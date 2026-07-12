@@ -190,9 +190,13 @@ final class AppModel: ObservableObject {
                 fillMissingWithShortEpg: false,
                 onBatch: { [weak self] batch in
                     guard let self else { return }
-                    // Only merge non-empty listings; never materialize empty rows for all channels.
+                    // Progressive merge while the stream is still downloading.
                     var next = self.epgByChannel
-                    for (k, v) in batch where !v.isEmpty { next[k] = v }
+                    for (k, v) in batch where !v.isEmpty {
+                        // Prefer longer list if we already have partial data for this channel.
+                        if let existing = next[k], existing.count >= v.count { continue }
+                        next[k] = v
+                    }
                     self.epgByChannel = next
                     self.epgLoadedCount = next.count
                 },
