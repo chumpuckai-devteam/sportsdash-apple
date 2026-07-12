@@ -6,45 +6,56 @@ struct ScoresView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                SportsColors.voidBlack.ignoresSafeArea()
-                Group {
-                    if appModel.isLoadingScores && appModel.games.isEmpty {
-                        ProgressView().tint(SportsColors.gold)
-                    } else if let err = appModel.scoresError, appModel.games.isEmpty {
-                        ContentUnavailableView(
-                            "Scores unavailable",
-                            systemImage: "wifi.exclamationmark",
-                            description: Text(err)
-                        )
-                    } else {
-                        scoresContent
+            scoresRoot
+                .background(SportsColors.voidBlack)
+                .navigationTitle("Scores")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.large)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Task { await appModel.refreshScores() }
+                        } label: {
+                            if appModel.isLoadingScores {
+                                ProgressView().tint(SportsColors.gold)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .disabled(appModel.isLoadingScores)
                     }
                 }
-            }
-            .navigationTitle("Scores")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        Task { await appModel.refreshScores() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .disabled(appModel.isLoadingScores)
+                .sheet(item: $selectedGame) { game in
+                    GameDetailSheet(game: game)
+                        .environmentObject(appModel)
+                        // Large first so streams are visible without scrolling the header away
+                        .presentationDetents([.large, .medium])
+                        .presentationDragIndicator(.visible)
                 }
+        }
+    }
+
+    @ViewBuilder
+    private var scoresRoot: some View {
+        if appModel.isLoadingScores && appModel.games.isEmpty {
+            ProgressView()
+                .tint(SportsColors.gold)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let err = appModel.scoresError, appModel.games.isEmpty {
+            ScrollView {
+                ContentUnavailableView(
+                    "Scores unavailable",
+                    systemImage: "wifi.exclamationmark",
+                    description: Text(err)
+                )
+                .frame(maxWidth: .infinity, minHeight: 400)
             }
             #if os(iOS)
             .refreshable { await appModel.refreshScores() }
             #endif
-            .sheet(item: $selectedGame) { game in
-                GameDetailSheet(game: game)
-                    .environmentObject(appModel)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
+        } else {
+            scoresContent
         }
     }
 
@@ -60,23 +71,32 @@ struct ScoresView: View {
 
         return VStack(spacing: 0) {
             filterBar
-            if showFaves || !shelves.isEmpty {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        if let updated = appModel.lastUpdated {
-                            Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                                .font(.caption)
-                                .foregroundStyle(SportsColors.muted)
-                                .padding(.horizontal)
-                        }
-                        if showFaves {
-                            shelfSection(
-                                title: "Faves",
-                                emoji: "★",
-                                games: appModel.favoriteGames,
-                                goldTitle: true
-                            )
-                        }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    if let updated = appModel.lastUpdated {
+                        Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.muted)
+                            .padding(.horizontal)
+                    }
+
+                    if showFaves {
+                        shelfSection(
+                            title: "Faves",
+                            emoji: "★",
+                            games: appModel.favoriteGames,
+                            goldTitle: true
+                        )
+                    }
+
+                    if shelves.isEmpty && !showFaves {
+                        ContentUnavailableView(
+                            emptyTitle,
+                            systemImage: "sportscourt",
+                            description: Text(emptySubtitle)
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                    } else {
                         ForEach(shelves) { section in
                             if section.showSportHeader {
                                 sportHeader(section.sportTitle, emoji: section.sportEmoji)
@@ -89,15 +109,15 @@ struct ScoresView: View {
                             )
                         }
                     }
-                    .padding(.vertical, 12)
                 }
-            } else {
-                ContentUnavailableView(
-                    emptyTitle,
-                    systemImage: "sportscourt",
-                    description: Text(emptySubtitle)
-                )
+                .padding(.vertical, 12)
             }
+            #if os(iOS)
+            // Must be on the ScrollView itself — not NavigationStack/ZStack — for pull-to-refresh
+            .refreshable {
+                await appModel.refreshScores()
+            }
+            #endif
         }
     }
 

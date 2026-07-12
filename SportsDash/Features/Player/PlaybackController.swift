@@ -2,7 +2,7 @@ import AVFoundation
 import Combine
 import Foundation
 
-/// AVPlayer tuned for live IPTV (HLS / progressive).
+/// AVPlayer tuned for live IPTV (HLS / progressive) with multi-URL fallback.
 @MainActor
 final class PlaybackController: ObservableObject {
     @Published private(set) var player: AVPlayer?
@@ -15,24 +15,27 @@ final class PlaybackController: ObservableObject {
     private var bufferEmptyObservation: NSKeyValueObservation?
     private var keepUpObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
-    private var triedAlternate = false
+    private var errorObservation: NSKeyValueObservation?
     private var currentURL: String?
+    private var candidateURLs: [String] = []
+    private var candidateIndex = 0
     private var loadGeneration = 0
 
     func start(url: String) {
         stopPlayerOnly()
         currentURL = url
+        candidateURLs = IptvService.playbackURLCandidates(from: url)
+        candidateIndex = 0
         loadGeneration += 1
         let gen = loadGeneration
         isLoading = true
         isBuffering = true
         error = nil
-        triedAlternate = false
 
         Task { @MainActor in
             await configureAudioSession()
             guard gen == self.loadGeneration else { return }
-            self.open(url: url, generation: gen)
+            self.open(url: self.candidateURLs[0], generation: gen)
         }
     }
 
@@ -40,6 +43,8 @@ final class PlaybackController: ObservableObject {
         loadGeneration += 1
         stopPlayerOnly()
         currentURL = nil
+        candidateURLs = []
+        candidateIndex = 0
         error = nil
         banner = nil
         isLoading = false
@@ -77,10 +82,12 @@ final class PlaybackController: ObservableObject {
         bufferEmptyObservation?.invalidate()
         keepUpObservation?.invalidate()
         timeControlObservation?.invalidate()
+        errorObservation?.invalidate()
         statusObservation = nil
         bufferEmptyObservation = nil
         keepUpObservation = nil
         timeControlObservation = nil
+        errorObservation = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
@@ -92,21 +99,24 @@ final class PlaybackController: ObservableObject {
             try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
             try session.setActive(true)
         } catch {
-            // Non-fatal — video can still play
+            // Non-fatal
         }
     }
 
     private func open(url: String, generation: Int) {
-        guard let u = URL(string: url) else {
+        // URL(string:) fails if string has unencoded spaces; use URLComponents if needed
+        guard let u = URL(string: url) ?? URL(string: url.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? url) else {
             error = "Invalid stream URL"
             isLoading = false
             isBuffering = false
             return
         }
 
-        // Headers many IPTV panels expect
+        currentURL = url
+
         let headers: [String: String] = [
-            "User-Agent": "SportsDash/1.0 (iOS; AVPlayer)",
+            "User-Agent":
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
             "Accept": "*/*",
             "Connection": "keep-alive",
         ]
@@ -114,22 +124,16 @@ final class PlaybackController: ObservableObject {
             url: u,
             options: [
                 "AVURLAssetHTTPHeaderFieldsKey": headers,
-                // Prefer network for live; don't over-cache incomplete segments
                 AVURLAssetAllowsCellularAccessKey: true,
             ]
         )
 
         let item = AVPlayerItem(asset: asset)
-        // Live-friendly buffering
-        item.preferredForwardBufferDuration = 4
+        item.preferredForwardBufferDuration = 3
         item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
-        if #available(iOS 15.0, tvOS 15.0, *) {
-            item.preferredPeakBitRate = 0 // let ABR choose
-        }
 
         let p = AVPlayer(playerItem: item)
         p.automaticallyWaitsToMinimizeStalling = true
-        // Slightly more aggressive for live feel once playing
         if #available(iOS 15.0, *) {
             p.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         }
@@ -144,13 +148,20 @@ final class PlaybackController: ObservableObject {
                     self.isBuffering = false
                     self.player?.play()
                 case .failed:
-                    self.handleFail(
-                        item.error?.localizedDescription ?? "Playback failed",
-                        generation: generation
-                    )
+                    let msg = item.error?.localizedDescription
+                        ?? (item.error as NSError?)?.localizedFailureReason
+                        ?? "Playback failed"
+                    self.handleFail(msg, generation: generation)
                 default:
                     break
                 }
+            }
+        }
+
+        errorObservation = item.observe(\.error, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor in
+                guard let self, generation == self.loadGeneration, let err = item.error else { return }
+                self.handleFail(err.localizedDescription, generation: generation)
             }
         }
 
@@ -176,9 +187,8 @@ final class PlaybackController: ObservableObject {
             }
         }
 
-        // Fail open if stuck too long
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 18_000_000_000)
+            try? await Task.sleep(nanoseconds: 16_000_000_000)
             guard generation == self.loadGeneration, self.isLoading else { return }
             self.handleFail("Stream timed out while loading", generation: generation)
         }
@@ -186,18 +196,25 @@ final class PlaybackController: ObservableObject {
 
     private func handleFail(_ message: String, generation: Int) {
         guard generation == loadGeneration else { return }
-        if !triedAlternate, let url = currentURL,
-           let alt = IptvService.alternateXtreamContainer(url) {
-            triedAlternate = true
-            banner = "Trying alternate stream format…"
-            open(url: alt, generation: generation)
-            currentURL = alt
+
+        // Auto-advance through m3u8 → ts → bare candidates
+        let next = candidateIndex + 1
+        if next < candidateURLs.count {
+            candidateIndex = next
+            let nextURL = candidateURLs[next]
+            banner = "Trying alternate format…"
+            stopPlayerOnly()
+            isLoading = true
+            isBuffering = true
+            error = nil
+            open(url: nextURL, generation: generation)
             Task {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 if self.banner?.contains("alternate") == true { self.banner = nil }
             }
             return
         }
+
         isLoading = false
         isBuffering = false
         error = friendlyError(message)
@@ -205,17 +222,20 @@ final class PlaybackController: ObservableObject {
 
     private func friendlyError(_ raw: String) -> String {
         let s = raw.lowercased()
-        if s.contains("not connected") || s.contains("network") {
+        if s.contains("resource unavailable") || s.contains("-1008") || s.contains("not available") {
+            return "Stream unavailable (panel offline, expired link, or blocked). Try another stream."
+        }
+        if s.contains("not connected") || s.contains("network") || s.contains("-1009") {
             return "Network error. Check Wi‑Fi or try again."
         }
         if s.contains("404") || s.contains("-1102") || s.contains("not found") {
-            return "Stream not found (expired or wrong URL). Try another channel."
+            return "Stream not found. Try another channel."
         }
         if s.contains("401") || s.contains("403") || s.contains("auth") {
             return "Access denied. Re-save IPTV credentials in Settings."
         }
-        if s.contains("format") || s.contains("-11828") || s.contains("-11800") {
-            return "Format not supported by AVPlayer. Try another stream or container."
+        if s.contains("format") || s.contains("-11828") || s.contains("-11800") || s.contains("-11850") {
+            return "Format not supported by iOS AVPlayer. Try another stream."
         }
         return raw
     }

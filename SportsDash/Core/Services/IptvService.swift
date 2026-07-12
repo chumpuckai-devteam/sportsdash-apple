@@ -103,6 +103,10 @@ actor IptvService {
         var byCategory: [String: [IptvChannel]] = [:]
         var uncategorized: [IptvChannel] = []
 
+        // Encode path segments — passwords often contain @ : / etc.
+        let userPath = user.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? user
+        let passPath = pass.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? pass
+
         for s in arr {
             let streamId = s["stream_id"] as? Int ?? Int("\(s["stream_id"] ?? "")") ?? 0
             let name = s["name"] as? String ?? "Stream \(streamId)"
@@ -110,8 +114,8 @@ actor IptvService {
             let group = categories[catId]
             let logo = s["stream_icon"] as? String
             let epgId = s["epg_channel_id"] as? String
-            // Prefer HLS for AVPlayer
-            let url = "\(host)/live/\(user)/\(pass)/\(streamId).m3u8"
+            // Prefer HLS for AVPlayer; fallback handled at play time
+            let url = "\(host)/live/\(userPath)/\(passPath)/\(streamId).m3u8"
             let channel = IptvChannel(
                 id: "xtream-\(streamId)",
                 name: name,
@@ -138,27 +142,40 @@ actor IptvService {
 
     /// Alternate Xtream container (.m3u8 ↔ .ts) for playback fallback.
     nonisolated static func alternateXtreamContainer(_ url: String) -> String? {
-        // .../live/user/pass/12345.m3u8 → .ts (and reverse)
-        if url.lowercased().contains(".m3u8") {
-            return url.replacingOccurrences(
-                of: ".m3u8",
-                with: ".ts",
-                options: [.caseInsensitive, .backwards]
-            )
+        let candidates = playbackURLCandidates(from: url)
+        guard candidates.count > 1 else { return nil }
+        // First alternate after the original
+        return candidates.dropFirst().first
+    }
+
+    /// Ordered play attempts for a stream URL (HLS first, then TS, then bare).
+    nonisolated static func playbackURLCandidates(from url: String) -> [String] {
+        var list: [String] = [url]
+        func add(_ u: String) {
+            if !list.contains(u) { list.append(u) }
         }
-        if let range = url.range(of: ".ts", options: [.caseInsensitive, .backwards]),
-           range.upperBound == url.endIndex || url[range.upperBound] == "?" {
-            var out = url
-            out.replaceSubrange(range, with: ".m3u8")
-            return out
+
+        let lower = url.lowercased()
+        if lower.contains(".m3u8") {
+            add(url.replacingOccurrences(of: ".m3u8", with: ".ts", options: [.caseInsensitive, .backwards]))
+            if let bare = url.range(of: ".m3u8", options: [.caseInsensitive, .backwards]) {
+                add(String(url[..<bare.lowerBound]))
+            }
+        } else if lower.hasSuffix(".ts") || lower.contains(".ts?") {
+            add(url.replacingOccurrences(of: ".ts", with: ".m3u8", options: [.caseInsensitive, .backwards]))
+        } else if !lower.contains(".m3u8") && !lower.contains(".ts") && !lower.contains(".mp4") {
+            // Extensionless live URL — try HLS then TS
+            add(url + (url.hasSuffix("/") ? "" : "") + ".m3u8".replacingOccurrences(of: "//", with: "/"))
+            // cleaner:
+            if url.hasSuffix("/") {
+                add(String(url.dropLast()) + ".m3u8")
+                add(String(url.dropLast()) + ".ts")
+            } else {
+                add(url + ".m3u8")
+                add(url + ".ts")
+            }
         }
-        if let range = url.range(of: ".mp4", options: [.caseInsensitive, .backwards]),
-           range.upperBound == url.endIndex || url[range.upperBound] == "?" {
-            var out = url
-            out.replaceSubrange(range, with: ".m3u8")
-            return out
-        }
-        return nil
+        return list
     }
 
     private func attr(_ line: String, _ key: String) -> String? {

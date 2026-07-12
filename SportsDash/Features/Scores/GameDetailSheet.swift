@@ -1,71 +1,53 @@
 import SwiftUI
 
+/// Compact stream picker: title, broadcasts, streams only (no scores / status chrome).
 struct GameDetailSheet: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
     let game: Game
 
     @State private var playerRoute: PlayerRoute?
+    @State private var matches: [ChannelMatch] = []
+    @State private var isMatching = true
 
-    private var matches: [ChannelMatch] {
-        appModel.matches(for: game)
+    private var title: String {
+        if game.usesMatchupLayout {
+            return "\(game.away.name) vs \(game.home.name)"
+        }
+        return game.eventName ?? game.league.label
     }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("\(game.league.emoji) \(game.eventName ?? game.league.label)")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(SportsColors.gold)
-                        if game.usesMatchupLayout {
-                            Text("\(game.away.name)  vs  \(game.home.name)")
-                                .font(.title3.weight(.bold))
-                        } else {
-                            Text(game.eventName ?? game.league.label)
-                                .font(.title3.weight(.bold))
-                        }
-                        Text(statusLine)
-                            .font(.subheadline)
-                            .foregroundStyle(SportsColors.muted)
-                        if game.usesMatchupLayout, game.isLive || game.isFinal {
-                            HStack {
-                                Spacer()
-                                scoreBlock(game.away)
-                                Text("—").foregroundStyle(SportsColors.muted)
-                                scoreBlock(game.home)
-                                Spacer()
-                            }
-                            .padding(.top, 8)
-                        }
-                    }
-                    .listRowBackground(SportsColors.panel)
-                }
-
-                if !game.broadcasts.isEmpty {
-                    Section("Broadcasts") {
+                    Text(title)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(SportsColors.text)
+                        .listRowBackground(SportsColors.panel)
+                    if !game.broadcasts.isEmpty {
                         Text(game.broadcasts.joined(separator: " · "))
+                            .font(.subheadline)
                             .foregroundStyle(SportsColors.textSecondary)
                             .listRowBackground(SportsColors.panel)
                     }
                 }
 
                 Section {
-                    if matches.isEmpty {
-                        Text("No strong matches. Browse Guide or Channels for the feed you want.")
-                            .font(.caption)
-                            .foregroundStyle(SportsColors.muted)
-                            .listRowBackground(SportsColors.panel)
-                        Button("Open Guide") {
-                            dismiss()
+                    if isMatching {
+                        HStack {
+                            ProgressView().tint(SportsColors.gold)
+                            Text("Finding streams…")
+                                .font(.caption)
+                                .foregroundStyle(SportsColors.muted)
                         }
                         .listRowBackground(SportsColors.panel)
-                    } else {
-                        Text("Top matches for this game. Use Guide or Channels if yours isn’t listed.")
+                    } else if matches.isEmpty {
+                        Text("No strong matches. Browse Channels or Guide.")
                             .font(.caption)
                             .foregroundStyle(SportsColors.muted)
                             .listRowBackground(SportsColors.panel)
+                    } else {
                         ForEach(matches) { m in
                             Button {
                                 appModel.recordLastPlayed(gameId: game.id)
@@ -75,20 +57,21 @@ struct GameDetailSheet: View {
                                     alternates: matches.filter { $0.channel.id != m.channel.id }
                                 )
                             } label: {
-                                HStack {
+                                HStack(spacing: 12) {
                                     Image(systemName: "play.tv.fill")
                                         .foregroundStyle(SportsColors.gold)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(m.channel.name)
                                             .font(.body.weight(.semibold))
                                             .foregroundStyle(SportsColors.text)
+                                            .multilineTextAlignment(.leading)
                                         if let g = m.channel.group, !g.isEmpty {
                                             Text(g)
                                                 .font(.caption)
                                                 .foregroundStyle(SportsColors.muted)
                                         }
                                     }
-                                    Spacer()
+                                    Spacer(minLength: 0)
                                     Image(systemName: "play.fill")
                                         .foregroundStyle(SportsColors.gold)
                                 }
@@ -97,12 +80,12 @@ struct GameDetailSheet: View {
                         }
                     }
                 } header: {
-                    Text(matches.isEmpty ? "Find a stream" : "Choose a stream")
+                    Text(isMatching ? "Streams" : (matches.isEmpty ? "No streams" : "Streams"))
                 }
             }
             .scrollContentBackground(.hidden)
             .background(SportsColors.panel)
-            .navigationTitle("Watch")
+            .navigationTitle(game.league.label)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -110,6 +93,9 @@ struct GameDetailSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+            }
+            .task {
+                await runMatch()
             }
             .fullScreenCover(item: $playerRoute) { route in
                 PlayerView(
@@ -122,26 +108,15 @@ struct GameDetailSheet: View {
         }
     }
 
-    private var statusLine: String {
-        [
-            game.isLive ? "LIVE" : nil,
-            game.isFinal ? "FINAL" : nil,
-            game.statusDetail,
-            game.venue,
-        ]
-        .compactMap { $0 }
-        .filter { !$0.isEmpty }
-        .joined(separator: " · ")
-    }
-
-    private func scoreBlock(_ team: TeamInfo) -> some View {
-        VStack {
-            Text(team.abbreviation)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SportsColors.muted)
-            Text(team.displayScore)
-                .font(.largeTitle.weight(.heavy).monospacedDigit())
-        }
+    private func runMatch() async {
+        isMatching = true
+        let gameSnapshot = game
+        let channels = appModel.channels
+        let result = await Task.detached(priority: .userInitiated) {
+            MatchingService().matchGameToChannels(gameSnapshot, channels: channels)
+        }.value
+        matches = result
+        isMatching = false
     }
 }
 
