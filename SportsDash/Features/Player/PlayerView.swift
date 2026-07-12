@@ -20,6 +20,8 @@ struct PlayerView: View {
     @State private var chromeTask: Task<Void, Never>?
     /// Extra streams for multiview (primary is `channel` / `playback`).
     @State private var multiSlots: [MultiviewSlot] = []
+    /// Which pane owns audio (`primary` or a multiview slot id). Video keeps playing on all panes.
+    @State private var audioFocusId: String = MultiviewAudioFocus.primary
 
     init(channel: IptvChannel, game: Game?, alternateMatches: [ChannelMatch] = []) {
         _channel = State(initialValue: channel)
@@ -170,19 +172,22 @@ struct PlayerView: View {
             MultiviewCell(
                 title: ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames),
                 playback: playback,
-                isPrimary: true,
+                hasAudioFocus: audioFocusId == MultiviewAudioFocus.primary,
+                onSelectAudio: { setAudioFocus(MultiviewAudioFocus.primary) },
                 onClose: nil
             )
             ForEach(multiSlots) { slot in
                 MultiviewCell(
                     title: ChannelNameCleanup.displayName(slot.channel.name, enabled: appModel.playerPrefs.cleanUpNames),
                     playback: slot.playback,
-                    isPrimary: false,
+                    hasAudioFocus: audioFocusId == slot.id.uuidString,
+                    onSelectAudio: { setAudioFocus(slot.id.uuidString) },
                     onClose: { removeMultiviewSlot(id: slot.id) }
                 )
             }
         }
         .background(Color.black)
+        .onAppear { applyMultiviewAudioFocus() }
     }
 
     private var loadingOverlay: some View {
@@ -531,11 +536,25 @@ struct PlayerView: View {
         let slot = MultiviewSlot(channel: ch)
         slot.playback.configure(prefs: appModel.playerPrefs)
         slot.playback.start(url: ch.url)
+        // New pane starts muted; primary keeps audio until user taps another pane.
+        slot.playback.setMuted(true)
         multiSlots.append(slot)
-        playback.banner = "Multiview \(totalActiveStreams)/\(maxMultiviewSlots)"
+        // Keep every stream decoding video.
+        playback.ensurePlaying()
+        applyMultiviewAudioFocus()
+        playback.banner = "Multiview \(totalActiveStreams)/\(maxMultiviewSlots) · tap a pane for audio"
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if playback.banner?.contains("Multiview") == true { playback.banner = nil }
+        }
+        // After secondary has time to open, re-assert play on all panes.
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            playback.banner = nil
+            applyMultiviewAudioFocus()
+            for _ in 0..<6 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                applyMultiviewAudioFocus()
+            }
         }
     }
 
@@ -543,6 +562,46 @@ struct PlayerView: View {
         if let idx = multiSlots.firstIndex(where: { $0.id == id }) {
             multiSlots[idx].playback.stop()
             multiSlots.remove(at: idx)
+        }
+        if audioFocusId == id.uuidString {
+            audioFocusId = MultiviewAudioFocus.primary
+        }
+        if multiSlots.isEmpty {
+            playback.setMuted(false)
+            playback.ensurePlaying()
+        } else {
+            applyMultiviewAudioFocus()
+        }
+    }
+
+    private func setAudioFocus(_ id: String) {
+        audioFocusId = id
+        applyMultiviewAudioFocus()
+        let name: String
+        if id == MultiviewAudioFocus.primary {
+            name = ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames)
+        } else if let slot = multiSlots.first(where: { $0.id.uuidString == id }) {
+            name = ChannelNameCleanup.displayName(slot.channel.name, enabled: appModel.playerPrefs.cleanUpNames)
+        } else {
+            name = "stream"
+        }
+        playback.banner = "Audio: \(name)"
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if playback.banner?.hasPrefix("Audio:") == true { playback.banner = nil }
+        }
+    }
+
+    /// All panes keep video; only the focused pane has sound.
+    private func applyMultiviewAudioFocus() {
+        let focus = multiSlots.isEmpty ? MultiviewAudioFocus.primary : audioFocusId
+        let primaryHasAudio = focus == MultiviewAudioFocus.primary
+        playback.setMuted(!primaryHasAudio)
+        playback.ensurePlaying()
+        for slot in multiSlots {
+            let on = slot.id.uuidString == focus
+            slot.playback.setMuted(!on)
+            slot.playback.ensurePlaying()
         }
     }
 
@@ -707,6 +766,10 @@ struct PlayerView: View {
 
 // MARK: - Multiview models
 
+enum MultiviewAudioFocus {
+    static let primary = "primary"
+}
+
 @MainActor
 final class MultiviewSlot: Identifiable, ObservableObject {
     let id = UUID()
@@ -721,7 +784,8 @@ final class MultiviewSlot: Identifiable, ObservableObject {
 private struct MultiviewCell: View {
     let title: String
     @ObservedObject var playback: PlaybackController
-    var isPrimary: Bool
+    var hasAudioFocus: Bool
+    var onSelectAudio: () -> Void
     var onClose: (() -> Void)?
 
     var body: some View {
@@ -729,10 +793,13 @@ private struct MultiviewCell: View {
             KSPlayerSurface(playback: playback)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .background(Color.black)
+                .contentShape(Rectangle())
+                .onTapGesture { onSelectAudio() }
 
             if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
                 ProgressView()
                     .tint(SportsColors.gold)
+                    .allowsHitTesting(false)
             }
 
             VStack {
@@ -744,6 +811,21 @@ private struct MultiviewCell: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(.black.opacity(0.55), in: Capsule())
+
+                    if hasAudioFocus {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(SportsColors.gold)
+                            .padding(6)
+                            .background(.black.opacity(0.55), in: Circle())
+                    } else {
+                        Image(systemName: "speaker.slash.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.55))
+                            .padding(6)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
+
                     Spacer()
                     if let onClose {
                         Button(action: onClose) {
@@ -754,13 +836,26 @@ private struct MultiviewCell: View {
                     }
                 }
                 Spacer()
+                if !hasAudioFocus {
+                    Text("Tap for audio")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.45), in: Capsule())
+                        .padding(.bottom, 8)
+                }
             }
             .padding(6)
+            .allowsHitTesting(true)
         }
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isPrimary ? SportsColors.gold.opacity(0.6) : SportsColors.border.opacity(0.4), lineWidth: isPrimary ? 1.5 : 1)
+                .stroke(
+                    hasAudioFocus ? SportsColors.gold.opacity(0.85) : SportsColors.border.opacity(0.4),
+                    lineWidth: hasAudioFocus ? 2 : 1
+                )
         }
     }
 }

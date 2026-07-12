@@ -139,11 +139,33 @@ final class PlaybackController: ObservableObject {
     }
 
     func toggleMute() {
-        coordinator.isMuted.toggle()
-        banner = coordinator.isMuted ? "Muted" : "Unmuted"
+        setMuted(!isMuted)
+        banner = isMuted ? "Muted" : "Unmuted"
         Task {
             try? await Task.sleep(nanoseconds: 1_200_000_000)
             if banner == "Muted" || banner == "Unmuted" { banner = nil }
+        }
+    }
+
+    /// Hard mute for multiview — keeps video decoding while silencing audio.
+    func setMuted(_ muted: Bool) {
+        coordinator.isMuted = muted
+        coordinator.playbackVolume = muted ? 0 : 1
+        if let player = coordinator.playerLayer?.player {
+            player.isMuted = muted
+            player.playbackVolume = muted ? 0 : 1
+        }
+    }
+
+    /// Keep video running (used so multiview panes don't drop out when another stream has audio focus).
+    func ensurePlaying() {
+        coordinator.playerLayer?.play()
+        if coordinator.playerLayer?.player.isReadyToPlay == true
+            || coordinator.state == .readyToPlay
+            || coordinator.state == .bufferFinished {
+            isPlaying = true
+            isLoading = false
+            isBuffering = false
         }
     }
 
@@ -320,7 +342,12 @@ final class PlaybackController: ObservableObject {
     private func configureAudioSession() async {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
+            // mixWithOthers helps multiple KSPlayer instances keep decoding while only one has volume.
+            try session.setCategory(
+                .playback,
+                mode: .moviePlayback,
+                options: [.allowAirPlay, .mixWithOthers]
+            )
             try session.setActive(true)
         } catch {
             // Non-fatal
