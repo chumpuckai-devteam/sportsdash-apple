@@ -18,6 +18,9 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: SportsDash
     # IPTV providers often use HTTP
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
+    # Personal Team (Samir Patel) — keeps signing after xcodegen regenerate
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "2H57Y8GR9D"
 
 targets:
   SportsDash:
@@ -29,13 +32,13 @@ targets:
           - "**/.DS_Store"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.sportsdash.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: "2H57Y8GR9D"
     scheme:
       testTargets: []
 
@@ -48,9 +51,9 @@ targets:
           - "**/.DS_Store"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.sportsdash.tvos
+        PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos
         TARGETED_DEVICE_FAMILY: "3"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: "2H57Y8GR9D"
     scheme:
       testTargets: []
