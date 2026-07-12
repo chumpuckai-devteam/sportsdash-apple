@@ -1,28 +1,43 @@
 import AVFoundation
 import Combine
 import Foundation
+import KSPlayer
 
-/// AVPlayer tuned for live IPTV (HLS / progressive) with multi-URL fallback.
+/// Multi-engine playback via KSPlayer (KSMEPlayer / FFmpeg + optional KSAVPlayer).
 @MainActor
 final class PlaybackController: ObservableObject {
-    @Published private(set) var player: AVPlayer?
     @Published private(set) var isLoading = false
     @Published private(set) var isBuffering = false
     @Published var error: String?
     @Published var banner: String?
+    /// Active playable URL for the SwiftUI `KSVideoPlayer` surface.
+    @Published private(set) var playURL: URL?
+    @Published private(set) var options = KSOptions()
+    @Published private(set) var engineLabel: String = ""
 
-    private var statusObservation: NSKeyValueObservation?
-    private var bufferEmptyObservation: NSKeyValueObservation?
-    private var keepUpObservation: NSKeyValueObservation?
-    private var timeControlObservation: NSKeyValueObservation?
-    private var errorObservation: NSKeyValueObservation?
+    let coordinator = KSVideoPlayer.Coordinator()
+
     private var currentURL: String?
     private var candidateURLs: [String] = []
     private var candidateIndex = 0
     private var loadGeneration = 0
+    private var engine: PlayerEngine = .auto
+    private var hardwareDecode = true
+    private var didWireCoordinator = false
+
+    init() {
+        wireCoordinator()
+    }
+
+    func configure(engine: PlayerEngine, hardwareDecode: Bool) {
+        self.engine = engine
+        self.hardwareDecode = hardwareDecode
+        Self.applyGlobalEngine(engine, hardwareDecode: hardwareDecode)
+        engineLabel = engine.label
+    }
 
     func start(url: String) {
-        stopPlayerOnly()
+        stopPlayerOnly(clearError: true)
         currentURL = url
         candidateURLs = IptvService.playbackURLCandidates(from: url)
         candidateIndex = 0
@@ -35,36 +50,40 @@ final class PlaybackController: ObservableObject {
         Task { @MainActor in
             await configureAudioSession()
             guard gen == self.loadGeneration else { return }
-            self.open(url: self.candidateURLs[0], generation: gen)
+            Self.applyGlobalEngine(self.engine, hardwareDecode: self.hardwareDecode)
+            self.open(urlString: self.candidateURLs[0], generation: gen)
         }
     }
 
     func stop() {
         loadGeneration += 1
-        stopPlayerOnly()
+        stopPlayerOnly(clearError: true)
         currentURL = nil
         candidateURLs = []
         candidateIndex = 0
-        error = nil
         banner = nil
         isLoading = false
         isBuffering = false
     }
 
     func jumpToLive() {
-        guard let player, let item = player.currentItem else {
-            if let url = currentURL { start(url: url) }
-            return
-        }
-        let duration = item.duration
-        if duration.isNumeric, duration.seconds.isFinite, duration.seconds > 2 {
-            let edge = CMTime(
-                seconds: max(0, duration.seconds - 0.35),
-                preferredTimescale: 600
-            )
-            player.seek(to: edge, toleranceBefore: .zero, toleranceAfter: .zero)
-            player.play()
-            banner = "Jumped to live"
+        if let layer = coordinator.playerLayer {
+            let duration = layer.player.duration
+            if duration.isFinite, duration > 2 {
+                layer.seek(time: max(0, duration - 0.5), autoPlay: true) { [weak self] finished in
+                    Task { @MainActor in
+                        if finished {
+                            self?.banner = "Jumped to live"
+                        } else if let url = self?.currentURL {
+                            self?.start(url: url)
+                            self?.banner = "Rejoined live stream"
+                        }
+                    }
+                }
+            } else if let url = currentURL {
+                start(url: url)
+                banner = "Rejoined live stream"
+            }
         } else if let url = currentURL {
             start(url: url)
             banner = "Rejoined live stream"
@@ -75,22 +94,69 @@ final class PlaybackController: ObservableObject {
         }
     }
 
+    func setAspectFill(_ fill: Bool) {
+        coordinator.isScaleAspectFill = fill
+        if let player = coordinator.playerLayer?.player {
+            player.contentMode = fill ? .scaleAspectFill : .scaleAspectFit
+        }
+    }
+
+    // MARK: - Global KSPlayer config
+
+    static func applyGlobalEngine(_ engine: PlayerEngine, hardwareDecode: Bool) {
+        KSOptions.isAutoPlay = true
+        KSOptions.hardwareDecode = hardwareDecode
+        KSOptions.preferredForwardBufferDuration = 2.0
+        KSOptions.maxBufferDuration = 20.0
+        KSOptions.isSecondOpen = true
+        KSOptions.logLevel = .warning
+
+        switch engine {
+        case .auto:
+            // FFmpeg first — better IPTV demux; AVPlayer as fallback for clean HLS.
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = KSAVPlayer.self
+        case .avPlayer:
+            KSOptions.firstPlayerType = KSAVPlayer.self
+            KSOptions.secondPlayerType = nil
+        case .ffmpeg:
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = nil
+        }
+    }
+
     // MARK: - Private
 
-    private func stopPlayerOnly() {
-        statusObservation?.invalidate()
-        bufferEmptyObservation?.invalidate()
-        keepUpObservation?.invalidate()
-        timeControlObservation?.invalidate()
-        errorObservation?.invalidate()
-        statusObservation = nil
-        bufferEmptyObservation = nil
-        keepUpObservation = nil
-        timeControlObservation = nil
-        errorObservation = nil
-        player?.pause()
-        player?.replaceCurrentItem(with: nil)
-        player = nil
+    private func wireCoordinator() {
+        guard !didWireCoordinator else { return }
+        didWireCoordinator = true
+
+        coordinator.onStateChanged = { [weak self] _, state in
+            Task { @MainActor in
+                self?.handleState(state)
+            }
+        }
+        coordinator.onFinish = { [weak self] _, err in
+            Task { @MainActor in
+                self?.handleFinish(error: err)
+            }
+        }
+        coordinator.onBufferChanged = { [weak self] count, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                // bufferedCount 0 on first load; >0 means rebuffer events.
+                if count == 0 {
+                    self.isLoading = true
+                    self.isBuffering = true
+                }
+            }
+        }
+    }
+
+    private func stopPlayerOnly(clearError: Bool) {
+        coordinator.resetPlayer()
+        playURL = nil
+        if clearError { error = nil }
     }
 
     private func configureAudioSession() async {
@@ -103,111 +169,96 @@ final class PlaybackController: ObservableObject {
         }
     }
 
-    private func open(url: String, generation: Int) {
-        // URL(string:) fails if string has unencoded spaces; use URLComponents if needed
-        guard let u = URL(string: url) ?? URL(string: url.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? url) else {
+    private func open(urlString: String, generation: Int) {
+        guard let u = Self.makeURL(urlString) else {
             error = "Invalid stream URL"
             isLoading = false
             isBuffering = false
             return
         }
 
-        currentURL = url
-
-        let headers: [String: String] = [
-            "User-Agent":
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-            "Accept": "*/*",
-            "Connection": "keep-alive",
-        ]
-        let asset = AVURLAsset(
-            url: u,
-            options: [
-                "AVURLAssetHTTPHeaderFieldsKey": headers,
-                AVURLAssetAllowsCellularAccessKey: true,
-            ]
-        )
-
-        let item = AVPlayerItem(asset: asset)
-        item.preferredForwardBufferDuration = 3
-        item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
-
-        let p = AVPlayer(playerItem: item)
-        p.automaticallyWaitsToMinimizeStalling = true
-        if #available(iOS 15.0, *) {
-            p.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-        }
-        player = p
-
-        statusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self, generation == self.loadGeneration else { return }
-                switch item.status {
-                case .readyToPlay:
-                    self.isLoading = false
-                    self.isBuffering = false
-                    self.player?.play()
-                case .failed:
-                    let msg = item.error?.localizedDescription
-                        ?? (item.error as NSError?)?.localizedFailureReason
-                        ?? "Playback failed"
-                    self.handleFail(msg, generation: generation)
-                default:
-                    break
-                }
-            }
-        }
-
-        errorObservation = item.observe(\.error, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self, generation == self.loadGeneration, let err = item.error else { return }
-                self.handleFail(err.localizedDescription, generation: generation)
-            }
-        }
-
-        bufferEmptyObservation = item.observe(\.isPlaybackBufferEmpty, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self, generation == self.loadGeneration else { return }
-                if item.isPlaybackBufferEmpty { self.isBuffering = true }
-            }
-        }
-        keepUpObservation = item.observe(\.isPlaybackLikelyToKeepUp, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self, generation == self.loadGeneration else { return }
-                if item.isPlaybackLikelyToKeepUp {
-                    self.isBuffering = false
-                    self.isLoading = false
-                }
-            }
-        }
-        timeControlObservation = p.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            Task { @MainActor in
-                guard let self, generation == self.loadGeneration else { return }
-                self.isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
-            }
-        }
+        currentURL = urlString
+        options = makeOptions()
+        isLoading = true
+        isBuffering = true
+        error = nil
+        // Assigning playURL rebuilds KSVideoPlayer, which opens the stream.
+        playURL = u
 
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 16_000_000_000)
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
             guard generation == self.loadGeneration, self.isLoading else { return }
             self.handleFail("Stream timed out while loading", generation: generation)
+        }
+    }
+
+    private func makeOptions() -> KSOptions {
+        let o = KSOptions()
+        o.hardwareDecode = hardwareDecode
+        o.preferredForwardBufferDuration = 2
+        o.maxBufferDuration = 20
+        o.isSecondOpen = true
+        o.userAgent =
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+        o.appendHeader([
+            "Accept": "*/*",
+            "Connection": "keep-alive",
+        ])
+        // Faster live open for IPTV
+        o.probesize = 500_000
+        o.maxAnalyzeDuration = 2_000_000
+        o.formatContextOptions["fflags"] = "nobuffer"
+        o.formatContextOptions["flags"] = "low_delay"
+        o.formatContextOptions["reconnect"] = 1
+        o.formatContextOptions["reconnect_streamed"] = 1
+        o.formatContextOptions["reconnect_delay_max"] = 5
+        return o
+    }
+
+    private func handleState(_ state: KSPlayerState) {
+        switch state {
+        case .preparing, .initialized:
+            isLoading = true
+            isBuffering = true
+        case .readyToPlay:
+            isLoading = false
+            isBuffering = false
+            error = nil
+            coordinator.playerLayer?.play()
+        case .buffering:
+            isBuffering = true
+        case .bufferFinished, .paused:
+            isLoading = false
+            isBuffering = false
+        case .error:
+            handleFail("Playback failed", generation: loadGeneration)
+        case .playedToTheEnd:
+            // Live streams sometimes signal end when the panel drops — rejoin.
+            if let url = currentURL {
+                banner = "Stream ended — rejoining…"
+                start(url: url)
+            }
+        }
+    }
+
+    private func handleFinish(error err: Error?) {
+        if let err {
+            handleFail(err.localizedDescription, generation: loadGeneration)
         }
     }
 
     private func handleFail(_ message: String, generation: Int) {
         guard generation == loadGeneration else { return }
 
-        // Auto-advance through m3u8 → ts → bare candidates
         let next = candidateIndex + 1
         if next < candidateURLs.count {
             candidateIndex = next
             let nextURL = candidateURLs[next]
             banner = "Trying alternate format…"
-            stopPlayerOnly()
+            stopPlayerOnly(clearError: true)
             isLoading = true
             isBuffering = true
-            error = nil
-            open(url: nextURL, generation: generation)
+            open(urlString: nextURL, generation: generation)
             Task {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 if self.banner?.contains("alternate") == true { self.banner = nil }
@@ -215,6 +266,7 @@ final class PlaybackController: ObservableObject {
             return
         }
 
+        // If FFmpeg-only or AV-only failed all candidates, one more pass on the other engine in Auto is handled by KSPlayer secondPlayerType.
         isLoading = false
         isBuffering = false
         error = friendlyError(message)
@@ -223,7 +275,7 @@ final class PlaybackController: ObservableObject {
     private func friendlyError(_ raw: String) -> String {
         let s = raw.lowercased()
         if s.contains("resource unavailable") || s.contains("-1008") || s.contains("not available") {
-            return "Stream unavailable (panel offline, expired link, or blocked). Try another stream."
+            return "Stream unavailable (panel offline, expired link, or blocked). Try another stream or switch engine in Settings."
         }
         if s.contains("not connected") || s.contains("network") || s.contains("-1009") {
             return "Network error. Check Wi‑Fi or try again."
@@ -235,8 +287,16 @@ final class PlaybackController: ObservableObject {
             return "Access denied. Re-save IPTV credentials in Settings."
         }
         if s.contains("format") || s.contains("-11828") || s.contains("-11800") || s.contains("-11850") {
-            return "Format not supported by iOS AVPlayer. Try another stream."
+            return "Format not supported by the current engine. Try FFmpeg in Settings → Player."
         }
         return raw
+    }
+
+    private static func makeURL(_ string: String) -> URL? {
+        if let u = URL(string: string) { return u }
+        if let encoded = string.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) {
+            return URL(string: encoded)
+        }
+        return nil
     }
 }

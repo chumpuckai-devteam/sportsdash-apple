@@ -24,6 +24,7 @@
 		414B4CEB24C5F3815C02D66B /* IptvService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471471EC528E70A5EA1F34F4 /* IptvService.swift */; };
 		5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */; };
 		54D313710DDC00E7528EDA46 /* SportLeague.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785157AB5153580FDAA7ADD3 /* SportLeague.swift */; };
+		5B9F1E32EBE2993CAE752B72 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = CECEE4E6B727E93E81A17B3A /* KSPlayer */; };
 		5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */; };
 		66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */; };
 		6DDDC13FB9D09AF25CF96984 /* SportsDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */; };
@@ -52,6 +53,7 @@
 		E3731096DEF391C521AA4BE3 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
 		E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
 		E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
+		EABDE1757E19EE695022B781 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 8324BB23E6E033259ED3F87B /* KSPlayer */; };
 		F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
 		F8C0D58D45A7685372A3AD43 /* EpgService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F4B40BC7655CA8A503E933B /* EpgService.swift */; };
 		F9B245814AE3C15D3DF07166 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EFBEACA2485831A4253C53 /* RootTabView.swift */; };
@@ -88,6 +90,25 @@
 		E7974E8727B3CE9311C7030D /* SportsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsAPI.swift; sourceTree = "<group>"; };
 		EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchingService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		117194AE3E04970C74737167 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EABDE1757E19EE695022B781 /* KSPlayer in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		315E7C8B2C90485304649FDA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B9F1E32EBE2993CAE752B72 /* KSPlayer in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		1757B28A0A63C78D857DD8F5 /* Products */ = {
@@ -243,6 +264,7 @@
 			buildConfigurationList = BAED3FEF50FC1EBBBE9B8602 /* Build configuration list for PBXNativeTarget "SportsDashTV" */;
 			buildPhases = (
 				D7FC13642A472CB3DAFDE853 /* Sources */,
+				315E7C8B2C90485304649FDA /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -250,6 +272,7 @@
 			);
 			name = SportsDashTV;
 			packageProductDependencies = (
+				CECEE4E6B727E93E81A17B3A /* KSPlayer */,
 			);
 			productName = SportsDashTV;
 			productReference = 69622EC9F8240505A1991EBF /* SportsDashTV.app */;
@@ -260,6 +283,7 @@
 			buildConfigurationList = 7AA11601289486FCE98A1C44 /* Build configuration list for PBXNativeTarget "SportsDash" */;
 			buildPhases = (
 				CA4CB141A47E22FEFE6DF843 /* Sources */,
+				117194AE3E04970C74737167 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -267,6 +291,7 @@
 			);
 			name = SportsDash;
 			packageProductDependencies = (
+				8324BB23E6E033259ED3F87B /* KSPlayer */,
 			);
 			productName = SportsDash;
 			productReference = 3034744E5A3A79A03FECA0DF /* SportsDash.app */;
@@ -300,6 +325,9 @@
 			);
 			mainGroup = 52B211B5B13246F55DA1D583;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1757B28A0A63C78D857DD8F5 /* Products */;
 			projectDirPath = "";
@@ -392,6 +420,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samirpatel.sportsdash.ios;
 				SDKROOT = iphoneos;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -456,6 +485,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SportsDash;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0.0;
@@ -481,6 +511,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samirpatel.sportsdash.tvos;
 				SDKROOT = appletvos;
 				TARGETED_DEVICE_FAMILY = 3;
@@ -538,6 +569,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SportsDash;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0.0;
@@ -562,6 +594,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samirpatel.sportsdash.tvos;
 				SDKROOT = appletvos;
 				TARGETED_DEVICE_FAMILY = 3;
@@ -581,6 +614,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.samirpatel.sportsdash.ios;
 				SDKROOT = iphoneos;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -619,6 +653,30 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8324BB23E6E033259ED3F87B /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
+		CECEE4E6B727E93E81A17B3A /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C571534C6AAADFB57F64A9ED /* Project object */;
 }

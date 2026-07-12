@@ -1,7 +1,6 @@
-import AVFoundation
 import SwiftUI
 
-/// Fullscreen IPTV player with LIVE jump, aspect, stream picker, live scores strip.
+/// Fullscreen IPTV player with multi-engine (KSPlayer FFmpeg / AVPlayer), LIVE jump, aspect, scores strip.
 struct PlayerView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -15,7 +14,6 @@ struct PlayerView: View {
     @State private var showStreamSheet = false
     @State private var showGamePicker: Game?
     @State private var chromeTask: Task<Void, Never>?
-    @State private var videoGravity: AVLayerVideoGravity = .resizeAspect
 
     init(channel: IptvChannel, game: Game?, alternateMatches: [ChannelMatch] = []) {
         _channel = State(initialValue: channel)
@@ -27,11 +25,9 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if let player = playback.player {
-                PlayerLayerView(player: player, videoGravity: videoGravity)
-                    .ignoresSafeArea()
-                    .onTapGesture { toggleChrome() }
-            }
+            KSPlayerSurface(playback: playback)
+                .ignoresSafeArea()
+                .onTapGesture { toggleChrome() }
 
             if playback.isLoading || playback.isBuffering {
                 VStack(spacing: 12) {
@@ -40,6 +36,11 @@ struct PlayerView: View {
                     Text(playback.isLoading ? "Starting stream…" : "Buffering…")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.9))
+                    if !playback.engineLabel.isEmpty {
+                        Text(playback.engineLabel)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
                 }
             }
 
@@ -82,6 +83,8 @@ struct PlayerView: View {
         }
         .statusBarHidden(true)
         .onAppear {
+            let prefs = appModel.playerPrefs
+            playback.configure(engine: prefs.engine, hardwareDecode: prefs.hardwareDecode)
             applyAspect()
             playback.start(url: channel.url)
             if let id = game?.id { appModel.recordLastPlayed(gameId: id) }
@@ -93,6 +96,14 @@ struct PlayerView: View {
         }
         .onChange(of: appModel.playerPrefs.aspect) { _, _ in
             applyAspect()
+        }
+        .onChange(of: appModel.playerPrefs.engine) { _, engine in
+            playback.configure(engine: engine, hardwareDecode: appModel.playerPrefs.hardwareDecode)
+            playback.start(url: channel.url)
+        }
+        .onChange(of: appModel.playerPrefs.hardwareDecode) { _, hw in
+            playback.configure(engine: appModel.playerPrefs.engine, hardwareDecode: hw)
+            playback.start(url: channel.url)
         }
         .sheet(isPresented: $showStreamSheet) {
             streamSheet(matches: streamOptions)
@@ -200,6 +211,28 @@ struct PlayerView: View {
                     .foregroundStyle(SportsColors.voidBlack)
                 Button("Back") { dismiss() }
                     .buttonStyle(.bordered)
+            }
+            // Quick engine switch when current stack fails
+            if appModel.playerPrefs.engine != .ffmpeg {
+                Button("Retry with FFmpeg") {
+                    var prefs = appModel.playerPrefs
+                    prefs.engine = .ffmpeg
+                    appModel.setPlayerPrefs(prefs)
+                    playback.configure(engine: .ffmpeg, hardwareDecode: prefs.hardwareDecode)
+                    playback.start(url: channel.url)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SportsColors.gold)
+            } else if appModel.playerPrefs.engine != .avPlayer {
+                Button("Retry with AVPlayer") {
+                    var prefs = appModel.playerPrefs
+                    prefs.engine = .avPlayer
+                    appModel.setPlayerPrefs(prefs)
+                    playback.configure(engine: .avPlayer, hardwareDecode: prefs.hardwareDecode)
+                    playback.start(url: channel.url)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SportsColors.gold)
             }
             if let alt = IptvService.alternateXtreamContainer(channel.url) {
                 Button("Try alternate format (.ts / .m3u8)") {
@@ -315,9 +348,10 @@ struct PlayerView: View {
 
     private func applyAspect() {
         switch appModel.playerPrefs.aspect {
-        case .fill: videoGravity = .resizeAspectFill
-        case .stretch: videoGravity = .resize
-        case .auto, .fit, .ratio16x9, .ratio4x3: videoGravity = .resizeAspect
+        case .fill, .stretch:
+            playback.setAspectFill(true)
+        case .auto, .fit, .ratio16x9, .ratio4x3:
+            playback.setAspectFill(false)
         }
     }
 }

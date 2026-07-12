@@ -77,12 +77,24 @@ struct SettingsView: View {
                 }
 
                 Section("Player") {
+                    Picker("Video engine", selection: engineBinding) {
+                        ForEach(PlayerEngine.allCases) { engine in
+                            Text(engine.label).tag(engine)
+                        }
+                    }
+                    Text(appModel.playerPrefs.engine.detail)
+                        .font(.caption)
+                        .foregroundStyle(SportsColors.muted)
+
+                    Toggle("Hardware decode", isOn: hardwareDecodeBinding)
+                        .tint(SportsColors.gold)
+
                     Picker("Aspect ratio", selection: aspectBinding) {
                         ForEach(PlayerAspectMode.allCases) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
-                    Text("In the player: LIVE rejoins the live edge; aspect cycles from the toolbar.")
+                    Text("FFmpeg (KSPlayer) plays more IPTV formats than native AVPlayer. LIVE rejoins the live edge; aspect cycles from the player toolbar.")
                         .font(.caption)
                         .foregroundStyle(SportsColors.muted)
                 }
@@ -111,6 +123,28 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .onAppear(perform: hydrate)
         }
+    }
+
+    private var engineBinding: Binding<PlayerEngine> {
+        Binding(
+            get: { appModel.playerPrefs.engine },
+            set: { v in
+                var p = appModel.playerPrefs
+                p.engine = v
+                appModel.setPlayerPrefs(p)
+            }
+        )
+    }
+
+    private var hardwareDecodeBinding: Binding<Bool> {
+        Binding(
+            get: { appModel.playerPrefs.hardwareDecode },
+            set: { v in
+                var p = appModel.playerPrefs
+                p.hardwareDecode = v
+                appModel.setPlayerPrefs(p)
+            }
+        )
     }
 
     private var aspectBinding: Binding<PlayerAspectMode> {
