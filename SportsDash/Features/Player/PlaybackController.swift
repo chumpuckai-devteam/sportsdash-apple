@@ -8,6 +8,7 @@ import KSPlayer
 final class PlaybackController: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isBuffering = false
+    @Published private(set) var isPlaying = false
     @Published var error: String?
     @Published var banner: String?
     @Published private(set) var playURL: URL?
@@ -21,10 +22,10 @@ final class PlaybackController: ObservableObject {
     private var candidateIndex = 0
     private var loadGeneration = 0
     private var prefs = PlayerPrefs()
-    private var didWireCoordinator = false
+    private var firstFrameWatch: Task<Void, Never>?
 
     init() {
-        wireCoordinator()
+        attachCoordinatorCallbacks()
     }
 
     func configure(prefs: PlayerPrefs) {
@@ -35,7 +36,10 @@ final class PlaybackController: ObservableObject {
     }
 
     func start(url: String) {
-        stopPlayerOnly(clearError: true)
+        // Tear down previous surface without wiping KSPlayer callback hooks permanently.
+        stopPlayerOnly(clearError: true, clearCallbacks: false)
+        attachCoordinatorCallbacks()
+
         currentURL = url
         candidateURLs = IptvService.playbackURLCandidates(
             from: url,
@@ -46,6 +50,7 @@ final class PlaybackController: ObservableObject {
         let gen = loadGeneration
         isLoading = true
         isBuffering = true
+        isPlaying = false
         error = nil
 
         Task { @MainActor in
@@ -58,13 +63,16 @@ final class PlaybackController: ObservableObject {
 
     func stop() {
         loadGeneration += 1
-        stopPlayerOnly(clearError: true)
+        firstFrameWatch?.cancel()
+        firstFrameWatch = nil
+        stopPlayerOnly(clearError: true, clearCallbacks: true)
         currentURL = nil
         candidateURLs = []
         candidateIndex = 0
         banner = nil
         isLoading = false
         isBuffering = false
+        isPlaying = false
     }
 
     func jumpToLive() {
@@ -74,6 +82,7 @@ final class PlaybackController: ObservableObject {
                 layer.seek(time: max(0, duration - 0.5), autoPlay: true) { [weak self] finished in
                     Task { @MainActor in
                         if finished {
+                            self?.markReady()
                             self?.banner = "Jumped to live"
                         } else if let url = self?.currentURL {
                             self?.start(url: url)
@@ -126,10 +135,8 @@ final class PlaybackController: ObservableObject {
 
     // MARK: - Private
 
-    private func wireCoordinator() {
-        guard !didWireCoordinator else { return }
-        didWireCoordinator = true
-
+    /// KSPlayer's `resetPlayer()` nils all callbacks — always re-attach after.
+    private func attachCoordinatorCallbacks() {
         coordinator.onStateChanged = { [weak self] _, state in
             Task { @MainActor in
                 self?.handleState(state)
@@ -143,16 +150,41 @@ final class PlaybackController: ObservableObject {
         coordinator.onBufferChanged = { [weak self] count, _ in
             Task { @MainActor in
                 guard let self else { return }
+                // First buffer event (count == 0) means still preparing; later counts are rebuffer.
                 if count == 0 {
-                    self.isLoading = true
+                    // Don't force loading spinner if we already have frames.
+                    if !self.isPlaying {
+                        self.isBuffering = true
+                    }
+                } else {
+                    // Rebuffer while playing — show subtle buffering only.
                     self.isBuffering = true
+                    self.isLoading = false
+                }
+            }
+        }
+        // Time updates prove frames are advancing — hide the start overlay.
+        coordinator.onPlay = { [weak self] current, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if current > 0.05 || self.coordinator.state == .bufferFinished
+                    || self.coordinator.state == .readyToPlay {
+                    self.markReady()
                 }
             }
         }
     }
 
-    private func stopPlayerOnly(clearError: Bool) {
-        coordinator.resetPlayer()
+    private func stopPlayerOnly(clearError: Bool, clearCallbacks: Bool) {
+        firstFrameWatch?.cancel()
+        firstFrameWatch = nil
+        if clearCallbacks {
+            coordinator.resetPlayer()
+        } else {
+            // Pause/release layer without discarding our callback closures permanently.
+            coordinator.playerLayer?.pause()
+            coordinator.playerLayer = nil
+        }
         playURL = nil
         if clearError { error = nil }
     }
@@ -179,14 +211,48 @@ final class PlaybackController: ObservableObject {
         options = makeOptions()
         isLoading = true
         isBuffering = true
+        isPlaying = false
         error = nil
+        attachCoordinatorCallbacks()
+        // Assigning playURL rebuilds KSVideoPlayer, which opens the stream.
         playURL = u
 
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 20_000_000_000)
+        // Failsafe: if callbacks never fire but video is up, clear spinner soon.
+        firstFrameWatch?.cancel()
+        firstFrameWatch = Task { @MainActor in
+            // Poll coordinator state for a few seconds after open.
+            for _ in 0..<40 {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard generation == self.loadGeneration else { return }
+                let state = self.coordinator.state
+                if state == .readyToPlay || state == .bufferFinished {
+                    self.markReady()
+                    return
+                }
+                if state == .error {
+                    self.handleFail("Playback failed", generation: generation)
+                    return
+                }
+            }
+            // If still "loading" after 10s but no error, hide spinner — video often already visible.
             guard generation == self.loadGeneration, self.isLoading else { return }
+            if self.coordinator.playerLayer?.player.isReadyToPlay == true {
+                self.markReady()
+            }
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            guard generation == self.loadGeneration, self.isLoading, !self.isPlaying else { return }
             self.handleFail("Stream timed out while loading", generation: generation)
         }
+    }
+
+    private func markReady() {
+        isLoading = false
+        isBuffering = false
+        isPlaying = true
+        error = nil
     }
 
     private func makeOptions() -> KSOptions {
@@ -217,18 +283,22 @@ final class PlaybackController: ObservableObject {
     private func handleState(_ state: KSPlayerState) {
         switch state {
         case .preparing, .initialized:
-            isLoading = true
-            isBuffering = true
+            if !isPlaying {
+                isLoading = true
+                isBuffering = true
+            }
         case .readyToPlay:
-            isLoading = false
-            isBuffering = false
-            error = nil
+            markReady()
             coordinator.playerLayer?.play()
         case .buffering:
+            // Mid-stream rebuffer: don't show "Starting stream…"
             isBuffering = true
-        case .bufferFinished, .paused:
             isLoading = false
-            isBuffering = false
+        case .bufferFinished, .paused:
+            markReady()
+            if state == .paused {
+                isPlaying = false
+            }
         case .error:
             handleFail("Playback failed", generation: loadGeneration)
         case .playedToTheEnd:
@@ -253,9 +323,11 @@ final class PlaybackController: ObservableObject {
             candidateIndex = next
             let nextURL = candidateURLs[next]
             banner = "Trying alternate format…"
-            stopPlayerOnly(clearError: true)
+            stopPlayerOnly(clearError: true, clearCallbacks: false)
+            attachCoordinatorCallbacks()
             isLoading = true
             isBuffering = true
+            isPlaying = false
             open(urlString: nextURL, generation: generation)
             Task {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -266,6 +338,7 @@ final class PlaybackController: ObservableObject {
 
         isLoading = false
         isBuffering = false
+        isPlaying = false
         error = friendlyError(message)
     }
 

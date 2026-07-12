@@ -29,7 +29,8 @@ struct PlayerView: View {
                 .ignoresSafeArea()
                 .onTapGesture { toggleChrome() }
 
-            if playback.isLoading || playback.isBuffering {
+            // Hide start overlay once playback is producing frames (even if brief rebuffer).
+            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
                 VStack(spacing: 12) {
                     ProgressView()
                         .tint(SportsColors.gold)
@@ -42,6 +43,7 @@ struct PlayerView: View {
                             .foregroundStyle(.white.opacity(0.55))
                     }
                 }
+                .allowsHitTesting(false)
             }
 
             if let err = playback.error {
