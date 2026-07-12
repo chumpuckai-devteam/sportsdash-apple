@@ -104,7 +104,10 @@ struct ChannelsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(displayedChannels) { ch in
-                    ChannelCard(channel: ch) {
+                    ChannelCard(
+                        channel: ch,
+                        cleanUpNames: appModel.playerPrefs.cleanUpNames
+                    ) {
                         playerRoute = PlayerRoute(channel: ch, game: nil, alternates: [])
                     }
                 }
@@ -117,6 +120,7 @@ struct ChannelsView: View {
 
 private struct ChannelCard: View {
     let channel: IptvChannel
+    var cleanUpNames: Bool = true
     let onPlay: () -> Void
 
     var body: some View {
@@ -147,7 +151,7 @@ private struct ChannelCard: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(channel.name)
+                    Text(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(SportsColors.text)
                         .lineLimit(2)

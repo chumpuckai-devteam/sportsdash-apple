@@ -12,46 +12,16 @@ private enum GuideMetrics {
     static var timelineWidth: CGFloat { CGFloat(hours) * pxPerHour }
 }
 
-/// List = channel × time timeline. Grid = card-style Now/Next rows.
-enum GuideDisplayMode: String, CaseIterable, Identifiable {
-    case list
-    case grid
-
-    var id: String { rawValue }
-
-    var menuTitle: String {
-        switch self {
-        case .list: return "List View"
-        case .grid: return "Grid View"
-        }
-    }
-
-    var menuSubtitle: String {
-        switch self {
-        case .list: return "Channel × time guide"
-        case .grid: return "Card-style Now / Next"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .list: return "list.bullet.rectangle"
-        case .grid: return "square.grid.2x2"
-        }
-    }
-}
-
 /// Traditional TV guide + optional card grid, with a small guide-only settings menu.
 struct GuideView: View {
     @EnvironmentObject private var appModel: AppModel
-    @AppStorage("guide_display_mode") private var displayModeRaw: String = GuideDisplayMode.list.rawValue
     @State private var selectedGroup: String = ""
     @State private var windowStart: Date = GuideView.snappedNowMinusOneHour()
     @State private var playerRoute: PlayerRoute?
     @State private var nowTick = Date()
 
-    private var displayMode: GuideDisplayMode {
-        GuideDisplayMode(rawValue: displayModeRaw) ?? .list
+    private var displayMode: GuideLayoutMode {
+        appModel.playerPrefs.guideLayout
     }
 
     private var groupNames: [String] {
@@ -64,6 +34,8 @@ struct GuideView: View {
         }
         return appModel.channelGroups.first(where: { $0.name == selectedGroup })?.channels ?? []
     }
+
+    private var cleanNames: Bool { appModel.playerPrefs.cleanUpNames }
 
     private var guideRows: [GuideChannelRowData] {
         activeChannels.map { ch in
@@ -166,14 +138,19 @@ struct GuideView: View {
             Divider()
 
             Section("Layout") {
-                ForEach(GuideDisplayMode.allCases) { mode in
+                ForEach(GuideLayoutMode.allCases) { mode in
                     Button {
-                        displayModeRaw = mode.rawValue
+                        var p = appModel.playerPrefs
+                        p.guideLayout = mode
+                        appModel.setPlayerPrefs(p)
                     } label: {
                         if displayMode == mode {
-                            Label(mode.menuTitle, systemImage: "checkmark")
+                            Label(mode.label, systemImage: "checkmark")
                         } else {
-                            Label(mode.menuTitle, systemImage: mode.systemImage)
+                            Label(
+                                mode.label,
+                                systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
+                            )
                         }
                     }
                 }
@@ -201,6 +178,7 @@ struct GuideView: View {
                     rows: guideRows,
                     windowStart: windowStart,
                     now: nowTick,
+                    cleanUpNames: cleanNames,
                     onPlay: { channel in
                         playerRoute = PlayerRoute(channel: channel, game: nil, alternates: [])
                     }
@@ -219,7 +197,11 @@ struct GuideView: View {
                     Button {
                         playerRoute = PlayerRoute(channel: row.channel, game: nil, alternates: [])
                     } label: {
-                        GuideCardRow(channel: row.channel, programs: row.programs)
+                        GuideCardRow(
+                            channel: row.channel,
+                            programs: row.programs,
+                            cleanUpNames: cleanNames
+                        )
                     }
                     .listRowBackground(SportsColors.panel)
                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
@@ -254,6 +236,7 @@ struct GuideView: View {
 private struct GuideCardRow: View {
     let channel: IptvChannel
     let programs: [EpgProgram]
+    var cleanUpNames: Bool = true
 
     private var now: EpgProgram? {
         programs.first(where: \.isNow) ?? programs.first
@@ -275,7 +258,7 @@ private struct GuideCardRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(channel.name)
+                Text(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(SportsColors.text)
                     .lineLimit(1)
@@ -350,6 +333,7 @@ private struct GuideTimelineGrid: View {
     let rows: [GuideChannelRowData]
     let windowStart: Date
     let now: Date
+    var cleanUpNames: Bool = true
     let onPlay: (IptvChannel) -> Void
 
     @StateObject private var scrollSync = GuideScrollSync()
@@ -465,7 +449,7 @@ private struct GuideTimelineGrid: View {
                                     .stroke(SportsColors.border, lineWidth: 1)
                             }
 
-                        Text(row.channel.name)
+                        Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(SportsColors.text)
                             .lineLimit(2)

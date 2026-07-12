@@ -2,11 +2,21 @@ import SwiftUI
 
 enum AppTab: Hashable {
     case scores, channels, guide, settings
+
+    init(launch: LaunchTab) {
+        switch launch {
+        case .scores: self = .scores
+        case .channels: self = .channels
+        case .guide: self = .guide
+        case .settings: self = .settings
+        }
+    }
 }
 
 struct RootTabView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var tab: AppTab = .scores
+    @State private var didApplyLaunchTab = false
 
     var body: some View {
         TabView(selection: $tab) {
@@ -28,6 +38,10 @@ struct RootTabView: View {
         }
         .tint(SportsColors.gold)
         .task {
+            if !didApplyLaunchTab {
+                tab = AppTab(launch: appModel.playerPrefs.launchTab)
+                didApplyLaunchTab = true
+            }
             await appModel.bootstrap()
         }
     }

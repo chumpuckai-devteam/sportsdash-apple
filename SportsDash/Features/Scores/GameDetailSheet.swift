@@ -61,7 +61,10 @@ struct GameDetailSheet: View {
                                     Image(systemName: "play.tv.fill")
                                         .foregroundStyle(SportsColors.gold)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(m.channel.name)
+                                        Text(ChannelNameCleanup.displayName(
+                                            m.channel.name,
+                                            enabled: appModel.playerPrefs.cleanUpNames
+                                        ))
                                             .font(.body.weight(.semibold))
                                             .foregroundStyle(SportsColors.text)
                                             .multilineTextAlignment(.leading)

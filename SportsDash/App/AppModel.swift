@@ -28,6 +28,8 @@ final class AppModel: ObservableObject {
     private let storage = StorageService.shared
 
     private var scoresTimer: Timer?
+    private var playlistTimer: Timer?
+    private var lastPlaylistReload: Date?
 
     init() {
         favoriteTeamIds = storage.favoriteTeamIds()
@@ -41,8 +43,10 @@ final class AppModel: ObservableObject {
         await refreshScores()
         if let config = iptvConfig, config.isConfigured {
             await reloadChannels()
+            lastPlaylistReload = Date()
         }
         startScoresPolling()
+        startPlaylistPolling()
     }
 
     func startScoresPolling() {
@@ -52,6 +56,29 @@ final class AppModel: ObservableObject {
                 await self?.refreshScores(silent: true)
             }
         }
+    }
+
+    /// Reload IPTV playlist on the schedule from General settings.
+    func startPlaylistPolling() {
+        playlistTimer?.invalidate()
+        let hours = playerPrefs.playlistRefresh.rawValue
+        guard hours > 0 else { return }
+        // Check every 15 minutes whether the refresh interval has elapsed.
+        playlistTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.maybeReloadPlaylist()
+            }
+        }
+    }
+
+    private func maybeReloadPlaylist() async {
+        let hours = playerPrefs.playlistRefresh.rawValue
+        guard hours > 0, iptvConfig?.isConfigured == true else { return }
+        let last = lastPlaylistReload ?? .distantPast
+        let elapsed = Date().timeIntervalSince(last)
+        guard elapsed >= Double(hours) * 3600 else { return }
+        await reloadChannels()
+        lastPlaylistReload = Date()
     }
 
     func refreshScores(silent: Bool = false) async {
@@ -125,8 +152,13 @@ final class AppModel: ObservableObject {
     }
 
     func setPlayerPrefs(_ prefs: PlayerPrefs) {
+        let refreshChanged = prefs.playlistRefresh != playerPrefs.playlistRefresh
         playerPrefs = prefs
         storage.setPlayerPrefs(prefs)
+        PlaybackController.applyGlobal(prefs)
+        if refreshChanged {
+            startPlaylistPolling()
+        }
     }
 
     func setSelectedLeagues(_ leagues: [SportLeague]) {

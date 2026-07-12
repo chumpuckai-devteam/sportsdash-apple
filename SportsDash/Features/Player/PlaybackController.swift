@@ -10,7 +10,6 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var isBuffering = false
     @Published var error: String?
     @Published var banner: String?
-    /// Active playable URL for the SwiftUI `KSVideoPlayer` surface.
     @Published private(set) var playURL: URL?
     @Published private(set) var options = KSOptions()
     @Published private(set) var engineLabel: String = ""
@@ -21,25 +20,27 @@ final class PlaybackController: ObservableObject {
     private var candidateURLs: [String] = []
     private var candidateIndex = 0
     private var loadGeneration = 0
-    private var engine: PlayerEngine = .auto
-    private var hardwareDecode = true
+    private var prefs = PlayerPrefs()
     private var didWireCoordinator = false
 
     init() {
         wireCoordinator()
     }
 
-    func configure(engine: PlayerEngine, hardwareDecode: Bool) {
-        self.engine = engine
-        self.hardwareDecode = hardwareDecode
-        Self.applyGlobalEngine(engine, hardwareDecode: hardwareDecode)
-        engineLabel = engine.label
+    func configure(prefs: PlayerPrefs) {
+        self.prefs = prefs
+        Self.applyGlobal(prefs)
+        engineLabel = prefs.primaryPlayer.label
+            + (prefs.fallbackPlayers ? " · fallback on" : "")
     }
 
     func start(url: String) {
         stopPlayerOnly(clearError: true)
         currentURL = url
-        candidateURLs = IptvService.playbackURLCandidates(from: url)
+        candidateURLs = IptvService.playbackURLCandidates(
+            from: url,
+            preferredFormat: prefs.preferredLiveFormat
+        )
         candidateIndex = 0
         loadGeneration += 1
         let gen = loadGeneration
@@ -50,7 +51,7 @@ final class PlaybackController: ObservableObject {
         Task { @MainActor in
             await configureAudioSession()
             guard gen == self.loadGeneration else { return }
-            Self.applyGlobalEngine(self.engine, hardwareDecode: self.hardwareDecode)
+            Self.applyGlobal(self.prefs)
             self.open(urlString: self.candidateURLs[0], generation: gen)
         }
     }
@@ -103,25 +104,23 @@ final class PlaybackController: ObservableObject {
 
     // MARK: - Global KSPlayer config
 
-    static func applyGlobalEngine(_ engine: PlayerEngine, hardwareDecode: Bool) {
+    static func applyGlobal(_ prefs: PlayerPrefs) {
         KSOptions.isAutoPlay = true
-        KSOptions.hardwareDecode = hardwareDecode
-        KSOptions.preferredForwardBufferDuration = 2.0
-        KSOptions.maxBufferDuration = 20.0
+        KSOptions.hardwareDecode = prefs.hardwareDecode
+        KSOptions.asynchronousDecompression = prefs.asynchronousDecompression
+        KSOptions.preferredFrame = prefs.adaptiveFrameRate
+        KSOptions.preferredForwardBufferDuration = prefs.clampedBufferSeconds
+        KSOptions.maxBufferDuration = max(15, prefs.clampedBufferSeconds * 5)
         KSOptions.isSecondOpen = true
         KSOptions.logLevel = .warning
 
-        switch engine {
-        case .auto:
-            // FFmpeg first — better IPTV demux; AVPlayer as fallback for clean HLS.
+        switch prefs.primaryPlayer {
+        case .ksPlayer:
             KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSAVPlayer.self
-        case .avPlayer:
+            KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSAVPlayer.self : nil
+        case .avKit:
             KSOptions.firstPlayerType = KSAVPlayer.self
-            KSOptions.secondPlayerType = nil
-        case .ffmpeg:
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = nil
+            KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSMEPlayer.self : nil
         }
     }
 
@@ -144,7 +143,6 @@ final class PlaybackController: ObservableObject {
         coordinator.onBufferChanged = { [weak self] count, _ in
             Task { @MainActor in
                 guard let self else { return }
-                // bufferedCount 0 on first load; >0 means rebuffer events.
                 if count == 0 {
                     self.isLoading = true
                     self.isBuffering = true
@@ -182,7 +180,6 @@ final class PlaybackController: ObservableObject {
         isLoading = true
         isBuffering = true
         error = nil
-        // Assigning playURL rebuilds KSVideoPlayer, which opens the stream.
         playURL = u
 
         Task { @MainActor in
@@ -194,17 +191,19 @@ final class PlaybackController: ObservableObject {
 
     private func makeOptions() -> KSOptions {
         let o = KSOptions()
-        o.hardwareDecode = hardwareDecode
-        o.preferredForwardBufferDuration = 2
-        o.maxBufferDuration = 20
+        o.hardwareDecode = prefs.hardwareDecode
+        o.asynchronousDecompression = prefs.asynchronousDecompression
+        o.preferredForwardBufferDuration = prefs.clampedBufferSeconds
+        o.maxBufferDuration = max(15, prefs.clampedBufferSeconds * 5)
         o.isSecondOpen = true
-        o.userAgent =
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+        let ua = prefs.userAgent.trimmingCharacters(in: .whitespacesAndNewlines)
+        o.userAgent = ua.isEmpty
+            ? "VLC/3.0.18 LibVLC/3.0.18"
+            : ua
         o.appendHeader([
             "Accept": "*/*",
             "Connection": "keep-alive",
         ])
-        // Faster live open for IPTV
         o.probesize = 500_000
         o.maxAnalyzeDuration = 2_000_000
         o.formatContextOptions["fflags"] = "nobuffer"
@@ -233,7 +232,6 @@ final class PlaybackController: ObservableObject {
         case .error:
             handleFail("Playback failed", generation: loadGeneration)
         case .playedToTheEnd:
-            // Live streams sometimes signal end when the panel drops — rejoin.
             if let url = currentURL {
                 banner = "Stream ended — rejoining…"
                 start(url: url)
@@ -266,7 +264,6 @@ final class PlaybackController: ObservableObject {
             return
         }
 
-        // If FFmpeg-only or AV-only failed all candidates, one more pass on the other engine in Auto is handled by KSPlayer secondPlayerType.
         isLoading = false
         isBuffering = false
         error = friendlyError(message)
@@ -275,7 +272,7 @@ final class PlaybackController: ObservableObject {
     private func friendlyError(_ raw: String) -> String {
         let s = raw.lowercased()
         if s.contains("resource unavailable") || s.contains("-1008") || s.contains("not available") {
-            return "Stream unavailable (panel offline, expired link, or blocked). Try another stream or switch engine in Settings."
+            return "Stream unavailable (panel offline, expired link, or blocked). Try another stream or switch player in Settings."
         }
         if s.contains("not connected") || s.contains("network") || s.contains("-1009") {
             return "Network error. Check Wi‑Fi or try again."
@@ -287,7 +284,7 @@ final class PlaybackController: ObservableObject {
             return "Access denied. Re-save IPTV credentials in Settings."
         }
         if s.contains("format") || s.contains("-11828") || s.contains("-11800") || s.contains("-11850") {
-            return "Format not supported by the current engine. Try FFmpeg in Settings → Player."
+            return "Format not supported. Enable fallback players or switch primary engine in Settings → Video player."
         }
         return raw
     }

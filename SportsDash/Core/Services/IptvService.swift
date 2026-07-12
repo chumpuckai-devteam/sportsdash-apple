@@ -142,20 +142,24 @@ actor IptvService {
 
     /// Alternate Xtream container (.m3u8 ↔ .ts) for playback fallback.
     nonisolated static func alternateXtreamContainer(_ url: String) -> String? {
-        let candidates = playbackURLCandidates(from: url)
+        let candidates = playbackURLCandidates(from: url, preferredFormat: .ts)
         guard candidates.count > 1 else { return nil }
-        // First alternate after the original
         return candidates.dropFirst().first
     }
 
-    /// Ordered play attempts for a stream URL (HLS first, then TS, then bare).
-    nonisolated static func playbackURLCandidates(from url: String) -> [String] {
-        var list: [String] = [url]
+    /// Ordered play attempts. Preferred format is tried first when the URL can be rewritten.
+    nonisolated static func playbackURLCandidates(
+        from url: String,
+        preferredFormat: LiveStreamFormat = .ts
+    ) -> [String] {
+        var variants: [String] = []
         func add(_ u: String) {
-            if !list.contains(u) { list.append(u) }
+            if !variants.contains(u) { variants.append(u) }
         }
 
+        add(url)
         let lower = url.lowercased()
+
         if lower.contains(".m3u8") {
             add(url.replacingOccurrences(of: ".m3u8", with: ".ts", options: [.caseInsensitive, .backwards]))
             if let bare = url.range(of: ".m3u8", options: [.caseInsensitive, .backwards]) {
@@ -164,9 +168,6 @@ actor IptvService {
         } else if lower.hasSuffix(".ts") || lower.contains(".ts?") {
             add(url.replacingOccurrences(of: ".ts", with: ".m3u8", options: [.caseInsensitive, .backwards]))
         } else if !lower.contains(".m3u8") && !lower.contains(".ts") && !lower.contains(".mp4") {
-            // Extensionless live URL — try HLS then TS
-            add(url + (url.hasSuffix("/") ? "" : "") + ".m3u8".replacingOccurrences(of: "//", with: "/"))
-            // cleaner:
             if url.hasSuffix("/") {
                 add(String(url.dropLast()) + ".m3u8")
                 add(String(url.dropLast()) + ".ts")
@@ -175,7 +176,12 @@ actor IptvService {
                 add(url + ".ts")
             }
         }
-        return list
+
+        // Prefer user-selected container at the front when present.
+        let preferredExt = preferredFormat == .ts ? ".ts" : ".m3u8"
+        let preferred = variants.filter { $0.lowercased().contains(preferredExt) }
+        let rest = variants.filter { !$0.lowercased().contains(preferredExt) }
+        return preferred + rest
     }
 
     private func attr(_ line: String, _ key: String) -> String? {

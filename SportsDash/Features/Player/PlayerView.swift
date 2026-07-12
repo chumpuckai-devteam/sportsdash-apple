@@ -83,8 +83,7 @@ struct PlayerView: View {
         }
         .statusBarHidden(true)
         .onAppear {
-            let prefs = appModel.playerPrefs
-            playback.configure(engine: prefs.engine, hardwareDecode: prefs.hardwareDecode)
+            playback.configure(prefs: appModel.playerPrefs)
             applyAspect()
             playback.start(url: channel.url)
             if let id = game?.id { appModel.recordLastPlayed(gameId: id) }
@@ -94,16 +93,9 @@ struct PlayerView: View {
             playback.stop()
             chromeTask?.cancel()
         }
-        .onChange(of: appModel.playerPrefs.aspect) { _, _ in
+        .onChange(of: appModel.playerPrefs) { _, prefs in
+            playback.configure(prefs: prefs)
             applyAspect()
-        }
-        .onChange(of: appModel.playerPrefs.engine) { _, engine in
-            playback.configure(engine: engine, hardwareDecode: appModel.playerPrefs.hardwareDecode)
-            playback.start(url: channel.url)
-        }
-        .onChange(of: appModel.playerPrefs.hardwareDecode) { _, hw in
-            playback.configure(engine: appModel.playerPrefs.engine, hardwareDecode: hw)
-            playback.start(url: channel.url)
         }
         .sheet(isPresented: $showStreamSheet) {
             streamSheet(matches: streamOptions)
@@ -142,7 +134,7 @@ struct PlayerView: View {
                     .padding(10)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(channel.name)
+                Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -213,22 +205,24 @@ struct PlayerView: View {
                     .buttonStyle(.bordered)
             }
             // Quick engine switch when current stack fails
-            if appModel.playerPrefs.engine != .ffmpeg {
-                Button("Retry with FFmpeg") {
+            if appModel.playerPrefs.primaryPlayer != .ksPlayer {
+                Button("Retry with KSPlayer (Metal)") {
                     var prefs = appModel.playerPrefs
-                    prefs.engine = .ffmpeg
+                    prefs.primaryPlayer = .ksPlayer
+                    prefs.fallbackPlayers = true
                     appModel.setPlayerPrefs(prefs)
-                    playback.configure(engine: .ffmpeg, hardwareDecode: prefs.hardwareDecode)
+                    playback.configure(prefs: prefs)
                     playback.start(url: channel.url)
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
-            } else if appModel.playerPrefs.engine != .avPlayer {
-                Button("Retry with AVPlayer") {
+            } else {
+                Button("Retry with AVKit") {
                     var prefs = appModel.playerPrefs
-                    prefs.engine = .avPlayer
+                    prefs.primaryPlayer = .avKit
+                    prefs.fallbackPlayers = true
                     appModel.setPlayerPrefs(prefs)
-                    playback.configure(engine: .avPlayer, hardwareDecode: prefs.hardwareDecode)
+                    playback.configure(prefs: prefs)
                     playback.start(url: channel.url)
                 }
                 .font(.caption.weight(.semibold))
@@ -272,7 +266,8 @@ struct PlayerView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading) {
-                                Text(m.channel.name).foregroundStyle(SportsColors.text)
+                                Text(ChannelNameCleanup.displayName(m.channel.name, enabled: appModel.playerPrefs.cleanUpNames))
+                                    .foregroundStyle(SportsColors.text)
                                 if let gr = m.channel.group {
                                     Text(gr).font(.caption).foregroundStyle(SportsColors.muted)
                                 }

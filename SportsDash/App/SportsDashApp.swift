@@ -6,9 +6,8 @@ struct SportsDashApp: App {
     @StateObject private var appModel = AppModel()
 
     init() {
-        // Configure multi-engine player defaults before any playback starts.
         let prefs = StorageService.shared.playerPrefs()
-        PlaybackController.applyGlobalEngine(prefs.engine, hardwareDecode: prefs.hardwareDecode)
+        PlaybackController.applyGlobal(prefs)
         KSOptions.isAutoPlay = true
     }
 
@@ -16,7 +15,15 @@ struct SportsDashApp: App {
         WindowGroup {
             RootTabView()
                 .environmentObject(appModel)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(colorScheme)
+        }
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch appModel.playerPrefs.theme {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 }
