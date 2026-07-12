@@ -166,29 +166,29 @@ struct ScoresView: View {
         }
     }
 
-    private func sportHeader(_ title: String, emoji: String) -> some View {
-        HStack(spacing: 8) {
-            Text(emoji)
+    /// Sport section label (e.g. BASEBALL, SOCCER) — no emoji.
+    private func sportHeader(_ title: String) -> some View {
+        HStack(spacing: 10) {
             Text(title.uppercased())
                 .font(.caption.weight(.black))
-                .tracking(1.4)
+                .tracking(1.6)
                 .foregroundStyle(SportsColors.gold)
             Rectangle().fill(SportsColors.border).frame(height: 1)
         }
         .padding(.horizontal)
-        .padding(.top, 6)
+        .padding(.top, 10)
     }
 
+    /// League sub-row (e.g. MLB, World Cup, Premier League) — no emoji.
     private func shelfSection(
         title: String,
-        emoji: String,
         games: [Game],
         goldTitle: Bool
     ) -> some View {
         let live = games.filter(\.isLive).count
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(emoji)  \(title)")
+                Text(title)
                     .font(.headline.weight(.bold))
                     .foregroundStyle(goldTitle ? SportsColors.gold : SportsColors.text)
                 Spacer()
@@ -249,19 +249,24 @@ struct ScoresView: View {
 
 struct LeagueShelf: Identifiable {
     var id: String { key }
+    /// League key (e.g. mlb, worldcup).
     var key: String
+    /// League display name (sub-row).
     var title: String
-    var emoji: String
+    /// Sport path for grouping (soccer, baseball, …).
     var sportKey: String
+    /// Sport section title (Soccer, Baseball, …).
     var sportTitle: String
-    var sportEmoji: String
+    /// First league under a sport gets the section header.
     var showSportHeader: Bool
     var games: [Game]
 }
 
 enum ScoreboardGrouping {
+    /// Preferred league order within sports (sport sections follow first league appearance).
     static let leagueOrder: [SportLeague] = SportLeague.allCases
 
+    /// Sport sections with league sub-rows: Soccer → World Cup, UCL, EPL, …
     static func leagueShelves(from games: [Game]) -> [LeagueShelf] {
         var buckets: [SportLeague: [Game]] = [:]
         for g in games {
@@ -284,10 +289,8 @@ enum ScoreboardGrouping {
                 LeagueShelf(
                     key: league.rawValue,
                     title: league.label,
-                    emoji: league.emoji,
                     sportKey: sport,
                     sportTitle: league.sportSectionTitle,
-                    sportEmoji: league.emoji,
                     showSportHeader: showHeader,
                     games: list
                 )
