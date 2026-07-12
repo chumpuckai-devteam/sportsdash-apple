@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
 		05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
 		16B0D1704242DBBB9DF61E57 /* UISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2635CCB93A485DFB19FD12C9 /* UISettingsView.swift */; };
+		1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
 		1F21546D2EEECFE4C0609857 /* PlaybackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8E8CB70B9909B421B80422 /* PlaybackController.swift */; };
 		2575CF213135E966885C7A68 /* IptvChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */; };
 		26636196C15CE3CC16A6D566 /* PlayerPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */; };
@@ -89,6 +91,7 @@
 		494C229A52590BB87936755D /* SportsColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsColors.swift; sourceTree = "<group>"; };
 		5F4B40BC7655CA8A503E933B /* EpgService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpgService.swift; sourceTree = "<group>"; };
 		69622EC9F8240505A1991EBF /* SportsDashTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SportsDashTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPlayerView.swift; sourceTree = "<group>"; };
 		75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsDashApp.swift; sourceTree = "<group>"; };
 		7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScoresStrip.swift; sourceTree = "<group>"; };
 		785157AB5153580FDAA7ADD3 /* SportLeague.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportLeague.swift; sourceTree = "<group>"; };
@@ -258,6 +261,7 @@
 		D196590FC9848A9ECAEA3D7A /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */,
 				7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */,
 				2B8E8CB70B9909B421B80422 /* PlaybackController.swift */,
 				9A6536F79A69B3125D554008 /* PlayerLayerView.swift */,
@@ -368,6 +372,7 @@
 				05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */,
 				32761960E9FED5FC0E6B05A3 /* EpgProgram.swift in Sources */,
 				DB6463BD97C03A2EFD1710BC /* EpgService.swift in Sources */,
+				04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */,
 				E3731096DEF391C521AA4BE3 /* Game.swift in Sources */,
 				A49D776B0F83CF3F2DEBD2D7 /* GameCardView.swift in Sources */,
 				9D9B700CAE82A22395D44A10 /* GameDetailSheet.swift in Sources */,
@@ -405,6 +410,7 @@
 				E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */,
 				DE706435C9488D505489ABE8 /* EpgProgram.swift in Sources */,
 				F8C0D58D45A7685372A3AD43 /* EpgService.swift in Sources */,
+				1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */,
 				3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */,
 				2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */,
 				B6CB6ED9D1811F26026C0BAC /* GameDetailSheet.swift in Sources */,

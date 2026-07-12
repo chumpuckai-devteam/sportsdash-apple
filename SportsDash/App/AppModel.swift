@@ -33,6 +33,14 @@ final class AppModel: ObservableObject {
     /// Human status while EPG loads (e.g. “Downloading full guide (XMLTV)…”).
     @Published var epgStatus: String?
 
+    // MARK: - Floating / full-screen player session (UHF-style pop-out)
+
+    @Published var floatingPlayer: FloatingPlayerState?
+    /// Full-screen player presentation from floating expand or deep links.
+    @Published var fullScreenPlayer: PlayerRoute?
+    /// Shared playback used by the floating mini player.
+    let floatingPlayback = PlaybackController()
+
     let sportsAPI = SportsAPI()
     let iptvService = IptvService()
     let matching = MatchingService()
@@ -282,6 +290,36 @@ final class AppModel: ObservableObject {
         } catch {
             xtreamAccount = nil
         }
+    }
+
+    // MARK: - Floating player (pop-out)
+
+    /// Pop current stream into a floating mini player over the tab UI.
+    func popOutPlayer(channel: IptvChannel, game: Game?) {
+        floatingPlayback.configure(prefs: playerPrefs)
+        floatingPlayback.start(url: channel.url)
+        floatingPlayer = FloatingPlayerState(channel: channel, game: game, size: .compact)
+        // Dismiss any full-screen cover driven by app-level route.
+        fullScreenPlayer = nil
+    }
+
+    func closeFloatingPlayer() {
+        floatingPlayback.stop()
+        floatingPlayer = nil
+    }
+
+    func setFloatingPlayerSize(_ size: FloatingPlayerSize) {
+        guard var session = floatingPlayer else { return }
+        session.size = size
+        floatingPlayer = session
+    }
+
+    /// Expand floating player into full-screen PlayerView (restarts session there).
+    func expandFloatingPlayerToFullscreen() {
+        guard let session = floatingPlayer else { return }
+        let route = PlayerRoute(channel: session.channel, game: session.game, alternates: [])
+        closeFloatingPlayer()
+        fullScreenPlayer = route
     }
 
     /// Full EPG: disk download + background parse. UI only gets status ticks + final result.

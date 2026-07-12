@@ -22,6 +22,8 @@ struct PlayerView: View {
     @State private var multiSlots: [MultiviewSlot] = []
     /// Which pane owns audio (`primary` or a multiview slot id). Video keeps playing on all panes.
     @State private var audioFocusId: String = MultiviewAudioFocus.primary
+    /// When true, dismissing full-screen hands off to the floating mini player (don't stop audio).
+    @State private var isPoppingOut = false
 
     init(channel: IptvChannel, game: Game?, alternateMatches: [ChannelMatch] = []) {
         _channel = State(initialValue: channel)
@@ -113,9 +115,12 @@ struct PlayerView: View {
             scheduleChromeHide()
         }
         .onDisappear {
-            playback.stop()
             multiSlots.forEach { $0.playback.stop() }
             chromeTask?.cancel()
+            // Keep decoding only if we handed off to the floating pop-out player.
+            if !isPoppingOut {
+                playback.stop()
+            }
         }
         .onChange(of: appModel.playerPrefs) { _, prefs in
             playback.configure(prefs: prefs)
@@ -136,6 +141,8 @@ struct PlayerView: View {
         .confirmationDialog("Player options", isPresented: $showMoreMenu, titleVisibility: .visible) {
             Button("Cycle aspect (\(appModel.playerPrefs.aspect.label))") { cycleAspect() }
             Button("Jump to LIVE") { playback.jumpToLive() }
+            Button("Pop out player") { popOutToFloatingPlayer() }
+            Button("System Picture in Picture") { playback.togglePictureInPicture() }
             Button("Alternate streams") { showStreamSheet = true }
             Button("Cycle subtitles") { playback.cycleSubtitleTrack() }
             Button("Cancel", role: .cancel) {}
@@ -254,12 +261,12 @@ struct PlayerView: View {
                         playback.jumpToLive()
                         scheduleChromeHide()
                     }
+                    // UHF-style pop-out: floating mini player over the app (not system PiP).
                     utilityButton(
-                        systemName: playback.isPiPActive ? "pip.exit" : "pip.enter",
+                        systemName: "rectangle.inset.filled.and.person.filled",
                         tint: .white
                     ) {
-                        playback.togglePictureInPicture()
-                        scheduleChromeHide()
+                        popOutToFloatingPlayer()
                     }
                     utilityButton(
                         systemName: "rectangle.split.2x2",
@@ -761,6 +768,18 @@ struct PlayerView: View {
         case .auto, .fit, .ratio16x9, .ratio4x3:
             playback.setAspectFill(false)
         }
+    }
+
+    /// Leave fullscreen and show UHF-style floating player over tabs.
+    private func popOutToFloatingPlayer() {
+        // Close multiview extras — floating session is single-stream.
+        multiSlots.forEach { $0.playback.stop() }
+        multiSlots = []
+        isPoppingOut = true
+        // Release fullscreen decoder; floating session starts its own player.
+        playback.stop()
+        appModel.popOutPlayer(channel: channel, game: game)
+        dismiss()
     }
 }
 
