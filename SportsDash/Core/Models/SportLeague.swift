@@ -143,9 +143,9 @@ enum SportLeague: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    /// Default leagues enabled on first launch (matches Flutter defaults intent).
+    /// Default leagues on first launch — keep short for fast scoreboard loads.
     static let defaults: [SportLeague] = [
-        .worldcup, .ucl, .epl, .mls,
+        .worldcup, .ucl, .epl,
         .nfl, .nba, .mlb, .nhl,
     ]
 }

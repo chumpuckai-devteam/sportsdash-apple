@@ -138,18 +138,25 @@ actor IptvService {
 
     /// Alternate Xtream container (.m3u8 ↔ .ts) for playback fallback.
     nonisolated static func alternateXtreamContainer(_ url: String) -> String? {
-        if let range = url.range(of: #"^(https?://.+/live/[^/]+/[^/]+/\d+)\.m3u8"#, options: .regularExpression) {
-            let base = String(url[range]).replacingOccurrences(of: ".m3u8", with: "")
-            return "\(base).ts"
+        // .../live/user/pass/12345.m3u8 → .ts (and reverse)
+        if url.lowercased().contains(".m3u8") {
+            return url.replacingOccurrences(
+                of: ".m3u8",
+                with: ".ts",
+                options: [.caseInsensitive, .backwards]
+            )
         }
-        if let range = url.range(of: #"^(https?://.+/live/[^/]+/[^/]+/\d+)\.(ts|mp4)"#, options: .regularExpression) {
-            let full = String(url[range])
-            if full.hasSuffix(".ts") {
-                return full.replacingOccurrences(of: ".ts", with: ".m3u8")
-            }
-            if full.hasSuffix(".mp4") {
-                return full.replacingOccurrences(of: ".mp4", with: ".m3u8")
-            }
+        if let range = url.range(of: ".ts", options: [.caseInsensitive, .backwards]),
+           range.upperBound == url.endIndex || url[range.upperBound] == "?" {
+            var out = url
+            out.replaceSubrange(range, with: ".m3u8")
+            return out
+        }
+        if let range = url.range(of: ".mp4", options: [.caseInsensitive, .backwards]),
+           range.upperBound == url.endIndex || url[range.upperBound] == "?" {
+            var out = url
+            out.replaceSubrange(range, with: ".m3u8")
+            return out
         }
         return nil
     }

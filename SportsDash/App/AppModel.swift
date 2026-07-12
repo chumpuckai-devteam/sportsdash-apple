@@ -58,15 +58,25 @@ final class AppModel: ObservableObject {
         if !silent { isLoadingScores = true }
         scoresError = nil
         defer { if !silent { isLoadingScores = false } }
-        do {
-            let leagues = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
-            games = try await sportsAPI.fetchScoreboards(leagues: leagues)
-            lastUpdated = Date()
-        } catch {
-            if games.isEmpty {
-                scoresError = error.localizedDescription
+        let leagues = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
+        // Progressive updates — first leagues paint quickly instead of waiting for all.
+        let result = await sportsAPI.fetchScoreboards(leagues: leagues) { [weak self] partial in
+            Task { @MainActor in
+                guard let self else { return }
+                // Only push partial if we still have nothing or fewer games
+                if self.games.count < partial.count || self.games.isEmpty {
+                    self.games = partial
+                    self.lastUpdated = Date()
+                }
             }
         }
+        games = result
+        lastUpdated = Date()
+    }
+
+    /// Matching can be heavy with large playlists — keep off hot SwiftUI paths when possible.
+    nonisolated func matchesSync(game: Game, channels: [IptvChannel]) -> [ChannelMatch] {
+        MatchingService().matchGameToChannels(game, channels: channels)
     }
 
     func reloadChannels() async {
@@ -126,7 +136,9 @@ final class AppModel: ObservableObject {
     }
 
     func matches(for game: Game) -> [ChannelMatch] {
-        matching.matchGameToChannels(game, channels: channels)
+        // Snapshot channels to avoid long main-thread holds on huge playlists
+        let chans = channels
+        return matching.matchGameToChannels(game, channels: chans)
     }
 
     var filteredGames: [Game] {

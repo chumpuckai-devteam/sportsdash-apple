@@ -1,5 +1,4 @@
 import AVFoundation
-import AVKit
 import SwiftUI
 
 /// Fullscreen IPTV player with LIVE jump, aspect, stream picker, live scores strip.
@@ -16,6 +15,7 @@ struct PlayerView: View {
     @State private var showStreamSheet = false
     @State private var showGamePicker: Game?
     @State private var chromeTask: Task<Void, Never>?
+    @State private var videoGravity: AVLayerVideoGravity = .resizeAspect
 
     init(channel: IptvChannel, game: Game?, alternateMatches: [ChannelMatch] = []) {
         _channel = State(initialValue: channel)
@@ -28,15 +28,19 @@ struct PlayerView: View {
             Color.black.ignoresSafeArea()
 
             if let player = playback.player {
-                VideoPlayer(player: player)
+                PlayerLayerView(player: player, videoGravity: videoGravity)
                     .ignoresSafeArea()
                     .onTapGesture { toggleChrome() }
             }
 
-            if playback.isLoading {
-                ProgressView("Starting stream…")
-                    .tint(SportsColors.gold)
-                    .foregroundStyle(.white)
+            if playback.isLoading || playback.isBuffering {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(SportsColors.gold)
+                    Text(playback.isLoading ? "Starting stream…" : "Buffering…")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
             }
 
             if let err = playback.error {
@@ -50,20 +54,25 @@ struct PlayerView: View {
                 }
             }
 
-            if showScoresStrip, playback.error == nil, !playback.isLoading {
+            if showScoresStrip, playback.error == nil {
                 VStack {
                     Spacer()
                     LiveScoresStrip(
-                        games: appModel.games,
+                        games: appModel.games.filter(\.isLive),
                         currentGameId: game?.id,
                         favoriteTeamIds: appModel.favoriteTeamIds,
                         lastPlayedGameIds: appModel.lastPlayedGameIds,
                         onGameTap: { g in
-                            let m = appModel.matches(for: g)
-                            if m.isEmpty {
-                                playback.banner = "No streams matched for \(g.matchupLabel)"
-                            } else {
-                                showGamePicker = g
+                            Task {
+                                let chans = appModel.channels
+                                let m = await Task.detached(priority: .userInitiated) {
+                                    MatchingService().matchGameToChannels(g, channels: chans)
+                                }.value
+                                if m.isEmpty {
+                                    playback.banner = "No streams matched for \(g.matchupLabel)"
+                                } else {
+                                    showGamePicker = g
+                                }
                             }
                         }
                     )
@@ -89,7 +98,10 @@ struct PlayerView: View {
             streamSheet(matches: streamOptions)
         }
         .sheet(item: $showGamePicker) { g in
-            streamSheet(matches: appModel.matches(for: g), forGame: g)
+            streamSheet(
+                matches: MatchingService().matchGameToChannels(g, channels: appModel.channels),
+                forGame: g
+            )
         }
         .overlay(alignment: .bottom) {
             if let banner = playback.banner {
@@ -105,9 +117,7 @@ struct PlayerView: View {
     }
 
     private var streamOptions: [ChannelMatch] {
-        var opts = [
-            ChannelMatch(channel: channel, score: 100, reason: "Current"),
-        ]
+        var opts = [ChannelMatch(channel: channel, score: 100, reason: "Current")]
         opts.append(contentsOf: alternates.filter { $0.channel.id != channel.id })
         return opts
     }
@@ -133,34 +143,25 @@ struct PlayerView: View {
                 }
             }
             Spacer()
-            Button {
-                playback.jumpToLive()
-            } label: {
+            Button { playback.jumpToLive() } label: {
                 HStack(spacing: 4) {
                     Circle().fill(SportsColors.live).frame(width: 8, height: 8)
-                    Text("LIVE")
-                        .font(.caption.weight(.black))
+                    Text("LIVE").font(.caption.weight(.black))
                 }
                 .foregroundStyle(SportsColors.live)
                 .padding(.horizontal, 8)
             }
-            Button {
-                cycleAspect()
-            } label: {
+            Button { cycleAspect() } label: {
                 Image(systemName: "aspectratio")
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(8)
             }
-            Button {
-                showScoresStrip.toggle()
-            } label: {
+            Button { showScoresStrip.toggle() } label: {
                 Image(systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt")
                     .foregroundStyle(showScoresStrip ? SportsColors.gold : .white.opacity(0.85))
                     .padding(8)
             }
-            Button {
-                showStreamSheet = true
-            } label: {
+            Button { showStreamSheet = true } label: {
                 Image(systemName: "list.bullet")
                     .foregroundStyle(SportsColors.gold)
                     .padding(8)
@@ -193,12 +194,10 @@ struct PlayerView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             HStack {
-                Button("Retry") {
-                    playback.start(url: channel.url)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(SportsColors.gold)
-                .foregroundStyle(SportsColors.voidBlack)
+                Button("Retry") { playback.start(url: channel.url) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(SportsColors.gold)
+                    .foregroundStyle(SportsColors.voidBlack)
                 Button("Back") { dismiss() }
                     .buttonStyle(.bordered)
             }
@@ -240,12 +239,9 @@ struct PlayerView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading) {
-                                Text(m.channel.name)
-                                    .foregroundStyle(SportsColors.text)
+                                Text(m.channel.name).foregroundStyle(SportsColors.text)
                                 if let gr = m.channel.group {
-                                    Text(gr)
-                                        .font(.caption)
-                                        .foregroundStyle(SportsColors.muted)
+                                    Text(gr).font(.caption).foregroundStyle(SportsColors.muted)
                                 }
                             }
                             Spacer()
@@ -318,104 +314,10 @@ struct PlayerView: View {
     }
 
     private func applyAspect() {
-        playback.setVideoGravity(appModel.playerPrefs.aspect)
-    }
-}
-
-@MainActor
-final class PlaybackController: ObservableObject {
-    @Published var player: AVPlayer?
-    @Published var isLoading = false
-    @Published var error: String?
-    @Published var banner: String?
-
-    private var endObserver: NSObjectProtocol?
-    private var statusObservation: NSKeyValueObservation?
-    private var triedAlternate = false
-    private var currentURL: String?
-
-    func start(url: String) {
-        stop()
-        currentURL = url
-        isLoading = true
-        error = nil
-        triedAlternate = false
-        guard let u = URL(string: url) else {
-            error = "Invalid stream URL"
-            isLoading = false
-            return
+        switch appModel.playerPrefs.aspect {
+        case .fill: videoGravity = .resizeAspectFill
+        case .stretch: videoGravity = .resize
+        case .auto, .fit, .ratio16x9, .ratio4x3: videoGravity = .resizeAspect
         }
-        let item = AVPlayerItem(url: u)
-        let p = AVPlayer(playerItem: item)
-        p.automaticallyWaitsToMinimizeStalling = true
-        player = p
-        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self else { return }
-                switch item.status {
-                case .readyToPlay:
-                    self.isLoading = false
-                    self.player?.play()
-                case .failed:
-                    self.handleFail(item.error?.localizedDescription ?? "Playback failed")
-                default:
-                    break
-                }
-            }
-        }
-        // Timeout if stuck loading
-        Task {
-            try? await Task.sleep(nanoseconds: 20_000_000_000)
-            if isLoading {
-                handleFail("Stream timed out while loading")
-            }
-        }
-    }
-
-    func stop() {
-        statusObservation?.invalidate()
-        statusObservation = nil
-        player?.pause()
-        player?.replaceCurrentItem(with: nil)
-        player = nil
-    }
-
-    func jumpToLive() {
-        guard let player, let item = player.currentItem else {
-            if let url = currentURL { start(url: url) }
-            return
-        }
-        let duration = item.duration
-        if duration.isNumeric && duration.seconds.isFinite && duration.seconds > 2 {
-            let edge = CMTime(seconds: max(0, duration.seconds - 0.5), preferredTimescale: 600)
-            player.seek(to: edge)
-            player.play()
-            banner = "Jumped to live"
-        } else if let url = currentURL {
-            // Live TS / unknown duration — hard restart
-            start(url: url)
-            banner = "Rejoined live stream"
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            await MainActor.run { banner = nil }
-        }
-    }
-
-    func setVideoGravity(_ aspect: PlayerAspectMode) {
-        // AVPlayerViewController gravity is set via VideoPlayer; use layer if available
-        // SwiftUI VideoPlayer doesn't expose gravity easily — store for future AVPlayerLayer host
-        _ = aspect
-    }
-
-    private func handleFail(_ message: String) {
-        if !triedAlternate, let url = currentURL,
-           let alt = IptvService.alternateXtreamContainer(url) {
-            triedAlternate = true
-            start(url: alt)
-            return
-        }
-        isLoading = false
-        error = message
     }
 }

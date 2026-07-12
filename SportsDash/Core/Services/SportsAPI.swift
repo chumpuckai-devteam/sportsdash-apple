@@ -1,40 +1,68 @@
 import Foundation
 
-/// ESPN public scoreboard client (same endpoints as the Flutter prototype).
+/// ESPN public scoreboard client with bounded concurrency for snappy UI.
 actor SportsAPI {
     private let session: URLSession
     private let base = "https://site.api.espn.com/apis/site/v2/sports"
+    /// Cap parallel ESPN requests so first paint isn't starved.
+    private let maxConcurrent = 5
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.ephemeral
+            config.timeoutIntervalForRequest = 12
+            config.timeoutIntervalForResource = 20
+            config.httpAdditionalHeaders = [
+                "User-Agent": "SportsDash/1.0 (iOS)",
+                "Accept": "application/json",
+            ]
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+            self.session = URLSession(configuration: config)
+        }
     }
 
-    func fetchScoreboards(leagues: [SportLeague]) async throws -> [Game] {
+    /// Fetches scoreboards; optional progressive callback for partial UI updates.
+    func fetchScoreboards(
+        leagues: [SportLeague],
+        onPartial: (@Sendable ([Game]) -> Void)? = nil
+    ) async -> [Game] {
         var all: [Game] = []
-        try await withThrowingTaskGroup(of: [Game].self) { group in
-            for league in leagues {
-                group.addTask {
-                    try await self.fetchScoreboard(league: league)
+        var index = 0
+        let list = leagues
+
+        while index < list.count {
+            let end = min(index + maxConcurrent, list.count)
+            let slice = Array(list[index..<end])
+            await withTaskGroup(of: [Game].self) { group in
+                for league in slice {
+                    group.addTask {
+                        (try? await self.fetchScoreboard(league: league)) ?? []
+                    }
+                }
+                for await batch in group {
+                    all.append(contentsOf: batch)
                 }
             }
-            for try await batch in group {
-                all.append(contentsOf: batch)
-            }
+            // Progressive update after each batch
+            let snapshot = all.sorted(by: Self.sortGames)
+            onPartial?(snapshot)
+            index = end
         }
-        return all.sorted { a, b in
-            if a.isLive != b.isLive { return a.isLive && !b.isLive }
-            return a.startTime < b.startTime
-        }
+        return all.sorted(by: Self.sortGames)
+    }
+
+    nonisolated private static func sortGames(_ a: Game, _ b: Game) -> Bool {
+        if a.isLive != b.isLive { return a.isLive && !b.isLive }
+        return a.startTime < b.startTime
     }
 
     func fetchScoreboard(league: SportLeague) async throws -> [Game] {
         let urlString = "\(base)/\(league.sportPath)/\(league.leaguePath)/scoreboard"
         guard let url = URL(string: urlString) else { return [] }
-        var request = URLRequest(url: url)
-        request.setValue("SportsDash/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(from: url)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            // Empty board for off-season leagues is fine
             return []
         }
         return try parseScoreboard(data: data, league: league)
@@ -47,6 +75,11 @@ actor SportsAPI {
         }
 
         var games: [Game] = []
+        games.reserveCapacity(events.count)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoBasic = ISO8601DateFormatter()
+
         for event in events {
             guard let id = event["id"] as? String else { continue }
             let competitions = event["competitions"] as? [[String: Any]] ?? []
@@ -73,8 +106,8 @@ actor SportsAPI {
                 status = .unknown
             }
 
-            let dateStr = (comp["date"] as? String) ?? (event["date"] as? String)
-            let start = ISO8601DateFormatter().date(from: dateStr ?? "") ?? Date()
+            let dateStr = (comp["date"] as? String) ?? (event["date"] as? String) ?? ""
+            let start = iso.date(from: dateStr) ?? isoBasic.date(from: dateStr) ?? Date()
 
             let competitors = comp["competitors"] as? [[String: Any]] ?? []
             var home = TeamInfo(id: "", name: "Home", abbreviation: "HOME")
@@ -95,22 +128,17 @@ actor SportsAPI {
                 }
             }
 
-            let broadcasts: [String] = {
-                guard let list = comp["broadcasts"] as? [[String: Any]] else { return [] }
-                var names: [String] = []
+            var broadcasts: [String] = []
+            if let list = comp["broadcasts"] as? [[String: Any]] {
                 for b in list {
-                    if let n = b["names"] as? [String] {
-                        names.append(contentsOf: n)
-                    }
+                    if let n = b["names"] as? [String] { broadcasts.append(contentsOf: n) }
                 }
-                return names
-            }()
+            }
 
             let venue = (comp["venue"] as? [String: Any])?["fullName"] as? String
             let eventName = event["name"] as? String ?? event["shortName"] as? String
             let period = (statusObj["period"] as? Int).map(String.init)
             let clock = statusObj["displayClock"] as? String
-
             let isH2H = league.sportPath != "golf" && league.sportPath != "racing"
 
             games.append(
