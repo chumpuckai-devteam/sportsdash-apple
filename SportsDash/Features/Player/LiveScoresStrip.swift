@@ -1,12 +1,17 @@
 import SwiftUI
 
-/// Player overlay: sport-grouped live cards, last-played sort, manual scroll.
+/// Player overlay ticker: sport → league → live games, with tap-to-collapse like the scores dashboard.
 struct LiveScoresStrip: View {
     let games: [Game]
     var currentGameId: String?
     var favoriteTeamIds: Set<String> = []
     var lastPlayedGameIds: [String] = []
     var onGameTap: (Game) -> Void
+
+    /// Collapsed sport section keys (`soccer`, `baseball`, …).
+    @State private var collapsedSports: Set<String> = []
+    /// Collapsed league keys (`worldcup`, `mlb`, …).
+    @State private var collapsedLeagues: Set<String> = []
 
     private var liveOrdered: [Game] {
         var live = games.filter(\.isLive)
@@ -25,22 +30,29 @@ struct LiveScoresStrip: View {
         return Array(live.prefix(40))
     }
 
-    private var groups: [(sport: String, title: String, emoji: String, games: [Game])] {
-        var order: [String] = []
-        var map: [String: [Game]] = [:]
-        var titles: [String: String] = [:]
-        var emojis: [String: String] = [:]
-        for g in liveOrdered {
-            let key = g.league.sportPath
-            if map[key] == nil {
-                order.append(key)
-                titles[key] = g.league.sportSectionTitle
-                emojis[key] = g.league.emoji
-                map[key] = []
+    /// Same sport → league shelves as the scores dashboard, live-only.
+    private var shelves: [LeagueShelf] {
+        ScoreboardGrouping.leagueShelves(from: liveOrdered)
+    }
+
+    private var sportSections: [StripSportSection] {
+        var sections: [StripSportSection] = []
+        var current: StripSportSection?
+        for shelf in shelves {
+            if current?.sportKey != shelf.sportKey {
+                if let current { sections.append(current) }
+                current = StripSportSection(
+                    sportKey: shelf.sportKey,
+                    sportTitle: shelf.sportTitle,
+                    emoji: shelf.games.first?.league.emoji ?? "🏟️",
+                    leagues: [shelf]
+                )
+            } else {
+                current?.leagues.append(shelf)
             }
-            map[key]?.append(g)
         }
-        return order.map { (sport: $0, title: titles[$0]!, emoji: emojis[$0]!, games: map[$0]!) }
+        if let current { sections.append(current) }
+        return sections
     }
 
     var body: some View {
@@ -50,16 +62,23 @@ struct LiveScoresStrip: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .center, spacing: 10) {
-                    if groups.isEmpty {
+                    if sportSections.isEmpty {
                         Text("No other live games")
                             .font(.caption)
                             .foregroundStyle(SportsColors.muted)
                             .padding(.horizontal)
                     }
-                    ForEach(groups, id: \.sport) { group in
-                        sportHeader(group.emoji, group.title, count: group.games.count)
-                        ForEach(group.games) { g in
-                            card(g)
+                    ForEach(sportSections) { section in
+                        sportChip(section)
+                        if !collapsedSports.contains(section.sportKey) {
+                            ForEach(section.leagues) { league in
+                                leagueChip(league)
+                                if !collapsedLeagues.contains(league.key) {
+                                    ForEach(sortedGames(league.games)) { g in
+                                        card(g)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -78,9 +97,81 @@ struct LiveScoresStrip: View {
         )
     }
 
+    // MARK: - Hierarchy chips
+
+    private func sportChip(_ section: StripSportSection) -> some View {
+        let collapsed = collapsedSports.contains(section.sportKey)
+        let count = section.leagues.reduce(0) { $0 + $1.games.count }
+        return Button {
+            toggleSport(section.sportKey)
+        } label: {
+            VStack(spacing: 4) {
+                Text(section.emoji).font(.title3)
+                Text(section.sportTitle.uppercased())
+                    .font(.system(size: 9, weight: .black))
+                    .foregroundStyle(SportsColors.gold)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                HStack(spacing: 3) {
+                    Text("\(count)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(SportsColors.muted)
+                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(SportsColors.muted)
+                }
+            }
+            .frame(width: 72, height: 104)
+            .background(SportsColors.voidBlack.opacity(0.8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(SportsColors.gold.opacity(collapsed ? 0.25 : 0.55), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(section.sportTitle), \(count) live")
+        .accessibilityHint(collapsed ? "Expand sport" : "Collapse sport")
+    }
+
+    private func leagueChip(_ league: LeagueShelf) -> some View {
+        let collapsed = collapsedLeagues.contains(league.key)
+        return Button {
+            toggleLeague(league.key)
+        } label: {
+            VStack(spacing: 4) {
+                Text(league.title.uppercased())
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(SportsColors.gold)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.85)
+                Text("\(league.games.count) LIVE")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(SportsColors.live)
+                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(SportsColors.muted)
+            }
+            .padding(.horizontal, 8)
+            .frame(width: 78, height: 104)
+            .background(SportsColors.panel.opacity(0.9))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(SportsColors.border.opacity(collapsed ? 0.35 : 0.7), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(league.title), \(league.games.count) live")
+        .accessibilityHint(collapsed ? "Expand league" : "Collapse league")
+    }
+
+    // MARK: - Hero / cards
+
     private func hero(_ game: Game) -> some View {
         VStack(spacing: 2) {
-            Text("\(game.league.emoji)  \(game.league.sportSectionTitle.uppercased())  ·  \(game.league.label)")
+            Text("\(game.league.sportSectionTitle.uppercased())  ·  \(game.league.label)")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(SportsColors.gold)
             if game.usesMatchupLayout {
@@ -96,27 +187,6 @@ struct LiveScoresStrip: View {
             }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private func sportHeader(_ emoji: String, _ title: String, count: Int) -> some View {
-        VStack(spacing: 4) {
-            Text(emoji).font(.title3)
-            Text(title.uppercased())
-                .font(.system(size: 9, weight: .black))
-                .foregroundStyle(SportsColors.gold)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-            Text("\(count)")
-                .font(.caption2)
-                .foregroundStyle(SportsColors.muted)
-        }
-        .frame(width: 68, height: 104)
-        .background(SportsColors.voidBlack.opacity(0.75))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(SportsColors.gold.opacity(0.45), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func card(_ g: Game) -> some View {
@@ -186,6 +256,36 @@ struct LiveScoresStrip: View {
         }
     }
 
+    // MARK: - Helpers
+
+    private func sortedGames(_ games: [Game]) -> [Game] {
+        games.sorted { a, b in
+            let aNow = a.id == currentGameId ? 0 : 1
+            let bNow = b.id == currentGameId ? 0 : 1
+            if aNow != bNow { return aNow < bNow }
+            let aLp = lastPlayedRank(a.id)
+            let bLp = lastPlayedRank(b.id)
+            if aLp != bLp { return aLp < bLp }
+            return a.startTime < b.startTime
+        }
+    }
+
+    private func toggleSport(_ key: String) {
+        if collapsedSports.contains(key) {
+            collapsedSports.remove(key)
+        } else {
+            collapsedSports.insert(key)
+        }
+    }
+
+    private func toggleLeague(_ key: String) {
+        if collapsedLeagues.contains(key) {
+            collapsedLeagues.remove(key)
+        } else {
+            collapsedLeagues.insert(key)
+        }
+    }
+
     private func isFav(_ g: Game) -> Bool {
         favoriteTeamIds.contains(g.home.id) || favoriteTeamIds.contains(g.away.id)
     }
@@ -193,4 +293,14 @@ struct LiveScoresStrip: View {
     private func lastPlayedRank(_ id: String) -> Int {
         lastPlayedGameIds.firstIndex(of: id) ?? 9999
     }
+}
+
+// MARK: - Strip model
+
+private struct StripSportSection: Identifiable {
+    var id: String { sportKey }
+    let sportKey: String
+    let sportTitle: String
+    let emoji: String
+    var leagues: [LeagueShelf]
 }

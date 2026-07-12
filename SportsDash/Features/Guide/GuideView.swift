@@ -12,13 +12,47 @@ private enum GuideMetrics {
     static var timelineWidth: CGFloat { CGFloat(hours) * pxPerHour }
 }
 
-/// Traditional TV guide: channels on the left, EPG programs on a horizontal hour timeline.
+/// List = channel × time timeline. Grid = card-style Now/Next rows.
+enum GuideDisplayMode: String, CaseIterable, Identifiable {
+    case list
+    case grid
+
+    var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .list: return "List View"
+        case .grid: return "Grid View"
+        }
+    }
+
+    var menuSubtitle: String {
+        switch self {
+        case .list: return "Channel × time guide"
+        case .grid: return "Card-style Now / Next"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .list: return "list.bullet.rectangle"
+        case .grid: return "square.grid.2x2"
+        }
+    }
+}
+
+/// Traditional TV guide + optional card grid, with a small guide-only settings menu.
 struct GuideView: View {
     @EnvironmentObject private var appModel: AppModel
+    @AppStorage("guide_display_mode") private var displayModeRaw: String = GuideDisplayMode.list.rawValue
     @State private var selectedGroup: String = ""
     @State private var windowStart: Date = GuideView.snappedNowMinusOneHour()
     @State private var playerRoute: PlayerRoute?
     @State private var nowTick = Date()
+
+    private var displayMode: GuideDisplayMode {
+        GuideDisplayMode(rawValue: displayModeRaw) ?? .list
+    }
 
     private var groupNames: [String] {
         appModel.channelGroups.map(\.name)
@@ -56,7 +90,7 @@ struct GuideView: View {
                         description: Text("Pick another category from the menu.")
                     )
                 } else {
-                    guideGrid
+                    guideContent
                 }
             }
             .background(SportsColors.voidBlack)
@@ -70,37 +104,8 @@ struct GuideView: View {
                         groupMenu
                     }
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        shiftWindow(byHours: -6)
-                    } label: {
-                        Image(systemName: "chevron.left.2")
-                    }
-                    .accessibilityLabel("Earlier")
-
-                    Button("NOW") {
-                        windowStart = Self.snappedNowMinusOneHour()
-                    }
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SportsColors.gold)
-
-                    Button {
-                        shiftWindow(byHours: 6)
-                    } label: {
-                        Image(systemName: "chevron.right.2")
-                    }
-                    .accessibilityLabel("Later")
-
-                    Button {
-                        Task { await reloadEpg() }
-                    } label: {
-                        if appModel.isLoadingEpg {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                    .accessibilityLabel("Refresh guide")
+                ToolbarItem(placement: .topBarTrailing) {
+                    guideSettingsMenu
                 }
             }
             .task {
@@ -145,13 +150,53 @@ struct GuideView: View {
         }
     }
 
-    private var guideGrid: some View {
-        VStack(spacing: 0) {
-            if appModel.isLoadingEpg && guideRows.allSatisfy({ $0.programs.isEmpty }) {
-                ProgressView("Loading program guide…")
-                    .tint(SportsColors.gold)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    /// Guide-only settings: refresh + list/grid layout.
+    private var guideSettingsMenu: some View {
+        Menu {
+            Button {
+                Task { await reloadEpg() }
+            } label: {
+                Label(
+                    appModel.isLoadingEpg ? "Refreshing…" : "Refresh Guide",
+                    systemImage: "arrow.clockwise"
+                )
+            }
+            .disabled(appModel.isLoadingEpg)
+
+            Divider()
+
+            Section("Layout") {
+                ForEach(GuideDisplayMode.allCases) { mode in
+                    Button {
+                        displayModeRaw = mode.rawValue
+                    } label: {
+                        if displayMode == mode {
+                            Label(mode.menuTitle, systemImage: "checkmark")
+                        } else {
+                            Label(mode.menuTitle, systemImage: mode.systemImage)
+                        }
+                    }
+                }
+            }
+        } label: {
+            if appModel.isLoadingEpg {
+                ProgressView()
             } else {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+        .accessibilityLabel("Guide settings")
+    }
+
+    @ViewBuilder
+    private var guideContent: some View {
+        if appModel.isLoadingEpg && guideRows.allSatisfy({ $0.programs.isEmpty }) {
+            ProgressView("Loading program guide…")
+                .tint(SportsColors.gold)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            switch displayMode {
+            case .list:
                 GuideTimelineGrid(
                     rows: guideRows,
                     windowStart: windowStart,
@@ -160,16 +205,37 @@ struct GuideView: View {
                         playerRoute = PlayerRoute(channel: channel, game: nil, alternates: [])
                     }
                 )
+            case .grid:
+                guideCardList
             }
         }
     }
 
-    private func shiftWindow(byHours hours: Int) {
-        windowStart = Calendar.current.date(byAdding: .hour, value: hours, to: windowStart) ?? windowStart
+    /// Card-style Now / Next rows (grid view).
+    private var guideCardList: some View {
+        List {
+            Section {
+                ForEach(guideRows) { row in
+                    Button {
+                        playerRoute = PlayerRoute(channel: row.channel, game: nil, alternates: [])
+                    } label: {
+                        GuideCardRow(channel: row.channel, programs: row.programs)
+                    }
+                    .listRowBackground(SportsColors.panel)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                }
+            } header: {
+                Text(selectedGroup.isEmpty ? "Channels" : selectedGroup)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(SportsColors.muted)
+                    .textCase(nil)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func reloadEpg() async {
-        // Load enough channels for a usable grid; short EPG is lightweight.
         let chans = Array(activeChannels.prefix(80))
         guard !chans.isEmpty else { return }
         await appModel.loadEpg(for: chans)
@@ -180,6 +246,93 @@ struct GuideView: View {
         let cal = Calendar.current
         let hour = cal.dateInterval(of: .hour, for: n)?.start ?? n
         return cal.date(byAdding: .hour, value: -1, to: hour) ?? hour
+    }
+}
+
+// MARK: - Card row (grid view)
+
+private struct GuideCardRow: View {
+    let channel: IptvChannel
+    let programs: [EpgProgram]
+
+    private var now: EpgProgram? {
+        programs.first(where: \.isNow) ?? programs.first
+    }
+
+    private var next: EpgProgram? {
+        guard let now else { return programs.dropFirst().first }
+        return programs.first { $0.start >= now.end } ?? programs.dropFirst().first
+    }
+
+    private var progress: Double {
+        guard let now else { return 0 }
+        let total = now.end.timeIntervalSince(now.start)
+        guard total > 0 else { return 0 }
+        let elapsed = Date().timeIntervalSince(now.start)
+        return min(1, max(0, elapsed / total))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(channel.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(SportsColors.text)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "play.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(SportsColors.gold)
+                    .symbolRenderingMode(.hierarchical)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("NOW")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(SportsColors.live)
+                    if let now {
+                        Text(now.timeRangeLabel)
+                            .font(.caption2)
+                            .foregroundStyle(SportsColors.muted)
+                    }
+                }
+                Text(now?.title ?? "No program info")
+                    .font(.subheadline)
+                    .foregroundStyle(SportsColors.textSecondary)
+                    .lineLimit(2)
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color(.tertiarySystemFill))
+                        Capsule()
+                            .fill(SportsColors.live.opacity(0.85))
+                            .frame(width: geo.size.width * progress)
+                    }
+                }
+                .frame(height: 3)
+            }
+
+            if let next {
+                HStack(alignment: .top, spacing: 6) {
+                    Text("NEXT")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(SportsColors.muted)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(next.title)
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.textSecondary)
+                            .lineLimit(1)
+                        Text(next.timeRangeLabel)
+                            .font(.caption2)
+                            .foregroundStyle(SportsColors.muted)
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 
