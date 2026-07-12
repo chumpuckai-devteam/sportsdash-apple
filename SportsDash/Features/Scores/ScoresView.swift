@@ -119,6 +119,7 @@ struct ScoresView: View {
         }
     }
 
+    /// Apple-style filter chips (like Sports / Fitness segmented filters).
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -130,54 +131,41 @@ struct ScoresView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(f.label)
-                                .font(.caption.weight(.black))
+                                .font(.subheadline.weight(.semibold))
                             if f == .live, liveCount > 0 {
                                 Text("\(liveCount)")
                                     .font(.caption2.weight(.bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(SportsColors.live.opacity(0.2))
-                                    .clipShape(Capsule())
+                                    .foregroundStyle(selected ? SportsColors.voidBlack.opacity(0.7) : SportsColors.live)
                             }
                         }
-                        .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.muted)
+                        .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(selected ? SportsColors.gold : SportsColors.panelElevated)
-                        .overlay(
-                            Capsule().stroke(
-                                selected ? SportsColors.gold : SportsColors.border,
-                                lineWidth: 1
-                            )
-                        )
+                        .background(selected ? SportsColors.gold : Color(.secondarySystemFill))
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
         .background(SportsColors.voidBlack)
-        .overlay(alignment: .bottom) {
-            Divider().background(SportsColors.border)
-        }
     }
 
-    /// Sport section label (e.g. BASEBALL, SOCCER) — no emoji.
+    /// Sport section — native list-section style (title only, no rule line).
     private func sportHeader(_ title: String) -> some View {
-        HStack(spacing: 10) {
-            Text(title.uppercased())
-                .font(.caption.weight(.black))
-                .tracking(1.6)
-                .foregroundStyle(SportsColors.gold)
-            Rectangle().fill(SportsColors.border).frame(height: 1)
-        }
-        .padding(.horizontal)
-        .padding(.top, 10)
+        Text(title)
+            .font(.title3.weight(.bold))
+            .foregroundStyle(SportsColors.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 4)
+            .accessibilityAddTraits(.isHeader)
     }
 
-    /// League sub-row (e.g. MLB, World Cup, Premier League) — no emoji.
+    /// League sub-row under a sport (e.g. MLB, World Cup).
     private func shelfSection(
         title: String,
         games: [Game],
@@ -185,25 +173,18 @@ struct ScoresView: View {
     ) -> some View {
         let live = games.filter(\.isLive).count
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(goldTitle ? SportsColors.gold : SportsColors.text)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(goldTitle ? SportsColors.gold : SportsColors.textSecondary)
                 Spacer()
-                Text("\(games.count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(SportsColors.muted)
                 if live > 0 {
-                    Text("\(live) LIVE")
-                        .font(.caption2.weight(.black))
+                    Text("\(live) Live")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(SportsColors.live)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(SportsColors.live.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
