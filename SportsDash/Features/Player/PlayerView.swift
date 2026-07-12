@@ -15,6 +15,8 @@ struct PlayerView: View {
     @State private var showGamePicker: Game?
     @State private var showMultiviewPicker = false
     @State private var showMoreMenu = false
+    @State private var multiviewGroup: String = ""
+    @State private var multiviewSearch: String = ""
     @State private var chromeTask: Task<Void, Never>?
     /// Extra streams for multiview (primary is `channel` / `playback`).
     @State private var multiSlots: [MultiviewSlot] = []
@@ -392,6 +394,25 @@ struct PlayerView: View {
 
     // MARK: - Multiview
 
+    private var multiviewGroupNames: [String] {
+        appModel.channelGroups.map(\.name)
+    }
+
+    /// Channels in the selected multiview group (optional name filter).
+    private var multiviewPickerChannels: [IptvChannel] {
+        let group = multiviewGroup.isEmpty ? multiviewGroupNames.first : multiviewGroup
+        var list = appModel.channelGroups.first(where: { $0.name == group })?.channels
+            ?? appModel.channels
+        let q = multiviewSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !q.isEmpty {
+            list = list.filter {
+                $0.name.lowercased().contains(q)
+                    || ($0.group?.lowercased().contains(q) ?? false)
+            }
+        }
+        return list
+    }
+
     private var multiviewChannelPicker: some View {
         NavigationStack {
             List {
@@ -400,26 +421,61 @@ struct PlayerView: View {
                         .font(.caption)
                         .foregroundStyle(SportsColors.muted)
                         .listRowBackground(SportsColors.panel)
-                }
-                Section("Add stream") {
-                    ForEach(appModel.channels.prefix(200)) { ch in
-                        Button {
-                            addMultiviewChannel(ch)
-                            showMultiviewPicker = false
-                        } label: {
-                            HStack {
-                                Text(ChannelNameCleanup.displayName(ch.name, enabled: appModel.playerPrefs.cleanUpNames))
-                                    .foregroundStyle(SportsColors.text)
-                                Spacer()
-                                if ch.id == channel.id || multiSlots.contains(where: { $0.channel.id == ch.id }) {
-                                    Text("ON")
-                                        .font(.caption.weight(.black))
-                                        .foregroundStyle(SportsColors.gold)
-                                }
+
+                    if !multiviewGroupNames.isEmpty {
+                        Picker("Group", selection: $multiviewGroup) {
+                            ForEach(multiviewGroupNames, id: \.self) { name in
+                                Text(name).tag(name)
                             }
                         }
-                        .listRowBackground(SportsColors.panelElevated)
+                        .pickerStyle(.menu)
+                        .tint(SportsColors.gold)
+                        .listRowBackground(SportsColors.panel)
                     }
+                } header: {
+                    Text("Category")
+                }
+
+                Section {
+                    if multiviewPickerChannels.isEmpty {
+                        Text("No channels in this group.")
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.muted)
+                            .listRowBackground(SportsColors.panel)
+                    } else {
+                        ForEach(multiviewPickerChannels) { ch in
+                            Button {
+                                addMultiviewChannel(ch)
+                                showMultiviewPicker = false
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(ChannelNameCleanup.displayName(
+                                            ch.name,
+                                            enabled: appModel.playerPrefs.cleanUpNames
+                                        ))
+                                        .foregroundStyle(SportsColors.text)
+                                        if let g = ch.group, !g.isEmpty {
+                                            Text(g)
+                                                .font(.caption2)
+                                                .foregroundStyle(SportsColors.muted)
+                                        }
+                                    }
+                                    Spacer()
+                                    if ch.id == channel.id
+                                        || multiSlots.contains(where: { $0.channel.id == ch.id }) {
+                                        Text("ON")
+                                            .font(.caption.weight(.black))
+                                            .foregroundStyle(SportsColors.gold)
+                                    }
+                                }
+                            }
+                            .listRowBackground(SportsColors.panelElevated)
+                        }
+                    }
+                } header: {
+                    let group = multiviewGroup.isEmpty ? (multiviewGroupNames.first ?? "Channels") : multiviewGroup
+                    Text("\(group) · \(multiviewPickerChannels.count)")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -427,10 +483,39 @@ struct PlayerView: View {
             .navigationTitle("Multiview")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $multiviewSearch, prompt: "Search in group")
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { showMultiviewPicker = false }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if !multiviewGroupNames.isEmpty {
+                        Menu {
+                            Picker("Group", selection: $multiviewGroup) {
+                                ForEach(multiviewGroupNames, id: \.self) { name in
+                                    Text(name).tag(name)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(multiviewGroup.isEmpty ? "Group" : multiviewGroup)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(SportsColors.gold)
+                        }
+                    }
+                }
+            }
+            .onAppear {
+                if multiviewGroup.isEmpty {
+                    // Prefer the primary stream’s group when opening the picker.
+                    multiviewGroup = channel.group
+                        ?? multiviewGroupNames.first
+                        ?? ""
                 }
             }
         }
