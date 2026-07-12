@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Fullscreen IPTV player with multi-engine (KSPlayer FFmpeg / AVPlayer), LIVE jump, aspect, scores strip.
+/// Fullscreen IPTV player with UHF-style chrome: channel/EPG info, pause, PiP, multiview, captions, scores.
 struct PlayerView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -13,7 +13,11 @@ struct PlayerView: View {
     @State private var showScoresStrip = true
     @State private var showStreamSheet = false
     @State private var showGamePicker: Game?
+    @State private var showMultiviewPicker = false
+    @State private var showMoreMenu = false
     @State private var chromeTask: Task<Void, Never>?
+    /// Extra streams for multiview (primary is `channel` / `playback`).
+    @State private var multiSlots: [MultiviewSlot] = []
 
     init(channel: IptvChannel, game: Game?, alternateMatches: [ChannelMatch] = []) {
         _channel = State(initialValue: channel)
@@ -21,40 +25,46 @@ struct PlayerView: View {
         _alternates = State(initialValue: alternateMatches)
     }
 
+    /// Max concurrent streams: Xtream max_connections, default 2, hard cap 4.
+    private var maxMultiviewSlots: Int {
+        let fromAccount = appModel.xtreamAccount?.maxConnections ?? 2
+        return min(4, max(1, fromAccount))
+    }
+
+    private var totalActiveStreams: Int {
+        1 + multiSlots.count
+    }
+
+    private var currentProgram: EpgProgram? {
+        let programs = appModel.epgByChannel[channel.id] ?? []
+        return programs.first(where: \.isNow) ?? programs.first
+    }
+
+    private var nextProgram: EpgProgram? {
+        guard let now = currentProgram else { return nil }
+        let programs = appModel.epgByChannel[channel.id] ?? []
+        return programs.first { $0.start >= now.end }
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            KSPlayerSurface(playback: playback)
+            videoSurface
                 .ignoresSafeArea()
                 .onTapGesture { toggleChrome() }
 
-            // Hide start overlay once playback is producing frames (even if brief rebuffer).
-            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .tint(SportsColors.gold)
-                    Text(playback.isLoading ? "Starting stream…" : "Buffering…")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                    if !playback.engineLabel.isEmpty {
-                        Text(playback.engineLabel)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                }
-                .allowsHitTesting(false)
+            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying && multiSlots.isEmpty {
+                loadingOverlay
+                    .allowsHitTesting(false)
             }
 
-            if let err = playback.error {
+            if let err = playback.error, multiSlots.isEmpty {
                 errorOverlay(err)
             }
 
             if showChrome {
-                VStack {
-                    topBar
-                    Spacer()
-                }
+                playerChrome
             }
 
             if showScoresStrip, playback.error == nil {
@@ -84,15 +94,20 @@ struct PlayerView: View {
             }
         }
         .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
         .onAppear {
             playback.configure(prefs: appModel.playerPrefs)
             applyAspect()
             playback.start(url: channel.url)
             if let id = game?.id { appModel.recordLastPlayed(gameId: id) }
+            if appModel.xtreamAccount == nil {
+                Task { await appModel.refreshXtreamAccount() }
+            }
             scheduleChromeHide()
         }
         .onDisappear {
             playback.stop()
+            multiSlots.forEach { $0.playback.stop() }
             chromeTask?.cancel()
         }
         .onChange(of: appModel.playerPrefs) { _, prefs in
@@ -108,6 +123,16 @@ struct PlayerView: View {
                 forGame: g
             )
         }
+        .sheet(isPresented: $showMultiviewPicker) {
+            multiviewChannelPicker
+        }
+        .confirmationDialog("Player options", isPresented: $showMoreMenu, titleVisibility: .visible) {
+            Button("Cycle aspect (\(appModel.playerPrefs.aspect.label))") { cycleAspect() }
+            Button("Jump to LIVE") { playback.jumpToLive() }
+            Button("Alternate streams") { showStreamSheet = true }
+            Button("Cycle subtitles") { playback.cycleSubtitleTrack() }
+            Button("Cancel", role: .cancel) {}
+        }
         .overlay(alignment: .bottom) {
             if let banner = playback.banner {
                 Text(banner)
@@ -121,68 +146,347 @@ struct PlayerView: View {
         }
     }
 
+    // MARK: - Video surface (single or multiview grid)
+
+    @ViewBuilder
+    private var videoSurface: some View {
+        if multiSlots.isEmpty {
+            KSPlayerSurface(playback: playback)
+        } else {
+            multiviewGrid
+        }
+    }
+
+    private var multiviewGrid: some View {
+        let columns = multiSlots.count >= 2
+            ? [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)]
+            : [GridItem(.flexible())]
+        return LazyVGrid(columns: columns, spacing: 2) {
+            MultiviewCell(
+                title: ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames),
+                playback: playback,
+                isPrimary: true,
+                onClose: nil
+            )
+            ForEach(multiSlots) { slot in
+                MultiviewCell(
+                    title: ChannelNameCleanup.displayName(slot.channel.name, enabled: appModel.playerPrefs.cleanUpNames),
+                    playback: slot.playback,
+                    isPrimary: false,
+                    onClose: { removeMultiviewSlot(id: slot.id) }
+                )
+            }
+        }
+        .background(Color.black)
+    }
+
+    private var loadingOverlay: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .tint(SportsColors.gold)
+            Text(playback.isLoading ? "Starting stream…" : "Buffering…")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.9))
+            if !playback.engineLabel.isEmpty {
+                Text(playback.engineLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+        }
+    }
+
+    // MARK: - UHF-style chrome
+
+    private var playerChrome: some View {
+        VStack(spacing: 0) {
+            topChrome
+            Spacer()
+            bottomChrome
+        }
+        .transition(.opacity)
+    }
+
+    private var topChrome: some View {
+        HStack(spacing: 10) {
+            chromeIconButton(systemName: "chevron.left") { dismiss() }
+
+            Spacer()
+
+            // Engine / quality chip
+            Text(engineChip)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+
+            chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
+                playback.toggleMute()
+                scheduleChromeHide()
+            }
+
+            chromeIconButton(systemName: "aspectratio") {
+                cycleAspect()
+                scheduleChromeHide()
+            }
+
+            chromeIconButton(systemName: "ellipsis") {
+                showMoreMenu = true
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 24)
+        .background(
+            LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom)
+        )
+    }
+
+    private var bottomChrome: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Channel + program info (UHF-style)
+            VStack(alignment: .leading, spacing: 6) {
+                if let group = channel.group, !group.isEmpty {
+                    Text(group.uppercased())
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(SportsColors.gold)
+                }
+
+                Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+
+                if let prog = currentProgram {
+                    Text(prog.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(2)
+                    Text(prog.timeRangeLabel)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else if let g = game {
+                    Text(g.matchupLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                }
+
+                if let next = nextProgram {
+                    Text("Next: \(next.title)")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
+                }
+
+                // Badges
+                HStack(spacing: 6) {
+                    badge(appModel.activePlaylist?.name ?? "IPTV", color: SportsColors.gold.opacity(0.85))
+                    badge(appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV", color: .white.opacity(0.25))
+                    if playback.isPlaying {
+                        badge("LIVE", color: SportsColors.live.opacity(0.35))
+                    }
+                    if multiSlots.count > 0 {
+                        badge("×\(totalActiveStreams)", color: .purple.opacity(0.5))
+                    }
+                }
+            }
+
+            // Transport + utility buttons
+            HStack(spacing: 12) {
+                // Pause / play
+                Button {
+                    playback.togglePlayPause()
+                    scheduleChromeHide()
+                } label: {
+                    Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 8) {
+                    // LIVE edge
+                    utilityButton(systemName: "dot.radiowaves.left.and.right", tint: SportsColors.live) {
+                        playback.jumpToLive()
+                        scheduleChromeHide()
+                    }
+
+                    // Picture in Picture
+                    utilityButton(
+                        systemName: playback.isPiPActive ? "pip.exit" : "pip.enter",
+                        tint: .white
+                    ) {
+                        playback.togglePictureInPicture()
+                        scheduleChromeHide()
+                    }
+
+                    // Multiview
+                    utilityButton(
+                        systemName: "rectangle.split.2x2",
+                        tint: multiSlots.isEmpty ? .white : SportsColors.gold
+                    ) {
+                        if totalActiveStreams >= maxMultiviewSlots {
+                            playback.banner = "Max \(maxMultiviewSlots) streams (account limit)"
+                            Task {
+                                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                playback.banner = nil
+                            }
+                        } else {
+                            showMultiviewPicker = true
+                        }
+                        scheduleChromeHide()
+                    }
+
+                    // Captions
+                    utilityButton(systemName: "captions.bubble", tint: .white) {
+                        playback.cycleSubtitleTrack()
+                        scheduleChromeHide()
+                    }
+
+                    // Live scores ticker
+                    utilityButton(
+                        systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt",
+                        tint: showScoresStrip ? SportsColors.gold : .white
+                    ) {
+                        showScoresStrip.toggle()
+                        scheduleChromeHide()
+                    }
+
+                    // Stream list
+                    utilityButton(systemName: "list.bullet", tint: SportsColors.gold) {
+                        showStreamSheet = true
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 28)
+        .padding(.bottom, showScoresStrip ? 8 : 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.55), .black.opacity(0.92)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private var engineChip: String {
+        appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV"
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color, in: Capsule())
+    }
+
+    private func chromeIconButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+    }
+
+    private func utilityButton(systemName: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+        }
+    }
+
+    // MARK: - Multiview
+
+    private var multiviewChannelPicker: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("You can watch up to \(maxMultiviewSlots) streams at once (from your IPTV package). Currently \(totalActiveStreams)/\(maxMultiviewSlots).")
+                        .font(.caption)
+                        .foregroundStyle(SportsColors.muted)
+                        .listRowBackground(SportsColors.panel)
+                }
+                Section("Add stream") {
+                    ForEach(appModel.channels.prefix(200)) { ch in
+                        Button {
+                            addMultiviewChannel(ch)
+                            showMultiviewPicker = false
+                        } label: {
+                            HStack {
+                                Text(ChannelNameCleanup.displayName(ch.name, enabled: appModel.playerPrefs.cleanUpNames))
+                                    .foregroundStyle(SportsColors.text)
+                                Spacer()
+                                if ch.id == channel.id || multiSlots.contains(where: { $0.channel.id == ch.id }) {
+                                    Text("ON")
+                                        .font(.caption.weight(.black))
+                                        .foregroundStyle(SportsColors.gold)
+                                }
+                            }
+                        }
+                        .listRowBackground(SportsColors.panelElevated)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SportsColors.voidBlack)
+            .navigationTitle("Multiview")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { showMultiviewPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func addMultiviewChannel(_ ch: IptvChannel) {
+        guard totalActiveStreams < maxMultiviewSlots else { return }
+        guard ch.id != channel.id, !multiSlots.contains(where: { $0.channel.id == ch.id }) else {
+            playback.banner = "Already playing"
+            return
+        }
+        let slot = MultiviewSlot(channel: ch)
+        slot.playback.configure(prefs: appModel.playerPrefs)
+        slot.playback.start(url: ch.url)
+        multiSlots.append(slot)
+        playback.banner = "Multiview \(totalActiveStreams)/\(maxMultiviewSlots)"
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            playback.banner = nil
+        }
+    }
+
+    private func removeMultiviewSlot(id: UUID) {
+        if let idx = multiSlots.firstIndex(where: { $0.id == id }) {
+            multiSlots[idx].playback.stop()
+            multiSlots.remove(at: idx)
+        }
+    }
+
+    // MARK: - Errors / streams
+
     private var streamOptions: [ChannelMatch] {
         var opts = [ChannelMatch(channel: channel, score: 100, reason: "Current")]
         opts.append(contentsOf: alternates.filter { $0.channel.id != channel.id })
         return opts
-    }
-
-    private var topBar: some View {
-        HStack(spacing: 4) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(10)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                if let g = channel.group {
-                    Text(g)
-                        .font(.caption2)
-                        .foregroundStyle(SportsColors.muted)
-                        .lineLimit(1)
-                }
-            }
-            Spacer()
-            Button { playback.jumpToLive() } label: {
-                HStack(spacing: 4) {
-                    Circle().fill(SportsColors.live).frame(width: 8, height: 8)
-                    Text("LIVE").font(.caption.weight(.black))
-                }
-                .foregroundStyle(SportsColors.live)
-                .padding(.horizontal, 8)
-            }
-            Button { cycleAspect() } label: {
-                Image(systemName: "aspectratio")
-                    .foregroundStyle(.white.opacity(0.85))
-                    .padding(8)
-            }
-            Button { showScoresStrip.toggle() } label: {
-                Image(systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt")
-                    .foregroundStyle(showScoresStrip ? SportsColors.gold : .white.opacity(0.85))
-                    .padding(8)
-            }
-            Button { showStreamSheet = true } label: {
-                Image(systemName: "list.bullet")
-                    .foregroundStyle(SportsColors.gold)
-                    .padding(8)
-            }
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(8)
-            }
-        }
-        .padding(.horizontal, 4)
-        .padding(.top, 8)
-        .padding(.bottom, 20)
-        .background(
-            LinearGradient(colors: [.black.opacity(0.85), .clear], startPoint: .top, endPoint: .bottom)
-        )
     }
 
     private func errorOverlay(_ message: String) -> some View {
@@ -206,7 +510,6 @@ struct PlayerView: View {
                 Button("Back") { dismiss() }
                     .buttonStyle(.bordered)
             }
-            // Quick engine switch when current stack fails
             if appModel.playerPrefs.primaryPlayer != .ksPlayer {
                 Button("Retry with KSPlayer (Metal)") {
                     var prefs = appModel.playerPrefs
@@ -228,22 +531,6 @@ struct PlayerView: View {
                     playback.start(url: channel.url)
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(SportsColors.gold)
-            }
-            if let alt = IptvService.alternateXtreamContainer(channel.url) {
-                Button("Try alternate format (.ts / .m3u8)") {
-                    channel = IptvChannel(
-                        id: channel.id,
-                        name: channel.name,
-                        url: alt,
-                        group: channel.group,
-                        logoURL: channel.logoURL,
-                        tvgId: channel.tvgId,
-                        epgChannelId: channel.epgChannelId
-                    )
-                    playback.start(url: alt)
-                }
-                .font(.caption)
                 .foregroundStyle(SportsColors.gold)
             }
         }
@@ -322,7 +609,7 @@ struct PlayerView: View {
     private func scheduleChromeHide() {
         chromeTask?.cancel()
         chromeTask = Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
             if !Task.isCancelled {
                 await MainActor.run { showChrome = false }
             }
@@ -349,6 +636,66 @@ struct PlayerView: View {
             playback.setAspectFill(true)
         case .auto, .fit, .ratio16x9, .ratio4x3:
             playback.setAspectFill(false)
+        }
+    }
+}
+
+// MARK: - Multiview models
+
+@MainActor
+final class MultiviewSlot: Identifiable, ObservableObject {
+    let id = UUID()
+    let channel: IptvChannel
+    let playback = PlaybackController()
+
+    init(channel: IptvChannel) {
+        self.channel = channel
+    }
+}
+
+private struct MultiviewCell: View {
+    let title: String
+    @ObservedObject var playback: PlaybackController
+    var isPrimary: Bool
+    var onClose: (() -> Void)?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            KSPlayerSurface(playback: playback)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .background(Color.black)
+
+            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
+                ProgressView()
+                    .tint(SportsColors.gold)
+            }
+
+            VStack {
+                HStack {
+                    Text(title)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.55), in: Capsule())
+                    Spacer()
+                    if let onClose {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.white.opacity(0.9))
+                                .padding(6)
+                        }
+                    }
+                }
+                Spacer()
+            }
+            .padding(6)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(isPrimary ? SportsColors.gold.opacity(0.6) : SportsColors.border.opacity(0.4), lineWidth: isPrimary ? 1.5 : 1)
         }
     }
 }

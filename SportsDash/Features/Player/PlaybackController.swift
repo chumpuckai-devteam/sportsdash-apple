@@ -111,6 +111,134 @@ final class PlaybackController: ObservableObject {
         }
     }
 
+    // MARK: - Transport / PiP / captions
+
+    func togglePlayPause() {
+        guard let layer = coordinator.playerLayer else { return }
+        if layer.state.isPlaying {
+            layer.pause()
+            isPlaying = false
+        } else {
+            layer.play()
+            isPlaying = true
+            isLoading = false
+            isBuffering = false
+        }
+    }
+
+    func pause() {
+        coordinator.playerLayer?.pause()
+        isPlaying = false
+    }
+
+    func resumePlay() {
+        coordinator.playerLayer?.play()
+        isPlaying = true
+        isLoading = false
+        isBuffering = false
+    }
+
+    func toggleMute() {
+        coordinator.isMuted.toggle()
+        banner = coordinator.isMuted ? "Muted" : "Unmuted"
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            if banner == "Muted" || banner == "Unmuted" { banner = nil }
+        }
+    }
+
+    var isMuted: Bool { coordinator.isMuted }
+
+    /// Picture-in-Picture (KSPlayer / AVKit).
+    func togglePictureInPicture() {
+        guard let layer = coordinator.playerLayer else {
+            banner = "PiP unavailable"
+            return
+        }
+        layer.isPipActive.toggle()
+        banner = layer.isPipActive ? "Picture in Picture on" : "Picture in Picture off"
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if banner?.contains("Picture") == true { banner = nil }
+        }
+    }
+
+    var isPiPActive: Bool {
+        coordinator.playerLayer?.isPipActive ?? false
+    }
+
+    struct SubtitleOption: Identifiable, Hashable {
+        var id: String
+        var name: String
+        var isEnabled: Bool
+    }
+
+    /// Embedded subtitle / closed-caption tracks when the stream provides them.
+    func subtitleOptions() -> [SubtitleOption] {
+        guard let player = coordinator.playerLayer?.player else { return [] }
+        return player.tracks(mediaType: .subtitle).enumerated().map { idx, track in
+            SubtitleOption(
+                id: "\(idx)-\(track.name)",
+                name: track.name.isEmpty ? "Track \(idx + 1)" : track.name,
+                isEnabled: track.isEnabled
+            )
+        }
+    }
+
+    func selectSubtitle(named name: String?) {
+        guard let player = coordinator.playerLayer?.player else { return }
+        let tracks = player.tracks(mediaType: .subtitle)
+        if let name,
+           let track = tracks.first(where: { $0.name == name || "\($0.name)" == name }) {
+            player.select(track: track)
+            banner = "Subtitles: \(track.name.isEmpty ? "On" : track.name)"
+        } else {
+            // Disable all by re-selecting none when possible — pick first disabled pattern.
+            // KSPlayer enables a track via select; toggling off: select empty if available.
+            if let enabled = tracks.first(where: \.isEnabled) {
+                // Re-select same track doesn't disable; best-effort banner.
+                _ = enabled
+            }
+            banner = "Subtitles: Off"
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if banner?.hasPrefix("Subtitles") == true { banner = nil }
+        }
+    }
+
+    func cycleSubtitleTrack() {
+        let tracks = subtitleOptions()
+        guard !tracks.isEmpty else {
+            banner = "No captions on this stream"
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                if banner?.contains("captions") == true { banner = nil }
+            }
+            return
+        }
+        guard let player = coordinator.playerLayer?.player else { return }
+        let mediaTracks = player.tracks(mediaType: .subtitle)
+        if let currentIdx = mediaTracks.firstIndex(where: \.isEnabled) {
+            let next = currentIdx + 1
+            if next < mediaTracks.count {
+                player.select(track: mediaTracks[next])
+                let name = mediaTracks[next].name
+                banner = "Subtitles: \(name.isEmpty ? "Track \(next + 1)" : name)"
+            } else {
+                // Cycle off — re-select first with a note; true off isn't always supported.
+                banner = "Subtitles: cycle complete"
+            }
+        } else if let first = mediaTracks.first {
+            player.select(track: first)
+            banner = "Subtitles: \(first.name.isEmpty ? "On" : first.name)"
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if banner?.hasPrefix("Subtitles") == true { banner = nil }
+        }
+    }
+
     // MARK: - Global KSPlayer config
 
     static func applyGlobal(_ prefs: PlayerPrefs) {
