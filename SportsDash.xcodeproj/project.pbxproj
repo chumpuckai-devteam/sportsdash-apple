@@ -1,0 +1,566 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
+		2575CF213135E966885C7A68 /* IptvChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */; };
+		27AAC46D639F78C9242EECAF /* MatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */; };
+		2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46644F4CFC505A9A0C711D84 /* GameCardView.swift */; };
+		29D9824E2CFA113E27CF5BFE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */; };
+		31BBA37D93F235C9385A6CAC /* SportsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7974E8727B3CE9311C7030D /* SportsAPI.swift */; };
+		3486FDA626F4C683774FF8FF /* SportsDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */; };
+		351F36947C67E492E0478109 /* SportsColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 494C229A52590BB87936755D /* SportsColors.swift */; };
+		3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
+		414B4CEB24C5F3815C02D66B /* IptvService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471471EC528E70A5EA1F34F4 /* IptvService.swift */; };
+		5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */; };
+		54D313710DDC00E7528EDA46 /* SportLeague.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785157AB5153580FDAA7ADD3 /* SportLeague.swift */; };
+		5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */; };
+		6DDDC13FB9D09AF25CF96984 /* SportsDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */; };
+		6F3EF38FF408DCD30298EFC0 /* PlayerPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */; };
+		71E856D992F371C497E6910F /* SportLeague.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785157AB5153580FDAA7ADD3 /* SportLeague.swift */; };
+		76646428DD6C7FC99E4B190C /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EFBEACA2485831A4253C53 /* RootTabView.swift */; };
+		7B6153EEDD6FC35C0442BE8D /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */; };
+		95532C7BA8EAA6F54782000E /* IptvChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */; };
+		9AAE34D6E818789F480BA992 /* PlayerPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */; };
+		A49D776B0F83CF3F2DEBD2D7 /* GameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46644F4CFC505A9A0C711D84 /* GameCardView.swift */; };
+		B3976BE88DA5C7D2AF1F48B0 /* IptvService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471471EC528E70A5EA1F34F4 /* IptvService.swift */; };
+		BF4FA82CEE4A6BE44C4CA694 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */; };
+		C1A3FE24D66331C815B7CF04 /* MatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */; };
+		CFC5670EF072841F02274478 /* SportsColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 494C229A52590BB87936755D /* SportsColors.swift */; };
+		DF15E6090BCA8022DB582613 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */; };
+		E3731096DEF391C521AA4BE3 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
+		E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
+		E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
+		F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
+		F9B245814AE3C15D3DF07166 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EFBEACA2485831A4253C53 /* RootTabView.swift */; };
+		FAAF35A1A7BA2717DE28EBDC /* SportsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7974E8727B3CE9311C7030D /* SportsAPI.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IptvChannel.swift; sourceTree = "<group>"; };
+		1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		3034744E5A3A79A03FECA0DF /* SportsDash.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SportsDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		45D76664BD312DAE597A0E9E /* Game.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Game.swift; sourceTree = "<group>"; };
+		46644F4CFC505A9A0C711D84 /* GameCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCardView.swift; sourceTree = "<group>"; };
+		471471EC528E70A5EA1F34F4 /* IptvService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IptvService.swift; sourceTree = "<group>"; };
+		494C229A52590BB87936755D /* SportsColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsColors.swift; sourceTree = "<group>"; };
+		69622EC9F8240505A1991EBF /* SportsDashTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SportsDashTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsDashApp.swift; sourceTree = "<group>"; };
+		785157AB5153580FDAA7ADD3 /* SportLeague.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportLeague.swift; sourceTree = "<group>"; };
+		A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPlaceholderView.swift; sourceTree = "<group>"; };
+		B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoresView.swift; sourceTree = "<group>"; };
+		B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsView.swift; sourceTree = "<group>"; };
+		B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideView.swift; sourceTree = "<group>"; };
+		C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D8EFBEACA2485831A4253C53 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		E7974E8727B3CE9311C7030D /* SportsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsAPI.swift; sourceTree = "<group>"; };
+		EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchingService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1757B28A0A63C78D857DD8F5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3034744E5A3A79A03FECA0DF /* SportsDash.app */,
+				69622EC9F8240505A1991EBF /* SportsDashTV.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1B379D524F84A37B38C58D02 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				45D76664BD312DAE597A0E9E /* Game.swift */,
+				1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */,
+				785157AB5153580FDAA7ADD3 /* SportLeague.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		3F6F2D4706C335A9FF3B6418 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				494C229A52590BB87936755D /* SportsColors.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		4F808749F0FB5D49C4FAEA22 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				471471EC528E70A5EA1F34F4 /* IptvService.swift */,
+				E7974E8727B3CE9311C7030D /* SportsAPI.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		52B211B5B13246F55DA1D583 = {
+			isa = PBXGroup;
+			children = (
+				BE464BB1CB6AE3106345DAB0 /* SportsDash */,
+				1757B28A0A63C78D857DD8F5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		55C497F876DE779BFAAA89DD /* Guide */ = {
+			isa = PBXGroup;
+			children = (
+				B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */,
+			);
+			path = Guide;
+			sourceTree = "<group>";
+		};
+		718503B9B9C7BECFB485BC1E /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				B71D1493066A0EDCD835ED9E /* Matching */,
+				1B379D524F84A37B38C58D02 /* Models */,
+				4F808749F0FB5D49C4FAEA22 /* Services */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		A3B9E3E4E938BC5BE2FE7BC5 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				C3877294771771BD7675E6EA /* Channels */,
+				55C497F876DE779BFAAA89DD /* Guide */,
+				D196590FC9848A9ECAEA3D7A /* Player */,
+				A654A1E1DC50B4A4D6FEFC5A /* Scores */,
+				CA4A44C7D4EA97C865498D3C /* Settings */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A654A1E1DC50B4A4D6FEFC5A /* Scores */ = {
+			isa = PBXGroup;
+			children = (
+				46644F4CFC505A9A0C711D84 /* GameCardView.swift */,
+				B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */,
+			);
+			path = Scores;
+			sourceTree = "<group>";
+		};
+		B71D1493066A0EDCD835ED9E /* Matching */ = {
+			isa = PBXGroup;
+			children = (
+				EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */,
+			);
+			path = Matching;
+			sourceTree = "<group>";
+		};
+		BE464BB1CB6AE3106345DAB0 /* SportsDash */ = {
+			isa = PBXGroup;
+			children = (
+				D6FF7D536AC4F31916559C07 /* App */,
+				718503B9B9C7BECFB485BC1E /* Core */,
+				A3B9E3E4E938BC5BE2FE7BC5 /* Features */,
+				3F6F2D4706C335A9FF3B6418 /* Theme */,
+			);
+			path = SportsDash;
+			sourceTree = "<group>";
+		};
+		C3877294771771BD7675E6EA /* Channels */ = {
+			isa = PBXGroup;
+			children = (
+				B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */,
+			);
+			path = Channels;
+			sourceTree = "<group>";
+		};
+		CA4A44C7D4EA97C865498D3C /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		D196590FC9848A9ECAEA3D7A /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */,
+			);
+			path = Player;
+			sourceTree = "<group>";
+		};
+		D6FF7D536AC4F31916559C07 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */,
+				D8EFBEACA2485831A4253C53 /* RootTabView.swift */,
+				75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4CF8683695D4E3C1E9FDBD5B /* SportsDashTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BAED3FEF50FC1EBBBE9B8602 /* Build configuration list for PBXNativeTarget "SportsDashTV" */;
+			buildPhases = (
+				D7FC13642A472CB3DAFDE853 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SportsDashTV;
+			packageProductDependencies = (
+			);
+			productName = SportsDashTV;
+			productReference = 69622EC9F8240505A1991EBF /* SportsDashTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D00BB0ED76D4928F0097EED0 /* SportsDash */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7AA11601289486FCE98A1C44 /* Build configuration list for PBXNativeTarget "SportsDash" */;
+			buildPhases = (
+				CA4CB141A47E22FEFE6DF843 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SportsDash;
+			packageProductDependencies = (
+			);
+			productName = SportsDash;
+			productReference = 3034744E5A3A79A03FECA0DF /* SportsDash.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C571534C6AAADFB57F64A9ED /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					4CF8683695D4E3C1E9FDBD5B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					D00BB0ED76D4928F0097EED0 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 5368D553D4F67AEE6FB079BE /* Build configuration list for PBXProject "SportsDash" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 52B211B5B13246F55DA1D583;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1757B28A0A63C78D857DD8F5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D00BB0ED76D4928F0097EED0 /* SportsDash */,
+				4CF8683695D4E3C1E9FDBD5B /* SportsDashTV */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		CA4CB141A47E22FEFE6DF843 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */,
+				05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */,
+				E3731096DEF391C521AA4BE3 /* Game.swift in Sources */,
+				A49D776B0F83CF3F2DEBD2D7 /* GameCardView.swift in Sources */,
+				5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */,
+				95532C7BA8EAA6F54782000E /* IptvChannel.swift in Sources */,
+				B3976BE88DA5C7D2AF1F48B0 /* IptvService.swift in Sources */,
+				27AAC46D639F78C9242EECAF /* MatchingService.swift in Sources */,
+				6F3EF38FF408DCD30298EFC0 /* PlayerPlaceholderView.swift in Sources */,
+				76646428DD6C7FC99E4B190C /* RootTabView.swift in Sources */,
+				F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */,
+				DF15E6090BCA8022DB582613 /* SettingsView.swift in Sources */,
+				71E856D992F371C497E6910F /* SportLeague.swift in Sources */,
+				31BBA37D93F235C9385A6CAC /* SportsAPI.swift in Sources */,
+				CFC5670EF072841F02274478 /* SportsColors.swift in Sources */,
+				3486FDA626F4C683774FF8FF /* SportsDashApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D7FC13642A472CB3DAFDE853 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7B6153EEDD6FC35C0442BE8D /* AppModel.swift in Sources */,
+				E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */,
+				3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */,
+				2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */,
+				BF4FA82CEE4A6BE44C4CA694 /* GuideView.swift in Sources */,
+				2575CF213135E966885C7A68 /* IptvChannel.swift in Sources */,
+				414B4CEB24C5F3815C02D66B /* IptvService.swift in Sources */,
+				C1A3FE24D66331C815B7CF04 /* MatchingService.swift in Sources */,
+				9AAE34D6E818789F480BA992 /* PlayerPlaceholderView.swift in Sources */,
+				F9B245814AE3C15D3DF07166 /* RootTabView.swift in Sources */,
+				E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */,
+				29D9824E2CFA113E27CF5BFE /* SettingsView.swift in Sources */,
+				54D313710DDC00E7528EDA46 /* SportLeague.swift in Sources */,
+				FAAF35A1A7BA2717DE28EBDC /* SportsAPI.swift in Sources */,
+				351F36947C67E492E0478109 /* SportsColors.swift in Sources */,
+				6DDDC13FB9D09AF25CF96984 /* SportsDashApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		43391522BDD17745EFB325D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sportsdash.ios;
+				SDKROOT = iphoneos;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		49AF9FDB792FB6F8703F36C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SportsDash;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		740EC8903F0723110A6DBE6E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sportsdash.tvos;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		75344CCC83573D5CBC126306 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SportsDash;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		773742B82DD0F331A2269B4D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sportsdash.tvos;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+		F1877467B4E36DEEF97F2F74 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sportsdash.ios;
+				SDKROOT = iphoneos;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5368D553D4F67AEE6FB079BE /* Build configuration list for PBXProject "SportsDash" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				49AF9FDB792FB6F8703F36C6 /* Debug */,
+				75344CCC83573D5CBC126306 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7AA11601289486FCE98A1C44 /* Build configuration list for PBXNativeTarget "SportsDash" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1877467B4E36DEEF97F2F74 /* Debug */,
+				43391522BDD17745EFB325D6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BAED3FEF50FC1EBBBE9B8602 /* Build configuration list for PBXNativeTarget "SportsDashTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				740EC8903F0723110A6DBE6E /* Debug */,
+				773742B82DD0F331A2269B4D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C571534C6AAADFB57F64A9ED /* Project object */;
+}

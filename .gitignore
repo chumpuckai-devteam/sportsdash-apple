@@ -1,0 +1,35 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.playground
+
+# XcodeGen
+# Keep generated project in repo for easy clone; regenerate with xcodegen when needed
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift PM
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# CocoaPods / Carthage (if added later)
+Pods/
+Carthage/Build/
+
+# Env / secrets
+.env
+*.pem
+Secrets.xcconfig
