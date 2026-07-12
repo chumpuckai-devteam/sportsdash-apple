@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ScoresView: View {
     @EnvironmentObject private var appModel: AppModel
+    @State private var selectedGame: Game?
 
     var body: some View {
         NavigationStack {
@@ -9,8 +10,7 @@ struct ScoresView: View {
                 SportsColors.voidBlack.ignoresSafeArea()
                 Group {
                     if appModel.isLoadingScores && appModel.games.isEmpty {
-                        ProgressView()
-                            .tint(SportsColors.gold)
+                        ProgressView().tint(SportsColors.gold)
                     } else if let err = appModel.scoresError, appModel.games.isEmpty {
                         ContentUnavailableView(
                             "Scores unavailable",
@@ -18,7 +18,7 @@ struct ScoresView: View {
                             description: Text(err)
                         )
                     } else {
-                        scoresList
+                        scoresContent
                     }
                 }
             }
@@ -37,32 +37,112 @@ struct ScoresView: View {
                 }
             }
             #if os(iOS)
-            .refreshable {
-                await appModel.refreshScores()
-            }
+            .refreshable { await appModel.refreshScores() }
             #endif
+            .sheet(item: $selectedGame) { game in
+                GameDetailSheet(game: game)
+                    .environmentObject(appModel)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         }
     }
 
-    private var scoresList: some View {
-        let sections = ScoreboardGrouping.leagueShelves(from: appModel.games)
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20, pinnedViews: []) {
-                if let updated = appModel.lastUpdated {
-                    Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
-                        .padding(.horizontal)
-                }
+    private var scoresContent: some View {
+        let showFaves = !appModel.favoriteGames.isEmpty
+            && (appModel.dashboardFilter == .all
+                || appModel.dashboardFilter == .live
+                || appModel.dashboardFilter == .upcoming
+                || appModel.dashboardFilter == .favorites)
+        let shelves: [LeagueShelf] = appModel.dashboardFilter == .favorites
+            ? []
+            : ScoreboardGrouping.leagueShelves(from: appModel.filteredGames)
 
-                ForEach(sections) { section in
-                    if section.showSportHeader {
-                        sportHeader(section.sportTitle, emoji: section.sportEmoji)
+        return VStack(spacing: 0) {
+            filterBar
+            if showFaves || !shelves.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        if let updated = appModel.lastUpdated {
+                            Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+                                .font(.caption)
+                                .foregroundStyle(SportsColors.muted)
+                                .padding(.horizontal)
+                        }
+                        if showFaves {
+                            shelfSection(
+                                title: "Faves",
+                                emoji: "★",
+                                games: appModel.favoriteGames,
+                                goldTitle: true
+                            )
+                        }
+                        ForEach(shelves) { section in
+                            if section.showSportHeader {
+                                sportHeader(section.sportTitle, emoji: section.sportEmoji)
+                            }
+                            shelfSection(
+                                title: section.title,
+                                emoji: section.emoji,
+                                games: section.games,
+                                goldTitle: false
+                            )
+                        }
                     }
-                    leagueShelf(section)
+                    .padding(.vertical, 12)
+                }
+            } else {
+                ContentUnavailableView(
+                    emptyTitle,
+                    systemImage: "sportscourt",
+                    description: Text(emptySubtitle)
+                )
+            }
+        }
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(DashboardFilter.allCases) { f in
+                    let selected = appModel.dashboardFilter == f
+                    let liveCount = appModel.games.filter(\.isLive).count
+                    Button {
+                        appModel.dashboardFilter = f
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(f.label)
+                                .font(.caption.weight(.black))
+                            if f == .live, liveCount > 0 {
+                                Text("\(liveCount)")
+                                    .font(.caption2.weight(.bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(SportsColors.live.opacity(0.2))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.muted)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(selected ? SportsColors.gold : SportsColors.panelElevated)
+                        .overlay(
+                            Capsule().stroke(
+                                selected ? SportsColors.gold : SportsColors.border,
+                                lineWidth: 1
+                            )
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .background(SportsColors.voidBlack)
+        .overlay(alignment: .bottom) {
+            Divider().background(SportsColors.border)
         }
     }
 
@@ -73,26 +153,30 @@ struct ScoresView: View {
                 .font(.caption.weight(.black))
                 .tracking(1.4)
                 .foregroundStyle(SportsColors.gold)
-            Rectangle()
-                .fill(SportsColors.border)
-                .frame(height: 1)
+            Rectangle().fill(SportsColors.border).frame(height: 1)
         }
         .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.top, 6)
     }
 
-    private func leagueShelf(_ section: LeagueShelf) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func shelfSection(
+        title: String,
+        emoji: String,
+        games: [Game],
+        goldTitle: Bool
+    ) -> some View {
+        let live = games.filter(\.isLive).count
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(section.emoji)  \(section.title)")
+                Text("\(emoji)  \(title)")
                     .font(.headline.weight(.bold))
-                    .foregroundStyle(SportsColors.text)
+                    .foregroundStyle(goldTitle ? SportsColors.gold : SportsColors.text)
                 Spacer()
-                Text("\(section.games.count)")
+                Text("\(games.count)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(SportsColors.muted)
-                if section.liveCount > 0 {
-                    Text("\(section.liveCount) LIVE")
+                if live > 0 {
+                    Text("\(live) LIVE")
                         .font(.caption2.weight(.black))
                         .foregroundStyle(SportsColors.live)
                         .padding(.horizontal, 8)
@@ -105,12 +189,40 @@ struct ScoresView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(section.games) { game in
-                        GameCardView(game: game)
+                    ForEach(games) { game in
+                        GameCardView(
+                            game: game,
+                            isFavorite: appModel.isFavorite(game),
+                            onTap: { selectedGame = game },
+                            onFavorite: {
+                                if !game.home.id.isEmpty {
+                                    appModel.toggleFavorite(teamId: game.home.id)
+                                }
+                                if !game.away.id.isEmpty {
+                                    appModel.toggleFavorite(teamId: game.away.id)
+                                }
+                            }
+                        )
                     }
                 }
                 .padding(.horizontal)
             }
+        }
+    }
+
+    private var emptyTitle: String {
+        switch appModel.dashboardFilter {
+        case .live: return "No live games"
+        case .upcoming: return "No upcoming games"
+        case .favorites: return "No favorite games"
+        case .all: return "No games"
+        }
+    }
+
+    private var emptySubtitle: String {
+        switch appModel.dashboardFilter {
+        case .favorites: return "Star teams on a matchup card to build your Faves row."
+        default: return "Pull to refresh or try another filter."
         }
     }
 }
@@ -125,7 +237,6 @@ struct LeagueShelf: Identifiable {
     var sportEmoji: String
     var showSportHeader: Bool
     var games: [Game]
-    var liveCount: Int { games.filter(\.isLive).count }
 }
 
 enum ScoreboardGrouping {
@@ -142,7 +253,6 @@ enum ScoreboardGrouping {
                 return $0.startTime < $1.startTime
             }
         }
-
         var shelves: [LeagueShelf] = []
         var lastSport: String?
         for league in leagueOrder {

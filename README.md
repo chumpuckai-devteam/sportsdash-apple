@@ -2,77 +2,56 @@
 
 Native **SwiftUI** app for **iOS** and **Apple TV (tvOS)**.
 
-This is the production Apple codebase. The Flutter prototype remains available for reference:
+Flutter prototype (reference only): https://github.com/chumpuckai-devteam/sportsdash
 
-- Flutter: https://github.com/chumpuckai-devteam/sportsdash  
-- Android (Kotlin/Compose) will be a separate repo later.
+## Features (ported from Flutter)
 
-## Stack
+| Area | Status |
+|------|--------|
+| Scores by **sport → league** shelves | ✅ |
+| LIVE / UPCOMING / FAVES / ALL filters | ✅ |
+| Favorite teams | ✅ |
+| ESPN scoreboards (multi-league) | ✅ |
+| Select leagues in Settings | ✅ |
+| Xtream + M3U load (Keychain password) | ✅ |
+| Channel browser by provider group | ✅ |
+| Stream matching (teams / groups / broadcasts) | ✅ |
+| Game detail → choose stream | ✅ |
+| Fullscreen player (AVPlayer) | ✅ |
+| LIVE jump, aspect prefs, stream list | ✅ |
+| Live scores strip (sport groups, last played) | ✅ |
+| Guide + short EPG (Xtream) | ✅ |
+| 45s scores refresh | ✅ |
 
-| Layer | Choice |
-|--------|--------|
-| Language | Swift 5 |
-| UI | SwiftUI (shared iOS + tvOS sources) |
-| Scores | ESPN public scoreboards (`URLSession`) |
-| IPTV | M3U + Xtream (v1 loaders) |
-| Matching | Port of Flutter `MatchingService` (v1) |
-| Player | `AVPlayer` placeholder → KSPlayer/VLC fallback planned |
-
-## Requirements
-
-- macOS with **Xcode 16+** (project uses iOS 17 / tvOS 17 deployment)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) to regenerate the project if needed
-
-## Open in Xcode
+## Open / run
 
 ```bash
 cd sportsdash-apple
-xcodegen generate   # if .xcodeproj missing or after Project.yml edits
+xcodegen generate   # after Project.yml changes
 open SportsDash.xcodeproj
 ```
 
-1. Select the **SportsDash** scheme (iPhone) or **SportsDashTV** (Apple TV).
-2. **Signing & Capabilities** → choose your Team.
-3. Change bundle IDs if needed (`com.sportsdash.ios` / `com.sportsdash.tvos`).
-4. Run on a **physical iPhone** for IPTV audio reliability (Simulator is limited).
+1. **Signing** → your Team + unique bundle id (e.g. `com.samirpatel.sportsdash.ios`)
+2. Physical **iPhone** for IPTV (best)
+3. Settings → Xtream/M3U → **Save & Load**
+4. Scores → card → **Choose a stream** → play
 
-### CLI run
-
-```bash
-xcodebuild -scheme SportsDash -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-# Or open Xcode and Run (⌘R)
-```
-
-## Project layout
+## Layout
 
 ```
 SportsDash/
-  App/                 # Entry + tab shell + AppModel
-  Core/
-    Models/            # Game, SportLeague, IPTV types
-    Services/          # SportsAPI, IptvService
-    Matching/          # MatchingService
-  Features/
-    Scores/            # Sport → league shelves
-    Channels/
-    Guide/             # Placeholder
-    Settings/
-    Player/            # AVPlayer placeholder
+  App/           AppModel, tabs
+  Core/          Models, ESPN, IPTV, EPG, Matching, Storage, Keychain
+  Features/      Scores, Channels, Guide, Settings, Player
   Theme/
 ```
 
-## Roadmap
+## Next enhancements
 
-1. ✅ Project scaffold + scores API + tab shell  
-2. ⬜ Keychain IPTV persistence  
-3. ⬜ Full player (LIVE jump, aspect, decoder options, live scores strip)  
-4. ⬜ Guide / EPG  
-5. ⬜ Apple TV focus polish  
-6. ⬜ Android port (separate repo)
-
-## Architecture notes
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- KSPlayer/VLC fallback for hard TS streams  
+- Deeper EPG / XMLTV  
+- Apple TV focus polish  
+- Android repo (Kotlin + Compose + ExoPlayer)
 
 ## License
 

@@ -7,6 +7,7 @@ struct IptvChannel: Identifiable, Hashable, Codable, Sendable {
     var group: String?
     var logoURL: String?
     var tvgId: String?
+    var epgChannelId: String?
 }
 
 enum IptvSourceType: String, Codable, Sendable {
@@ -14,11 +15,12 @@ enum IptvSourceType: String, Codable, Sendable {
     case xtream
 }
 
-struct IptvConfig: Codable, Sendable {
+struct IptvConfig: Codable, Sendable, Equatable {
     var type: IptvSourceType
     var m3uURL: String?
     var xtreamHost: String?
     var xtreamUsername: String?
+    /// Loaded from Keychain; not encoded into UserDefaults JSON.
     var xtreamPassword: String?
     var displayName: String?
 
@@ -31,6 +33,10 @@ struct IptvConfig: Codable, Sendable {
                 && !(xtreamUsername?.isEmpty ?? true)
                 && !(xtreamPassword?.isEmpty ?? true)
         }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type, m3uURL, xtreamHost, xtreamUsername, displayName
     }
 }
 

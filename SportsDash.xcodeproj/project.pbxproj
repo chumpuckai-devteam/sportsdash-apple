@@ -9,10 +9,14 @@
 /* Begin PBXBuildFile section */
 		05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
 		2575CF213135E966885C7A68 /* IptvChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */; };
+		26636196C15CE3CC16A6D566 /* PlayerPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */; };
+		26A4ACD47019AADF2A30F586 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1090AD445B621B9B48C6CF6B /* PlayerView.swift */; };
 		27AAC46D639F78C9242EECAF /* MatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */; };
 		2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46644F4CFC505A9A0C711D84 /* GameCardView.swift */; };
 		29D9824E2CFA113E27CF5BFE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */; };
+		2C538351FBADE81975B82667 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10AB69783C0F768691CA6E21 /* KeychainStore.swift */; };
 		31BBA37D93F235C9385A6CAC /* SportsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7974E8727B3CE9311C7030D /* SportsAPI.swift */; };
+		32761960E9FED5FC0E6B05A3 /* EpgProgram.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1962154907DC4FCBA45671B4 /* EpgProgram.swift */; };
 		3486FDA626F4C683774FF8FF /* SportsDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */; };
 		351F36947C67E492E0478109 /* SportsColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 494C229A52590BB87936755D /* SportsColors.swift */; };
 		3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
@@ -20,44 +24,61 @@
 		5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */; };
 		54D313710DDC00E7528EDA46 /* SportLeague.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785157AB5153580FDAA7ADD3 /* SportLeague.swift */; };
 		5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */; };
+		66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */; };
 		6DDDC13FB9D09AF25CF96984 /* SportsDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */; };
-		6F3EF38FF408DCD30298EFC0 /* PlayerPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */; };
 		71E856D992F371C497E6910F /* SportLeague.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785157AB5153580FDAA7ADD3 /* SportLeague.swift */; };
 		76646428DD6C7FC99E4B190C /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EFBEACA2485831A4253C53 /* RootTabView.swift */; };
 		7B6153EEDD6FC35C0442BE8D /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */; };
+		7B987F51AE74B2F0D48AEE63 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10AB69783C0F768691CA6E21 /* KeychainStore.swift */; };
 		95532C7BA8EAA6F54782000E /* IptvChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */; };
-		9AAE34D6E818789F480BA992 /* PlayerPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */; };
+		9D9B700CAE82A22395D44A10 /* GameDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24C42B15674881585E8FF1D /* GameDetailSheet.swift */; };
+		A029D5B519C96F40068949D1 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACFA98F2DC29322F942EC8B /* StorageService.swift */; };
+		A2130A05B3E974FC1AC23C68 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACFA98F2DC29322F942EC8B /* StorageService.swift */; };
 		A49D776B0F83CF3F2DEBD2D7 /* GameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46644F4CFC505A9A0C711D84 /* GameCardView.swift */; };
 		B3976BE88DA5C7D2AF1F48B0 /* IptvService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471471EC528E70A5EA1F34F4 /* IptvService.swift */; };
+		B6CB6ED9D1811F26026C0BAC /* GameDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24C42B15674881585E8FF1D /* GameDetailSheet.swift */; };
 		BF4FA82CEE4A6BE44C4CA694 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */; };
 		C1A3FE24D66331C815B7CF04 /* MatchingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */; };
+		CEFE40AAAB7F3B0F5DDE01A7 /* LiveScoresStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */; };
 		CFC5670EF072841F02274478 /* SportsColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 494C229A52590BB87936755D /* SportsColors.swift */; };
+		D8DB5EE2079668AFF024DDB4 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1090AD445B621B9B48C6CF6B /* PlayerView.swift */; };
+		DB6463BD97C03A2EFD1710BC /* EpgService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F4B40BC7655CA8A503E933B /* EpgService.swift */; };
+		DE706435C9488D505489ABE8 /* EpgProgram.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1962154907DC4FCBA45671B4 /* EpgProgram.swift */; };
+		DEECE22937840316EF2B4CAA /* LiveScoresStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */; };
 		DF15E6090BCA8022DB582613 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */; };
 		E3731096DEF391C521AA4BE3 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
 		E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
 		E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
 		F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
+		F8C0D58D45A7685372A3AD43 /* EpgService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F4B40BC7655CA8A503E933B /* EpgService.swift */; };
 		F9B245814AE3C15D3DF07166 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EFBEACA2485831A4253C53 /* RootTabView.swift */; };
 		FAAF35A1A7BA2717DE28EBDC /* SportsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7974E8727B3CE9311C7030D /* SportsAPI.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1090AD445B621B9B48C6CF6B /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		10AB69783C0F768691CA6E21 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IptvChannel.swift; sourceTree = "<group>"; };
 		1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		1962154907DC4FCBA45671B4 /* EpgProgram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpgProgram.swift; sourceTree = "<group>"; };
 		3034744E5A3A79A03FECA0DF /* SportsDash.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SportsDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		45D76664BD312DAE597A0E9E /* Game.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Game.swift; sourceTree = "<group>"; };
 		46644F4CFC505A9A0C711D84 /* GameCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCardView.swift; sourceTree = "<group>"; };
 		471471EC528E70A5EA1F34F4 /* IptvService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IptvService.swift; sourceTree = "<group>"; };
 		494C229A52590BB87936755D /* SportsColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsColors.swift; sourceTree = "<group>"; };
+		5F4B40BC7655CA8A503E933B /* EpgService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpgService.swift; sourceTree = "<group>"; };
 		69622EC9F8240505A1991EBF /* SportsDashTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SportsDashTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsDashApp.swift; sourceTree = "<group>"; };
+		7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScoresStrip.swift; sourceTree = "<group>"; };
 		785157AB5153580FDAA7ADD3 /* SportLeague.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportLeague.swift; sourceTree = "<group>"; };
-		A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPlaceholderView.swift; sourceTree = "<group>"; };
 		B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoresView.swift; sourceTree = "<group>"; };
+		B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPrefs.swift; sourceTree = "<group>"; };
 		B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsView.swift; sourceTree = "<group>"; };
 		B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideView.swift; sourceTree = "<group>"; };
 		C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		CACFA98F2DC29322F942EC8B /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		D8EFBEACA2485831A4253C53 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		E24C42B15674881585E8FF1D /* GameDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDetailSheet.swift; sourceTree = "<group>"; };
 		E7974E8727B3CE9311C7030D /* SportsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsAPI.swift; sourceTree = "<group>"; };
 		EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchingService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,8 +96,10 @@
 		1B379D524F84A37B38C58D02 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				1962154907DC4FCBA45671B4 /* EpgProgram.swift */,
 				45D76664BD312DAE597A0E9E /* Game.swift */,
 				1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */,
+				B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */,
 				785157AB5153580FDAA7ADD3 /* SportLeague.swift */,
 			);
 			path = Models;
@@ -93,8 +116,11 @@
 		4F808749F0FB5D49C4FAEA22 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				5F4B40BC7655CA8A503E933B /* EpgService.swift */,
 				471471EC528E70A5EA1F34F4 /* IptvService.swift */,
+				10AB69783C0F768691CA6E21 /* KeychainStore.swift */,
 				E7974E8727B3CE9311C7030D /* SportsAPI.swift */,
+				CACFA98F2DC29322F942EC8B /* StorageService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -141,6 +167,7 @@
 			isa = PBXGroup;
 			children = (
 				46644F4CFC505A9A0C711D84 /* GameCardView.swift */,
+				E24C42B15674881585E8FF1D /* GameDetailSheet.swift */,
 				B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */,
 			);
 			path = Scores;
@@ -184,7 +211,8 @@
 		D196590FC9848A9ECAEA3D7A /* Player */ = {
 			isa = PBXGroup;
 			children = (
-				A8473FB25DCABD7113D48D15 /* PlayerPlaceholderView.swift */,
+				7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */,
+				1090AD445B621B9B48C6CF6B /* PlayerView.swift */,
 			);
 			path = Player;
 			sourceTree = "<group>";
@@ -282,13 +310,19 @@
 			files = (
 				5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */,
 				05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */,
+				32761960E9FED5FC0E6B05A3 /* EpgProgram.swift in Sources */,
+				DB6463BD97C03A2EFD1710BC /* EpgService.swift in Sources */,
 				E3731096DEF391C521AA4BE3 /* Game.swift in Sources */,
 				A49D776B0F83CF3F2DEBD2D7 /* GameCardView.swift in Sources */,
+				9D9B700CAE82A22395D44A10 /* GameDetailSheet.swift in Sources */,
 				5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */,
 				95532C7BA8EAA6F54782000E /* IptvChannel.swift in Sources */,
 				B3976BE88DA5C7D2AF1F48B0 /* IptvService.swift in Sources */,
+				2C538351FBADE81975B82667 /* KeychainStore.swift in Sources */,
+				DEECE22937840316EF2B4CAA /* LiveScoresStrip.swift in Sources */,
 				27AAC46D639F78C9242EECAF /* MatchingService.swift in Sources */,
-				6F3EF38FF408DCD30298EFC0 /* PlayerPlaceholderView.swift in Sources */,
+				66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */,
+				26A4ACD47019AADF2A30F586 /* PlayerView.swift in Sources */,
 				76646428DD6C7FC99E4B190C /* RootTabView.swift in Sources */,
 				F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */,
 				DF15E6090BCA8022DB582613 /* SettingsView.swift in Sources */,
@@ -296,6 +330,7 @@
 				31BBA37D93F235C9385A6CAC /* SportsAPI.swift in Sources */,
 				CFC5670EF072841F02274478 /* SportsColors.swift in Sources */,
 				3486FDA626F4C683774FF8FF /* SportsDashApp.swift in Sources */,
+				A029D5B519C96F40068949D1 /* StorageService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,13 +340,19 @@
 			files = (
 				7B6153EEDD6FC35C0442BE8D /* AppModel.swift in Sources */,
 				E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */,
+				DE706435C9488D505489ABE8 /* EpgProgram.swift in Sources */,
+				F8C0D58D45A7685372A3AD43 /* EpgService.swift in Sources */,
 				3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */,
 				2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */,
+				B6CB6ED9D1811F26026C0BAC /* GameDetailSheet.swift in Sources */,
 				BF4FA82CEE4A6BE44C4CA694 /* GuideView.swift in Sources */,
 				2575CF213135E966885C7A68 /* IptvChannel.swift in Sources */,
 				414B4CEB24C5F3815C02D66B /* IptvService.swift in Sources */,
+				7B987F51AE74B2F0D48AEE63 /* KeychainStore.swift in Sources */,
+				CEFE40AAAB7F3B0F5DDE01A7 /* LiveScoresStrip.swift in Sources */,
 				C1A3FE24D66331C815B7CF04 /* MatchingService.swift in Sources */,
-				9AAE34D6E818789F480BA992 /* PlayerPlaceholderView.swift in Sources */,
+				26636196C15CE3CC16A6D566 /* PlayerPrefs.swift in Sources */,
+				D8DB5EE2079668AFF024DDB4 /* PlayerView.swift in Sources */,
 				F9B245814AE3C15D3DF07166 /* RootTabView.swift in Sources */,
 				E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */,
 				29D9824E2CFA113E27CF5BFE /* SettingsView.swift in Sources */,
@@ -319,6 +360,7 @@
 				FAAF35A1A7BA2717DE28EBDC /* SportsAPI.swift in Sources */,
 				351F36947C67E492E0478109 /* SportsColors.swift in Sources */,
 				6DDDC13FB9D09AF25CF96984 /* SportsDashApp.swift in Sources */,
+				A2130A05B3E974FC1AC23C68 /* StorageService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
