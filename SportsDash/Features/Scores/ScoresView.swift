@@ -83,7 +83,6 @@ struct ScoresView: View {
                     if showFaves {
                         shelfSection(
                             title: "Faves",
-                            emoji: "★",
                             games: appModel.favoriteGames,
                             goldTitle: true
                         )
@@ -99,11 +98,10 @@ struct ScoresView: View {
                     } else {
                         ForEach(shelves) { section in
                             if section.showSportHeader {
-                                sportHeader(section.sportTitle, emoji: section.sportEmoji)
+                                sportHeader(section.sportTitle)
                             }
                             shelfSection(
                                 title: section.title,
-                                emoji: section.emoji,
                                 games: section.games,
                                 goldTitle: false
                             )
