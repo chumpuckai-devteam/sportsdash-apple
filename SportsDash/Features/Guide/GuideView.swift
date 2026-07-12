@@ -205,6 +205,7 @@ struct GuideView: View {
     }
 
     private var epgStatusText: String {
+        if let s = appModel.epgStatus, !s.isEmpty { return s }
         let total = max(appModel.channels.count, 1)
         let loaded = appModel.epgLoadedCount
         if loaded == 0 {
