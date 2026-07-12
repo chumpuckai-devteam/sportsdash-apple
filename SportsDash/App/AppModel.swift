@@ -176,13 +176,17 @@ final class AppModel: ObservableObject {
         return order.map { (name: $0, channels: map[$0] ?? []) }
     }
 
-    func loadEpg(for channels: [IptvChannel]) async {
+    func loadEpg(for channels: [IptvChannel], limitPerChannel: Int = 12) async {
         isLoadingEpg = true
         defer { isLoadingEpg = false }
         let map = await epgService.loadForChannels(
             channels: channels,
-            config: iptvConfig
+            config: iptvConfig,
+            limitPerChannel: limitPerChannel
         )
-        epgByChannel = map
+        // Merge so switching groups doesn't wipe other channels' EPG.
+        var next = epgByChannel
+        for (k, v) in map { next[k] = v }
+        epgByChannel = next
     }
 }

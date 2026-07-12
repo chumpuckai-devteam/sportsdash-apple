@@ -119,17 +119,23 @@ actor EpgService {
         }
     }
 
+    /// Placeholder hour blocks so the traditional guide grid still looks usable without provider EPG.
     nonisolated private func demoPrograms(for channel: IptvChannel) -> [EpgProgram] {
         let now = Date()
-        return [
-            EpgProgram(
+        let cal = Calendar.current
+        let hourStart = cal.dateInterval(of: .hour, for: now)?.start ?? now
+        let base = cal.date(byAdding: .hour, value: -1, to: hourStart) ?? hourStart
+        return (0..<12).map { i in
+            let start = cal.date(byAdding: .hour, value: i, to: base) ?? base
+            let end = cal.date(byAdding: .hour, value: i + 1, to: base) ?? start.addingTimeInterval(3600)
+            return EpgProgram(
                 channelKey: channel.id,
-                title: "Live: \(channel.name)",
-                start: now.addingTimeInterval(-1800),
-                end: now.addingTimeInterval(3600),
-                description: nil
-            ),
-        ]
+                title: i == 1 ? "Live: \(channel.name)" : channel.name,
+                start: start,
+                end: end,
+                description: "Guide placeholder — live EPG when provider supplies it."
+            )
+        }
     }
 
     nonisolated static func xtreamStreamId(_ ch: IptvChannel) -> String? {
