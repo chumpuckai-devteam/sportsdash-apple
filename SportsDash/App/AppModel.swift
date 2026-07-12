@@ -12,7 +12,13 @@ final class AppModel: ObservableObject {
     @Published var scoresError: String?
     @Published var channelsError: String?
     @Published var lastUpdated: Date?
+    /// Saved IPTV sources (multi-playlist).
+    @Published var playlists: [IptvPlaylist] = []
+    @Published var activePlaylistId: String?
+    /// Convenience: active playlist config (backward compatible).
     @Published var iptvConfig: IptvConfig?
+    @Published var xtreamAccount: XtreamAccountInfo?
+    @Published var isLoadingAccount = false
     @Published var favoriteTeamIds: Set<String> = []
     @Published var lastPlayedGameIds: [String] = []
     @Published var playerPrefs = PlayerPrefs()
@@ -43,7 +49,14 @@ final class AppModel: ObservableObject {
         lastPlayedGameIds = storage.lastPlayedGameIds()
         playerPrefs = storage.playerPrefs()
         selectedLeagues = storage.selectedLeagues()
-        iptvConfig = storage.loadIptvConfig()
+        playlists = storage.loadPlaylists()
+        activePlaylistId = storage.activePlaylistId() ?? playlists.first?.id
+        iptvConfig = storage.loadActiveConfig()
+    }
+
+    var activePlaylist: IptvPlaylist? {
+        guard let activePlaylistId else { return playlists.first }
+        return playlists.first(where: { $0.id == activePlaylistId }) ?? playlists.first
     }
 
     func bootstrap() async {
@@ -53,7 +66,8 @@ final class AppModel: ObservableObject {
         if let config = iptvConfig, config.isConfigured {
             await reloadChannels()
             lastPlaylistReload = Date()
-            Task { await reloadEpg(force: true) }
+            Task { await refreshXtreamAccount() }
+            Task { await reloadEpg(force: false) }
         }
         startScoresPolling()
         startPlaylistPolling()
@@ -133,28 +147,141 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func saveIptvConfig(_ config: IptvConfig) async throws {
-        storage.saveIptvConfig(config)
-        iptvConfig = storage.loadIptvConfig()
+    /// Add a new playlist and make it active.
+    func addPlaylist(_ config: IptvConfig) async throws {
+        guard config.isConfigured else { throw IptvError.invalidConfig }
+        var list = playlists
+        let pl = IptvPlaylist(config: config)
+        list.append(pl)
+        storage.savePlaylists(list, activeId: pl.id)
+        playlists = storage.loadPlaylists()
+        activePlaylistId = pl.id
+        iptvConfig = storage.loadActiveConfig()
         try await {
             isLoadingChannels = true
             defer { isLoadingChannels = false }
-            channels = try await iptvService.loadChannels(config: storage.loadIptvConfig() ?? config)
+            channels = try await iptvService.loadChannels(config: config)
         }()
-        // Fresh playlist → pull full EPG in the background.
+        Task { await refreshXtreamAccount() }
         Task { await reloadEpg(force: true) }
+    }
+
+    /// Update the active playlist credentials (or create one if empty).
+    func saveIptvConfig(_ config: IptvConfig) async throws {
+        guard config.isConfigured else { throw IptvError.invalidConfig }
+        var list = playlists
+        if let active = activePlaylistId, let idx = list.firstIndex(where: { $0.id == active }) {
+            list[idx].config = config
+            storage.savePlaylists(list, activeId: active)
+        } else {
+            let pl = IptvPlaylist(config: config)
+            list.append(pl)
+            storage.savePlaylists(list, activeId: pl.id)
+            activePlaylistId = pl.id
+        }
+        playlists = storage.loadPlaylists()
+        iptvConfig = storage.loadActiveConfig()
+        try await {
+            isLoadingChannels = true
+            defer { isLoadingChannels = false }
+            guard let cfg = storage.loadActiveConfig() else { return }
+            channels = try await iptvService.loadChannels(config: cfg)
+        }()
+        Task { await refreshXtreamAccount() }
+        Task { await reloadEpg(force: true) }
+    }
+
+    func selectPlaylist(id: String) async {
+        guard playlists.contains(where: { $0.id == id }) else { return }
+        storage.savePlaylists(playlists, activeId: id)
+        activePlaylistId = id
+        iptvConfig = storage.loadActiveConfig()
+        channels = []
+        epgByChannel = [:]
+        epgLoadedCount = 0
+        xtreamAccount = nil
+        storage.clearEpgCache()
+        await reloadChannels()
+        lastPlaylistReload = Date()
+        Task { await refreshXtreamAccount() }
+        Task { await reloadEpg(force: true) }
+    }
+
+    func removePlaylist(id: String) {
+        let wasActive = activePlaylistId == id
+        var list = playlists.filter { $0.id != id }
+        KeychainStore.delete(account: "iptv_pass_\(id)")
+        let newActive: String? = wasActive ? list.first?.id : activePlaylistId
+        if list.isEmpty {
+            clearIptvConfig()
+            return
+        }
+        storage.savePlaylists(list, activeId: newActive)
+        playlists = storage.loadPlaylists()
+        activePlaylistId = newActive
+        iptvConfig = storage.loadActiveConfig()
+        if wasActive {
+            channels = []
+            epgByChannel = [:]
+            storage.clearEpgCache()
+            Task {
+                await reloadChannels()
+                await refreshXtreamAccount()
+                await reloadEpg(force: true)
+            }
+        }
+    }
+
+    /// Update credentials for a playlist id (does not switch active unless it is active).
+    func updatePlaylist(id: String, config: IptvConfig) async throws {
+        guard config.isConfigured else { throw IptvError.invalidConfig }
+        var list = playlists
+        guard let idx = list.firstIndex(where: { $0.id == id }) else {
+            try await addPlaylist(config)
+            return
+        }
+        list[idx].config = config
+        storage.savePlaylists(list, activeId: activePlaylistId)
+        playlists = storage.loadPlaylists()
+        if activePlaylistId == id {
+            iptvConfig = storage.loadActiveConfig()
+            try await {
+                isLoadingChannels = true
+                defer { isLoadingChannels = false }
+                channels = try await iptvService.loadChannels(config: config)
+            }()
+            Task { await refreshXtreamAccount() }
+            Task { await reloadEpg(force: true) }
+        }
     }
 
     func clearIptvConfig() {
         epgLoadTask?.cancel()
         storage.clearIptvConfig()
+        playlists = []
+        activePlaylistId = nil
         iptvConfig = nil
+        xtreamAccount = nil
         channels = []
         epgByChannel = [:]
         epgLoadedCount = 0
         lastEpgReload = nil
         epgError = nil
         epgStatus = nil
+    }
+
+    func refreshXtreamAccount() async {
+        guard let config = iptvConfig, config.type == .xtream, config.isConfigured else {
+            xtreamAccount = nil
+            return
+        }
+        isLoadingAccount = true
+        defer { isLoadingAccount = false }
+        do {
+            xtreamAccount = try await iptvService.fetchXtreamAccountInfo(config: config)
+        } catch {
+            xtreamAccount = nil
+        }
     }
 
     /// Full EPG: disk download + background parse. UI only gets status ticks + final result.

@@ -1,75 +1,86 @@
 import SwiftUI
 
-/// IPTV playlist credentials (Xtream / M3U) + separate playlist / EPG reload.
+/// Multi-playlist manager + Xtream account status.
 struct PlaylistSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
-    @State private var sourceType: IptvSourceType = .m3u
-    @State private var m3uURL = ""
-    @State private var host = ""
-    @State private var user = ""
-    @State private var password = ""
+    @State private var showEditor = false
+    @State private var editingPlaylistId: String?
     @State private var statusMessage: String?
-    @State private var isSaving = false
 
     var body: some View {
         Form {
             Section {
-                if let cfg = appModel.iptvConfig, cfg.isConfigured {
-                    Text("Configured · \(appModel.channels.count) channels")
+                if appModel.playlists.isEmpty {
+                    Text("No playlists yet. Add an Xtream or M3U source to get started.")
                         .font(.caption)
                         .foregroundStyle(SportsColors.muted)
                 } else {
-                    Text("Add a playlist to browse channels and match live games.")
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
+                    ForEach(appModel.playlists) { pl in
+                        playlistRow(pl)
+                    }
+                    .onDelete(perform: delete)
                 }
 
-                Picker("Type", selection: $sourceType) {
-                    Text("M3U").tag(IptvSourceType.m3u)
-                    Text("Xtream").tag(IptvSourceType.xtream)
-                }
-                .pickerStyle(.segmented)
-
-                if sourceType == .m3u {
-                    TextField("Playlist URL", text: $m3uURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        #if os(iOS)
-                        .keyboardType(.URL)
-                        #endif
-                } else {
-                    TextField("Server URL", text: $host)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField("Username", text: $user)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("Password", text: $password)
+                Button {
+                    editingPlaylistId = nil
+                    showEditor = true
+                } label: {
+                    Label("Add playlist", systemImage: "plus.circle.fill")
+                        .foregroundStyle(SportsColors.gold)
                 }
             } header: {
-                Text("Source")
+                Text("Playlists")
+            } footer: {
+                Text("Only the selected playlist’s channels and EPG are loaded. Switch anytime without losing other sources.")
             }
 
-            Section {
-                Button {
-                    Task { await saveAndLoad() }
-                } label: {
-                    if isSaving {
-                        ProgressView().frame(maxWidth: .infinity)
-                    } else {
-                        Text("Save & Load").frame(maxWidth: .infinity)
+            if let account = appModel.xtreamAccount {
+                Section {
+                    LabeledContent("Username", value: account.username ?? "—")
+                    HStack {
+                        Text("Status")
+                        Spacer()
+                        Text(account.status ?? "—")
+                            .foregroundStyle(account.isActive ? SportsColors.live : SportsColors.danger)
+                            .fontWeight(.semibold)
                     }
+                    LabeledContent("Connections", value: account.connectionsLabel)
+                    LabeledContent("Expires", value: account.expDateLabel)
+                    if account.isTrial {
+                        Text("Trial account")
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.gold)
+                    }
+                    if let msg = account.message, !msg.isEmpty {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.muted)
+                    }
+                    Button {
+                        Task { await appModel.refreshXtreamAccount() }
+                    } label: {
+                        if appModel.isLoadingAccount {
+                            ProgressView()
+                        } else {
+                            Label("Refresh account status", systemImage: "arrow.clockwise")
+                        }
+                    }
+                } header: {
+                    Text("Account")
+                } footer: {
+                    Text("Pulled from your Xtream panel for the selected playlist.")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(SportsColors.gold)
-                .foregroundStyle(SportsColors.voidBlack)
-                .disabled(isSaving)
-
-                if appModel.iptvConfig != nil {
-                    Button("Remove playlist", role: .destructive) {
-                        appModel.clearIptvConfig()
-                        m3uURL = ""; host = ""; user = ""; password = ""
-                        statusMessage = "Cleared."
+            } else if appModel.iptvConfig?.type == .xtream {
+                Section("Account") {
+                    if appModel.isLoadingAccount {
+                        ProgressView("Checking account…")
+                    } else {
+                        Button("Load account status") {
+                            Task { await appModel.refreshXtreamAccount() }
+                        }
+                        Text("Could not load status. Check credentials or server.")
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.muted)
                     }
                 }
             }
@@ -77,14 +88,9 @@ struct PlaylistSettingsView: View {
             Section {
                 Button {
                     Task {
-                        isSaving = true
-                        defer { isSaving = false }
                         await appModel.reloadChannels()
-                        if let err = appModel.channelsError {
-                            statusMessage = err
-                        } else {
-                            statusMessage = "Playlist reloaded · \(appModel.channels.count) channels."
-                        }
+                        statusMessage = appModel.channelsError
+                            ?? "Playlist reloaded · \(appModel.channels.count) channels."
                     }
                 } label: {
                     if appModel.isLoadingChannels {
@@ -101,30 +107,20 @@ struct PlaylistSettingsView: View {
                 Button {
                     Task {
                         await appModel.reloadEpg(force: true)
-                        if let err = appModel.epgError {
-                            statusMessage = err
-                        } else {
-                            let withData = appModel.epgByChannel.values.filter { !$0.isEmpty }.count
-                            statusMessage = "EPG reloaded · \(withData)/\(appModel.channels.count) channels have listings."
-                        }
+                        statusMessage = appModel.epgError
+                            ?? "EPG reloaded · \(appModel.epgLoadedCount) channels cached."
                     }
                 } label: {
                     if appModel.isLoadingEpg {
                         HStack {
                             ProgressView()
-                            Text(epgProgressLabel)
+                            Text(appModel.epgStatus ?? "Reloading EPG…")
                         }
                     } else {
                         Label("Reload EPG", systemImage: "calendar")
                     }
                 }
                 .disabled(appModel.channels.isEmpty || appModel.isLoadingEpg)
-
-                if let updated = appModel.lastEpgReload {
-                    Text("Last EPG update \(updated.formatted(date: .omitted, time: .shortened)) · \(appModel.epgLoadedCount) channels cached")
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
-                }
 
                 if let statusMessage {
                     Text(statusMessage)
@@ -133,53 +129,198 @@ struct PlaylistSettingsView: View {
                 }
             } header: {
                 Text("Reload")
-            } footer: {
-                Text("Reload playlist refreshes channels only. Reload EPG downloads the guide to a temp file on disk, then parses it in the background so Settings stays responsive. A disk cache makes the next launch nearly instant.")
             }
         }
         .scrollContentBackground(.hidden)
         .background(SportsColors.voidBlack)
-        .navigationTitle("Playlist")
+        .navigationTitle("Playlists")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .onAppear(perform: hydrate)
+        .sheet(isPresented: $showEditor) {
+            PlaylistEditorSheet(
+                playlistId: editingPlaylistId,
+                existing: editingPlaylistId.flatMap { id in
+                    appModel.playlists.first(where: { $0.id == id })?.config
+                }
+            )
+            .environmentObject(appModel)
+        }
+        .task {
+            if appModel.iptvConfig?.type == .xtream {
+                await appModel.refreshXtreamAccount()
+            }
+        }
     }
 
-    private var epgProgressLabel: String {
-        let total = max(appModel.channels.count, 1)
-        return "EPG \(appModel.epgLoadedCount)/\(total)…"
+    private func playlistRow(_ pl: IptvPlaylist) -> some View {
+        let isActive = pl.id == appModel.activePlaylistId
+        return HStack(spacing: 12) {
+            Button {
+                Task { await appModel.selectPlaylist(id: pl.id) }
+            } label: {
+                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isActive ? SportsColors.gold : SportsColors.muted)
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(pl.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(SportsColors.text)
+                Text(pl.config.type == .xtream ? "Xtream" : "M3U")
+                    .font(.caption)
+                    .foregroundStyle(SportsColors.muted)
+            }
+
+            Spacer()
+
+            if isActive {
+                Text("Active")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(SportsColors.voidBlack)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(SportsColors.gold, in: Capsule())
+            }
+
+            Button {
+                editingPlaylistId = pl.id
+                showEditor = true
+            } label: {
+                Image(systemName: "pencil")
+                    .foregroundStyle(SportsColors.muted)
+            }
+            .buttonStyle(.plain)
+        }
+        .listRowBackground(SportsColors.panel)
+    }
+
+    private func delete(at offsets: IndexSet) {
+        for i in offsets {
+            let id = appModel.playlists[i].id
+            appModel.removePlaylist(id: id)
+        }
+    }
+}
+
+// MARK: - Add / Edit sheet
+
+private struct PlaylistEditorSheet: View {
+    @EnvironmentObject private var appModel: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var playlistId: String?
+    var existing: IptvConfig?
+
+    @State private var sourceType: IptvSourceType = .xtream
+    @State private var displayName = ""
+    @State private var m3uURL = ""
+    @State private var host = ""
+    @State private var user = ""
+    @State private var password = ""
+    @State private var error: String?
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Display name", text: $displayName)
+                    Picker("Type", selection: $sourceType) {
+                        Text("Xtream").tag(IptvSourceType.xtream)
+                        Text("M3U").tag(IptvSourceType.m3u)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                if sourceType == .m3u {
+                    Section("M3U") {
+                        TextField("Playlist URL", text: $m3uURL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #if os(iOS)
+                            .keyboardType(.URL)
+                            #endif
+                    }
+                } else {
+                    Section("Xtream") {
+                        TextField("Server URL", text: $host)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        TextField("Username", text: $user)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("Password", text: $password)
+                    }
+                }
+
+                if let error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(SportsColors.danger)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SportsColors.voidBlack)
+            .navigationTitle(playlistId == nil ? "Add playlist" : "Edit playlist")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+            .onAppear(perform: hydrate)
+        }
     }
 
     private func hydrate() {
-        guard let cfg = appModel.iptvConfig else { return }
-        sourceType = cfg.type
-        m3uURL = cfg.m3uURL ?? ""
-        host = cfg.xtreamHost ?? ""
-        user = cfg.xtreamUsername ?? ""
-        password = cfg.xtreamPassword ?? ""
+        guard let existing else { return }
+        sourceType = existing.type
+        displayName = existing.displayName ?? ""
+        m3uURL = existing.m3uURL ?? ""
+        host = existing.xtreamHost ?? ""
+        user = existing.xtreamUsername ?? ""
+        password = existing.xtreamPassword ?? ""
     }
 
-    private func saveAndLoad() async {
+    private func save() async {
         isSaving = true
         defer { isSaving = false }
-        let config = IptvConfig(
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var config = IptvConfig(
             type: sourceType,
             m3uURL: m3uURL,
             xtreamHost: host,
             xtreamUsername: user,
             xtreamPassword: password,
-            displayName: sourceType == .m3u ? "M3U" : "Xtream"
+            displayName: name.isEmpty ? nil : name
         )
+        if name.isEmpty {
+            config.displayName = config.summaryLabel
+        }
         guard config.isConfigured else {
-            statusMessage = "Fill in required fields."
+            error = "Fill in required fields."
             return
         }
         do {
-            try await appModel.saveIptvConfig(config)
-            statusMessage = "Loaded \(appModel.channels.count) channels. EPG loading in background…"
+            if let playlistId {
+                try await appModel.updatePlaylist(id: playlistId, config: config)
+            } else {
+                try await appModel.addPlaylist(config)
+            }
+            dismiss()
         } catch {
-            statusMessage = error.localizedDescription
+            self.error = error.localizedDescription
         }
     }
 }

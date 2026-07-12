@@ -7,7 +7,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Playlist") {
+                Section("Playlists") {
                     NavigationLink {
                         PlaylistSettingsView()
                     } label: {
@@ -19,6 +19,36 @@ struct SettingsView: View {
                         )
                     }
                     .listRowBackground(SportsColors.panel)
+
+                    if let account = appModel.xtreamAccount {
+                        HStack {
+                            Text("Status")
+                                .foregroundStyle(SportsColors.muted)
+                            Spacer()
+                            Text(account.status ?? "—")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(account.isActive ? SportsColors.live : SportsColors.danger)
+                        }
+                        .listRowBackground(SportsColors.panel)
+
+                        HStack {
+                            Text("Expires")
+                                .foregroundStyle(SportsColors.muted)
+                            Spacer()
+                            Text(account.expDateLabel)
+                                .foregroundStyle(SportsColors.text)
+                        }
+                        .listRowBackground(SportsColors.panel)
+
+                        HStack {
+                            Text("Connections")
+                                .foregroundStyle(SportsColors.muted)
+                            Spacer()
+                            Text(account.connectionsLabel)
+                                .foregroundStyle(SportsColors.text)
+                        }
+                        .listRowBackground(SportsColors.panel)
+                    }
 
                     if appModel.isLoadingEpg {
                         HStack(spacing: 10) {
@@ -94,13 +124,20 @@ struct SettingsView: View {
     }
 
     private var playlistTitle: String {
-        appModel.iptvConfig?.displayName
-            ?? (appModel.iptvConfig?.type == .xtream ? "Xtream" : "Playlist")
+        if appModel.playlists.isEmpty { return "Playlists" }
+        let active = appModel.activePlaylist?.name ?? "Playlist"
+        if appModel.playlists.count > 1 {
+            return "\(active) · \(appModel.playlists.count) sources"
+        }
+        return active
     }
 
     private var playlistSubtitle: String {
+        if appModel.playlists.isEmpty {
+            return "Add Xtream or M3U"
+        }
         if appModel.channels.isEmpty {
-            return appModel.iptvConfig == nil ? "Not configured" : "No channels loaded"
+            return "No channels loaded"
         }
         return "\(appModel.channels.count) channels"
     }

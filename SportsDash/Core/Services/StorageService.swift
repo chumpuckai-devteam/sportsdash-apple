@@ -78,9 +78,108 @@ final class StorageService {
         defaults.set(leagues.map(\.rawValue), forKey: selectedLeaguesKey)
     }
 
-    // MARK: - IPTV
+    // MARK: - IPTV (multi-playlist)
 
+    private let playlistsKey = "iptv_playlists_v1"
+    private let activePlaylistKey = "iptv_active_playlist_id"
+
+    private func passwordAccount(for playlistId: String) -> String {
+        "iptv_pass_\(playlistId)"
+    }
+
+    /// All saved playlists with passwords hydrated from Keychain.
+    func loadPlaylists() -> [IptvPlaylist] {
+        // Migrate legacy single-config store once.
+        if defaults.data(forKey: playlistsKey) == nil,
+           let legacy = loadLegacyIptvConfig() {
+            let pl = IptvPlaylist(config: legacy)
+            savePlaylists([pl], activeId: pl.id)
+            clearLegacyIptvConfig()
+        }
+
+        guard let data = defaults.data(forKey: playlistsKey),
+              var list = try? JSONDecoder().decode([IptvPlaylist].self, from: data) else {
+            return []
+        }
+        for i in list.indices {
+            let id = list[i].id
+            if list[i].config.type == .xtream {
+                list[i].config.xtreamPassword =
+                    KeychainStore.get(account: passwordAccount(for: id))
+                    ?? KeychainStore.get(account: iptvPassAccount) // legacy fallback
+            }
+        }
+        return list
+    }
+
+    func activePlaylistId() -> String? {
+        defaults.string(forKey: activePlaylistKey)
+    }
+
+    func savePlaylists(_ playlists: [IptvPlaylist], activeId: String?) {
+        // Strip passwords from JSON; store each in Keychain by playlist id.
+        var encoded: [IptvPlaylist] = []
+        for pl in playlists {
+            var copy = pl
+            let password = copy.config.xtreamPassword
+            copy.config.xtreamPassword = nil
+            encoded.append(copy)
+            if let password, !password.isEmpty {
+                KeychainStore.set(password, account: passwordAccount(for: pl.id))
+            }
+        }
+        if let data = try? JSONEncoder().encode(encoded) {
+            defaults.set(data, forKey: playlistsKey)
+        }
+        if let activeId {
+            defaults.set(activeId, forKey: activePlaylistKey)
+        } else {
+            defaults.removeObject(forKey: activePlaylistKey)
+        }
+    }
+
+    func loadActiveConfig() -> IptvConfig? {
+        let list = loadPlaylists()
+        guard !list.isEmpty else { return nil }
+        let active = activePlaylistId()
+        if let active, let match = list.first(where: { $0.id == active }) {
+            return match.config
+        }
+        return list.first?.config
+    }
+
+    /// Legacy single-config API used during migration.
     func loadIptvConfig() -> IptvConfig? {
+        loadActiveConfig()
+    }
+
+    func saveIptvConfig(_ config: IptvConfig) {
+        var list = loadPlaylists()
+        if let active = activePlaylistId(),
+           let idx = list.firstIndex(where: { $0.id == active }) {
+            list[idx].config = config
+            savePlaylists(list, activeId: active)
+        } else if list.isEmpty {
+            let pl = IptvPlaylist(config: config)
+            savePlaylists([pl], activeId: pl.id)
+        } else {
+            list[0].config = config
+            savePlaylists(list, activeId: list[0].id)
+        }
+    }
+
+    func clearIptvConfig() {
+        let list = loadPlaylists()
+        for pl in list {
+            KeychainStore.delete(account: passwordAccount(for: pl.id))
+        }
+        defaults.removeObject(forKey: playlistsKey)
+        defaults.removeObject(forKey: activePlaylistKey)
+        clearLegacyIptvConfig()
+        clearEpgCache()
+    }
+
+    private func loadLegacyIptvConfig() -> IptvConfig? {
         guard let data = defaults.data(forKey: iptvMetaKey),
               var config = try? JSONDecoder().decode(IptvConfig.self, from: data) else {
             return nil
@@ -92,24 +191,10 @@ final class StorageService {
         return config
     }
 
-    func saveIptvConfig(_ config: IptvConfig) {
-        var toStore = config
-        let password = config.xtreamPassword
-        toStore.xtreamPassword = nil // never store password in JSON blob
-        if let data = try? JSONEncoder().encode(toStore) {
-            defaults.set(data, forKey: iptvMetaKey)
-        }
-        if let password, !password.isEmpty {
-            KeychainStore.set(password, account: iptvPassAccount)
-            defaults.set(password, forKey: "\(iptvPassAccount)_fallback")
-        }
-    }
-
-    func clearIptvConfig() {
+    private func clearLegacyIptvConfig() {
         defaults.removeObject(forKey: iptvMetaKey)
         defaults.removeObject(forKey: "\(iptvPassAccount)_fallback")
         KeychainStore.delete(account: iptvPassAccount)
-        clearEpgCache()
     }
 
     // MARK: - EPG disk cache (keeps RAM free; next launch is instant)

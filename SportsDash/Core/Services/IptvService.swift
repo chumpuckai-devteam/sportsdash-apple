@@ -23,6 +23,75 @@ actor IptvService {
         }
     }
 
+    /// Xtream account status: `player_api.php` with no action returns `user_info`.
+    func fetchXtreamAccountInfo(config: IptvConfig) async throws -> XtreamAccountInfo {
+        guard config.type == .xtream,
+              let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+              let user = config.xtreamUsername,
+              let pass = config.xtreamPassword else {
+            throw IptvError.invalidConfig
+        }
+        let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
+        let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
+        let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
+        guard let url = URL(string: "\(host)/player_api.php?username=\(userQ)&password=\(passQ)") else {
+            throw IptvError.invalidConfig
+        }
+        let (data, response) = try await session.data(from: url)
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            throw IptvError.loadFailed("Account check failed (\(http.statusCode))")
+        }
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw IptvError.loadFailed("Invalid account response")
+        }
+        let info = (root["user_info"] as? [String: Any]) ?? root
+        return XtreamAccountInfo(
+            username: info["username"] as? String ?? user,
+            status: stringValue(info["status"]),
+            expDate: parseUnixDate(info["exp_date"]),
+            isTrial: boolish(info["is_trial"]),
+            activeConnections: intValue(info["active_cons"]),
+            maxConnections: intValue(info["max_connections"]),
+            createdAt: parseUnixDate(info["created_at"]),
+            message: stringValue(info["message"])
+        )
+    }
+
+    private func stringValue(_ any: Any?) -> String? {
+        if let s = any as? String, !s.isEmpty { return s }
+        if let n = any as? NSNumber { return n.stringValue }
+        return nil
+    }
+
+    private func intValue(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let s = any as? String { return Int(s) }
+        if let n = any as? NSNumber { return n.intValue }
+        return nil
+    }
+
+    private func boolish(_ any: Any?) -> Bool {
+        if let b = any as? Bool { return b }
+        if let i = any as? Int { return i != 0 }
+        if let s = any as? String {
+            return s == "1" || s.lowercased() == "true" || s.lowercased() == "yes"
+        }
+        return false
+    }
+
+    private func parseUnixDate(_ any: Any?) -> Date? {
+        if let s = any as? String, let t = TimeInterval(s), t > 0 {
+            return Date(timeIntervalSince1970: t)
+        }
+        if let i = any as? Int, i > 0 {
+            return Date(timeIntervalSince1970: TimeInterval(i))
+        }
+        if let n = any as? NSNumber, n.doubleValue > 0 {
+            return Date(timeIntervalSince1970: n.doubleValue)
+        }
+        return nil
+    }
+
     func parseM3U(_ content: String) -> [IptvChannel] {
         var channels: [IptvChannel] = []
         var pendingName = "Channel"

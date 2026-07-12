@@ -15,7 +15,7 @@ enum IptvSourceType: String, Codable, Sendable {
     case xtream
 }
 
-struct IptvConfig: Codable, Sendable, Equatable {
+struct IptvConfig: Codable, Sendable, Equatable, Hashable {
     var type: IptvSourceType
     var m3uURL: String?
     var xtreamHost: String?
@@ -35,8 +35,60 @@ struct IptvConfig: Codable, Sendable, Equatable {
         }
     }
 
+    var summaryLabel: String {
+        if let displayName, !displayName.isEmpty { return displayName }
+        switch type {
+        case .m3u: return "M3U Playlist"
+        case .xtream: return xtreamUsername.map { "Xtream · \($0)" } ?? "Xtream"
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case type, m3uURL, xtreamHost, xtreamUsername, displayName
+    }
+}
+
+/// A saved IPTV source the user can switch between.
+struct IptvPlaylist: Identifiable, Codable, Sendable, Equatable, Hashable {
+    var id: String
+    var config: IptvConfig
+
+    init(id: String = UUID().uuidString, config: IptvConfig) {
+        self.id = id
+        self.config = config
+    }
+
+    var name: String { config.summaryLabel }
+}
+
+/// Xtream `player_api.php` user_info payload.
+struct XtreamAccountInfo: Sendable, Equatable {
+    var username: String?
+    var status: String?
+    var expDate: Date?
+    var isTrial: Bool
+    var activeConnections: Int?
+    var maxConnections: Int?
+    var createdAt: Date?
+    var message: String?
+
+    var isActive: Bool {
+        let s = (status ?? "").lowercased()
+        return s == "active" || s == "true" || s == "1"
+    }
+
+    var expDateLabel: String {
+        guard let expDate else { return "—" }
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f.string(from: expDate)
+    }
+
+    var connectionsLabel: String {
+        let a = activeConnections.map(String.init) ?? "—"
+        let m = maxConnections.map(String.init) ?? "—"
+        return "\(a) / \(m)"
     }
 }
 

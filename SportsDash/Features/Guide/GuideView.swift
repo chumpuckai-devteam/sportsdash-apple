@@ -362,15 +362,6 @@ private struct GuideTimelineGrid: View {
         Calendar.current.date(byAdding: .hour, value: GuideMetrics.hours, to: windowStart) ?? windowStart
     }
 
-    private var nowOffset: CGFloat {
-        let minutes = now.timeIntervalSince(windowStart) / 60.0
-        return CGFloat(minutes / 60.0) * GuideMetrics.pxPerHour
-    }
-
-    private var showNowLine: Bool {
-        nowOffset >= 0 && nowOffset <= GuideMetrics.timelineWidth
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             timeHeader
@@ -390,8 +381,6 @@ private struct GuideTimelineGrid: View {
                             windowStart: windowStart,
                             windowEnd: windowEnd,
                             now: now,
-                            nowOffset: nowOffset,
-                            showNowLine: showNowLine,
                             cleanUpNames: cleanUpNames,
                             scrollSync: scrollSync,
                             onPlay: onPlay
@@ -401,14 +390,7 @@ private struct GuideTimelineGrid: View {
             }
         }
         .background(SportsColors.voidBlack)
-        .onAppear {
-            scrollSync.jump(to: max(0, nowOffset - 40))
-        }
-        .onChange(of: windowStart) { _, _ in
-            DispatchQueue.main.async {
-                scrollSync.jump(to: max(0, nowOffset - 40))
-            }
-        }
+        // No auto jump / snap — user freely scrolls horizontally.
     }
 
     private var timeHeader: some View {
@@ -422,28 +404,18 @@ private struct GuideTimelineGrid: View {
 
             GuideLinkedScrollView(
                 axis: .horizontal,
-                showsIndicators: false,
+                showsIndicators: true,
                 sync: scrollSync,
                 role: .header
             ) {
-                ZStack(alignment: .topLeading) {
-                    HStack(spacing: 0) {
-                        ForEach(0..<GuideMetrics.hours, id: \.self) { h in
-                            let t = Calendar.current.date(byAdding: .hour, value: h, to: windowStart) ?? windowStart
-                            Text(hourLabel(t))
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(SportsColors.goldDim)
-                                .frame(width: GuideMetrics.pxPerHour, alignment: .leading)
-                                .padding(.leading, 8)
-                        }
-                    }
-                    .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.timeHeaderHeight)
-
-                    if showNowLine {
-                        Rectangle()
-                            .fill(SportsColors.live)
-                            .frame(width: 2, height: GuideMetrics.timeHeaderHeight)
-                            .offset(x: nowOffset)
+                HStack(spacing: 0) {
+                    ForEach(0..<GuideMetrics.hours, id: \.self) { h in
+                        let t = Calendar.current.date(byAdding: .hour, value: h, to: windowStart) ?? windowStart
+                        Text(hourLabel(t))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(SportsColors.goldDim)
+                            .frame(width: GuideMetrics.pxPerHour, alignment: .leading)
+                            .padding(.leading, 8)
                     }
                 }
                 .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.timeHeaderHeight)
@@ -464,8 +436,6 @@ private struct GuideTimelineRow: View {
     let windowStart: Date
     let windowEnd: Date
     let now: Date
-    let nowOffset: CGFloat
-    let showNowLine: Bool
     let cleanUpNames: Bool
     @ObservedObject var scrollSync: GuideScrollSync
     let onPlay: (IptvChannel) -> Void
@@ -518,13 +488,6 @@ private struct GuideTimelineRow: View {
 
                     ForEach(visiblePrograms, id: \.id) { program in
                         programBlock(program)
-                    }
-
-                    if showNowLine {
-                        Rectangle()
-                            .fill(SportsColors.live)
-                            .frame(width: 2, height: GuideMetrics.rowHeight)
-                            .offset(x: nowOffset)
                     }
                 }
                 .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.rowHeight, alignment: .topLeading)
@@ -609,9 +572,12 @@ final class GuideScrollSync: ObservableObject {
     /// Weak set of visible row scroll views (LazyVStack recycles these).
     private let bodyScrolls = NSHashTable<UIScrollView>.weakObjects()
     private var locking = false
-    private var pendingX: CGFloat?
+    /// Shared free-scroll offset (user-controlled only — never auto-jump to “now”).
+    private(set) var sharedOffsetX: CGFloat = 0
 
     func register(_ scrollView: UIScrollView, role: GuideScrollRole) {
+        scrollView.isPagingEnabled = false
+        scrollView.decelerationRate = .normal
         switch role {
         case .header:
             headerScroll = scrollView
@@ -619,18 +585,17 @@ final class GuideScrollSync: ObservableObject {
             bodyScrolls.add(scrollView)
         }
         scrollView.delegate = bridge
-        if let pendingX {
-            apply(pendingX, excluding: nil)
+        // Align newly visible rows to the user's current offset only (no global re-snap).
+        if abs(scrollView.contentOffset.x - sharedOffsetX) > 0.5 {
+            locking = true
+            scrollView.contentOffset.x = sharedOffsetX
+            locking = false
         }
-    }
-
-    func jump(to x: CGFloat) {
-        pendingX = max(0, x)
-        apply(pendingX!, excluding: nil)
     }
 
     private func apply(_ x: CGFloat, excluding: UIScrollView?) {
         locking = true
+        sharedOffsetX = x
         let offset = CGPoint(x: x, y: 0)
         if headerScroll !== excluding {
             headerScroll?.setContentOffset(offset, animated: false)
@@ -645,9 +610,7 @@ final class GuideScrollSync: ObservableObject {
 
     fileprivate func didScroll(_ scrollView: UIScrollView) {
         guard !locking else { return }
-        let x = scrollView.contentOffset.x
-        pendingX = x
-        apply(x, excluding: scrollView)
+        apply(scrollView.contentOffset.x, excluding: scrollView)
     }
 }
 
@@ -717,10 +680,17 @@ private struct GuideLinkedScrollView<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        // Preserve user scroll position when SwiftUI refreshes row content (e.g. EPG updates).
+        let savedX = scrollView.contentOffset.x
         context.coordinator.hosting?.rootView = content()
-        // Re-register in case the scroll view instance is reused after state changes.
-        DispatchQueue.main.async {
-            sync.register(scrollView, role: role)
+        scrollView.layoutIfNeeded()
+        if abs(scrollView.contentOffset.x - savedX) > 0.5 {
+            scrollView.contentOffset.x = savedX
+        }
+        // Align recycled rows to shared offset without forcing a jump-to-now.
+        let target = sync.sharedOffsetX
+        if abs(scrollView.contentOffset.x - target) > 0.5 {
+            scrollView.contentOffset.x = target
         }
     }
 
