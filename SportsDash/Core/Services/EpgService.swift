@@ -34,10 +34,11 @@ actor EpgService {
         config: IptvConfig,
         limit: Int
     ) async -> [String: [EpgProgram]] {
-        guard var host = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+        guard let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
               let user = config.xtreamUsername,
               let pass = config.xtreamPassword else { return [:] }
-        if !host.hasPrefix("http") { host = "http://\(host)" }
+        // Immutable for concurrent TaskGroup captures (Swift 6).
+        let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
 
         let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
         let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
