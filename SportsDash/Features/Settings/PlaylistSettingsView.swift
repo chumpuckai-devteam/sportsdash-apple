@@ -134,7 +134,7 @@ struct PlaylistSettingsView: View {
             } header: {
                 Text("Reload")
             } footer: {
-                Text("Reload playlist refreshes the channel list only. Reload EPG prefers a single bulk XMLTV download from your panel (fast). Per-channel fallback is used only when bulk is unavailable.")
+                Text("Reload playlist refreshes channels only. Reload EPG downloads the guide to a temp file on disk, then parses it in the background so Settings stays responsive. A disk cache makes the next launch nearly instant.")
             }
         }
         .scrollContentBackground(.hidden)

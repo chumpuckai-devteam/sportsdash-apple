@@ -109,5 +109,46 @@ final class StorageService {
         defaults.removeObject(forKey: iptvMetaKey)
         defaults.removeObject(forKey: "\(iptvPassAccount)_fallback")
         KeychainStore.delete(account: iptvPassAccount)
+        clearEpgCache()
+    }
+
+    // MARK: - EPG disk cache (keeps RAM free; next launch is instant)
+
+    private var epgCacheURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return dir.appendingPathComponent("sportsdash_epg_cache.json")
+    }
+
+    private let epgCacheDateKey = "epg_cache_saved_at"
+
+    /// Cached guide listings (compact JSON on disk). Max age ~12 hours.
+    func loadEpgCache(maxAge: TimeInterval = 12 * 3600) -> [String: [EpgProgram]]? {
+        guard let saved = defaults.object(forKey: epgCacheDateKey) as? Date,
+              Date().timeIntervalSince(saved) < maxAge,
+              let data = try? Data(contentsOf: epgCacheURL),
+              !data.isEmpty else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try? decoder.decode([String: [EpgProgram]].self, from: data)
+    }
+
+    func saveEpgCache(_ map: [String: [EpgProgram]]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        // Cap payload: drop empty lists
+        let compact = map.filter { !$0.value.isEmpty }
+        guard let data = try? encoder.encode(compact) else { return }
+        try? data.write(to: epgCacheURL, options: .atomic)
+        defaults.set(Date(), forKey: epgCacheDateKey)
+    }
+
+    func clearEpgCache() {
+        try? FileManager.default.removeItem(at: epgCacheURL)
+        defaults.removeObject(forKey: epgCacheDateKey)
+    }
+
+    var epgCacheSavedAt: Date? {
+        defaults.object(forKey: epgCacheDateKey) as? Date
     }
 }

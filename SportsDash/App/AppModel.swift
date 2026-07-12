@@ -154,9 +154,10 @@ final class AppModel: ObservableObject {
         epgLoadedCount = 0
         lastEpgReload = nil
         epgError = nil
+        epgStatus = nil
     }
 
-    /// Full EPG — prefers bulk XMLTV (seconds) over per-channel short EPG (minutes).
+    /// Full EPG: disk download + background parse. UI only gets status ticks + final result.
     func reloadEpg(force: Bool = false) async {
         guard !channels.isEmpty else {
             epgByChannel = [:]
@@ -164,9 +165,23 @@ final class AppModel: ObservableObject {
             return
         }
         if isLoadingEpg, !force { return }
-        if !force, lastEpgReload != nil, !epgByChannel.isEmpty {
-            let withData = epgByChannel.values.filter { !$0.isEmpty }.count
-            if withData > 0 { return }
+        if !force, !epgByChannel.isEmpty {
+            return
+        }
+
+        // Instant path: load previous parse from disk cache (no network, no RAM spike).
+        if !force, let cached = storage.loadEpgCache(), !cached.isEmpty {
+            epgByChannel = cached
+            epgLoadedCount = cached.count
+            lastEpgReload = storage.epgCacheSavedAt
+            epgStatus = "Guide from cache · \(cached.count) channels"
+            epgError = nil
+            // Refresh in background if cache is older than 3 hours.
+            if let saved = storage.epgCacheSavedAt,
+               Date().timeIntervalSince(saved) > 3 * 3600 {
+                Task { await self.reloadEpg(force: true) }
+            }
+            return
         }
 
         epgLoadTask?.cancel()
@@ -174,102 +189,102 @@ final class AppModel: ObservableObject {
         let config = iptvConfig
         isLoadingEpg = true
         epgError = nil
-        epgStatus = "Starting guide download…"
+        epgStatus = "Downloading guide to disk…"
         if force {
-            epgByChannel = [:]
-            epgLoadedCount = 0
+            // Keep showing old listings while refreshing so Settings/Guide stay usable.
         }
 
-        let task = Task { @MainActor in
-            let map = await epgService.loadForChannels(
+        // Heavy work runs off the main actor — Settings stays responsive.
+        let service = epgService
+        let storageRef = storage
+        let task = Task.detached(priority: .utility) { [weak self] () -> [String: [EpgProgram]] in
+            let map = await service.loadForChannels(
                 channels: snapshot,
                 config: config,
                 limitPerChannel: EpgService.maxProgramsPerChannel,
                 batchSize: 12,
                 preferBulk: true,
                 fillMissingWithShortEpg: false,
-                onBatch: { [weak self] batch in
-                    guard let self else { return }
-                    // Progressive merge while the stream is still downloading.
-                    var next = self.epgByChannel
-                    for (k, v) in batch where !v.isEmpty {
-                        // Prefer longer list if we already have partial data for this channel.
-                        if let existing = next[k], existing.count >= v.count { continue }
-                        next[k] = v
+                onBatch: nil,
+                onStatus: { msg in
+                    Task { @MainActor in
+                        self?.epgStatus = msg
                     }
-                    self.epgByChannel = next
-                    self.epgLoadedCount = next.count
-                },
-                onStatus: { [weak self] msg in
-                    self?.epgStatus = msg
                 }
             )
+            if !map.isEmpty {
+                await MainActor.run {
+                    storageRef.saveEpgCache(map)
+                }
+            }
+            return map
+        }
+        epgLoadTask = Task { @MainActor in
+            let map = await task.value
             guard !Task.isCancelled else {
                 self.isLoadingEpg = false
                 return
             }
-            var next = epgByChannel
-            for (k, v) in map where !v.isEmpty { next[k] = v }
-            // Drop empty placeholders if any.
-            next = next.filter { !$0.value.isEmpty }
-            epgByChannel = next
-            epgLoadedCount = next.count
-            lastEpgReload = Date()
-            isLoadingEpg = false
-            if next.isEmpty {
-                epgError = "No EPG data returned. Provider may not expose XMLTV."
-                epgStatus = nil
+            let compact = map.filter { !$0.value.isEmpty }
+            if !compact.isEmpty {
+                self.epgByChannel = compact
+                self.epgLoadedCount = compact.count
+                self.lastEpgReload = Date()
+                self.epgStatus = "Guide ready · \(compact.count) channels"
+                self.epgError = nil
             } else {
-                epgStatus = "Guide ready · \(next.count) channels with listings"
+                self.epgError = "No EPG data returned. Provider may not expose XMLTV."
+                self.epgStatus = nil
             }
+            self.isLoadingEpg = false
         }
-        epgLoadTask = task
-        await task.value
+        await epgLoadTask?.value
     }
 
-    /// Fill gaps for a guide category: short EPG only for channels still missing listings.
+    /// Fill gaps for a guide category without blocking UI; uses short EPG only.
     func loadEpgIfNeeded(for channels: [IptvChannel]) async {
         let missing = channels.filter { ch in
             guard let list = epgByChannel[ch.id] else { return true }
             return list.isEmpty
         }
         guard !missing.isEmpty else { return }
-        if isLoadingEpg {
-            await epgLoadTask?.value
-            // After bulk finishes, re-check gaps.
+        if isLoadingEpg { return } // bulk job owns the pipeline
+
+        // Prefer cache hit first.
+        if epgByChannel.isEmpty, let cached = storage.loadEpgCache(), !cached.isEmpty {
+            epgByChannel = cached
+            epgLoadedCount = cached.count
             let still = missing.filter { epgByChannel[$0.id]?.isEmpty != false }
-            guard !still.isEmpty else { return }
+            if still.isEmpty { return }
         }
 
         isLoadingEpg = true
-        epgStatus = "Filling guide for \(missing.count) channels…"
-        defer {
-            isLoadingEpg = false
-            if epgStatus?.hasPrefix("Filling") == true { epgStatus = nil }
-        }
+        epgStatus = "Filling \(missing.count) channels…"
+        let service = epgService
+        let config = iptvConfig
+        let need = Array(missing.prefix(80))
 
-        let map = await epgService.loadForChannels(
-            channels: missing,
-            config: iptvConfig,
-            limitPerChannel: 12,
-            batchSize: 16,
-            preferBulk: false,
-            fillMissingWithShortEpg: true,
-            onBatch: { [weak self] batch in
-                guard let self else { return }
-                var next = self.epgByChannel
-                for (k, v) in batch { next[k] = v }
-                self.epgByChannel = next
-                self.epgLoadedCount = next.count
-            },
-            onStatus: { [weak self] msg in
-                self?.epgStatus = msg
-            }
-        )
+        let map = await Task.detached(priority: .utility) {
+            await service.loadForChannels(
+                channels: need,
+                config: config,
+                limitPerChannel: 8,
+                batchSize: 12,
+                preferBulk: false,
+                fillMissingWithShortEpg: true,
+                onBatch: nil,
+                onStatus: nil
+            )
+        }.value
+
         var next = epgByChannel
-        for (k, v) in map { next[k] = v }
+        for (k, v) in map where !v.isEmpty { next[k] = v }
         epgByChannel = next
         epgLoadedCount = next.count
+        isLoadingEpg = false
+        if epgStatus?.hasPrefix("Filling") == true {
+            epgStatus = next.isEmpty ? nil : "Guide · \(next.count) channels"
+        }
     }
 
     func toggleFavorite(teamId: String) {

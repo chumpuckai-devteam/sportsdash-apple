@@ -54,7 +54,9 @@ struct GeneralSettingsView: View {
                     appModel.epgByChannel = [:]
                     appModel.epgLoadedCount = 0
                     appModel.lastEpgReload = nil
-                    statusMessage = "EPG cache cleared."
+                    appModel.epgStatus = nil
+                    StorageService.shared.clearEpgCache()
+                    statusMessage = "EPG cache cleared (memory + disk)."
                 } label: {
                     Label("Clear EPG data", systemImage: "book")
                 }

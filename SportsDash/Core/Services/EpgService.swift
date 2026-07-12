@@ -1,23 +1,22 @@
 import Foundation
 
-/// EPG loader: **download and parse at the same time** (true streaming).
+/// Disk-first EPG loader (what keeps other IPTV apps responsive).
 ///
-/// Strategy used by fast IPTV apps:
-/// 1. Open one bulk XMLTV URL (`xmltv.php` / M3U `url-tvg`)
-/// 2. Read the HTTP body as a byte stream (URLSession decompresses gzip)
-/// 3. Extract complete `<programme>…</programme>` blocks from a small rolling buffer
-/// 4. Keep only playlist channels + a short time window (low memory)
-/// 5. Push batches to the UI while the download is still running
+/// **Pipeline**
+/// 1. `URLSession.download` → temp file on disk (not held in RAM)
+/// 2. Background `XMLParser` over the file (SAX / streaming)
+/// 3. Keep only playlist channels + short time window + max programmes / channel
+/// 4. Hand a compact dictionary back to the UI **once** (or rare status ticks)
+///
+/// Avoids: full-file `String`, regex over multi‑MB XML, byte-by-byte MainActor work.
 actor EpgService {
     private let session: URLSession
 
     static let maxProgramsPerChannel = 12
     static let windowHoursAhead = 18
     static let windowHoursBehind = 1
-    /// Max bytes kept for an incomplete trailing tag while streaming.
-    private static let maxCarryBytes = 512 * 1024
-    /// Flush UI at least this often while streaming.
-    private static let flushInterval: TimeInterval = 0.35
+    /// Refuse downloads larger than this (protects device storage + parse time).
+    static let maxDownloadBytes = 120 * 1024 * 1024
 
     init(session: URLSession? = nil) {
         if let session {
@@ -26,9 +25,8 @@ actor EpgService {
             let cfg = URLSessionConfiguration.default
             cfg.timeoutIntervalForRequest = 120
             cfg.timeoutIntervalForResource = 300
-            cfg.httpMaximumConnectionsPerHost = 6
-            // Do NOT set Accept-Encoding manually — URLSession will negotiate gzip
-            // and transparently decompress so we can stream plain XML.
+            cfg.httpMaximumConnectionsPerHost = 4
+            // Let URLSession negotiate gzip and write **decoded** body to the temp file.
             cfg.httpAdditionalHeaders = [
                 "Accept": "application/xml, text/xml, */*",
                 "User-Agent": "SportsDash/1.0",
@@ -39,6 +37,10 @@ actor EpgService {
         }
     }
 
+    /// Load EPG for channels. Heavy work never touches the main actor.
+    ///
+    /// - `onStatus`: rare progress strings (download % / parse)
+    /// - `onBatch`: optional mid-parse updates (throttled by caller); final map is returned
     func loadForChannels(
         channels: [IptvChannel],
         config: IptvConfig?,
@@ -46,34 +48,27 @@ actor EpgService {
         batchSize: Int = 12,
         preferBulk: Bool = true,
         fillMissingWithShortEpg: Bool = false,
-        onBatch: (@MainActor ([String: [EpgProgram]]) -> Void)? = nil,
-        onStatus: (@MainActor (String) -> Void)? = nil
+        onBatch: (@Sendable ([String: [EpgProgram]]) -> Void)? = nil,
+        onStatus: (@Sendable (String) -> Void)? = nil
     ) async -> [String: [EpgProgram]] {
         guard !channels.isEmpty else { return [:] }
 
         let interest = Self.interestKeys(for: channels)
-        let keyToChannelId = Self.keyToChannelId(for: channels)
         var result: [String: [EpgProgram]] = [:]
 
         if preferBulk {
-            var urls = bulkURLs(config: config)
-            // M3U playlists often declare a bulk XMLTV URL in the header.
-            if let config, config.type == .m3u,
-               let tvg = await discoverM3UXmltvURL(config: config) {
-                urls.insert(tvg, at: 0)
-            }
-            for urlString in urls {
-                await status(onStatus, "Streaming guide…")
-                if let streamed = await streamDownloadAndParse(
+            let urls = await bulkURLs(config: config)
+            for (index, urlString) in urls.enumerated() {
+                onStatus?("Downloading guide… (\(index + 1)/\(urls.count))")
+                if let byTvg = await downloadToDiskAndParse(
                     urlString: urlString,
                     interestKeys: interest,
-                    keyToChannelId: keyToChannelId,
                     limitPerChannel: limitPerChannel,
-                    onBatch: onBatch,
                     onStatus: onStatus
-                ), !streamed.isEmpty {
-                    result = streamed
-                    await status(onStatus, "Guide ready · \(result.count) channels")
+                ), !byTvg.isEmpty {
+                    result = mapXmltv(byTvg, to: channels, limit: limitPerChannel)
+                    onStatus?("Guide ready · \(result.count) channels")
+                    onBatch?(result)
                     if !fillMissingWithShortEpg || result.count > max(20, channels.count / 10) {
                         return result
                     }
@@ -81,23 +76,12 @@ actor EpgService {
                 }
             }
             if result.isEmpty {
-                await status(onStatus, "Bulk stream failed — trying file parse…")
-                // Fallback: download-to-disk + SAX (still lower peak than regex).
-                if let config, config.type == .xtream, config.isConfigured,
-                   let byTvg = await loadXtreamXmltvFile(config: config, interestKeys: interest, onStatus: onStatus) {
-                    result = mapXmltv(byTvg, to: channels, limit: limitPerChannel)
-                    if let onBatch { await MainActor.run { onBatch(result) } }
-                    if !result.isEmpty {
-                        await status(onStatus, "Guide ready · \(result.count) channels")
-                        return result
-                    }
-                }
-                await status(onStatus, "Bulk guide unavailable — short EPG fallback…")
+                onStatus?("Bulk guide unavailable — short EPG for open category…")
             }
         }
 
-        // Limited short-EPG fill (never full playlist hammer).
-        let need = channels.filter { result[$0.id] == nil }.prefix(100)
+        // Short EPG only for a small gap set (never full playlist).
+        let need = Array(channels.filter { result[$0.id] == nil }.prefix(80))
         guard !need.isEmpty,
               let config,
               config.type == .xtream,
@@ -105,276 +89,89 @@ actor EpgService {
             return result
         }
 
-        await status(onStatus, "Loading short EPG (\(need.count) channels)…")
+        onStatus?("Loading short EPG (\(need.count) channels)…")
         let short = await loadXtreamShortBatch(
-            channels: Array(need),
+            channels: need,
             config: config,
             limit: min(limitPerChannel, 8),
-            batchSize: batchSize,
-            onBatch: { batch in
-                if let onBatch { await MainActor.run { onBatch(batch) } }
-            }
+            batchSize: batchSize
         )
         for (k, v) in short where !v.isEmpty {
             result[k] = v
         }
+        if !short.isEmpty {
+            onBatch?(short)
+        }
         return result
     }
 
-    // MARK: - True streaming: download + process together
+    // MARK: - Download to disk → SAX parse (primary path)
 
-    /// Reads HTTP body as an async byte stream, extracts programmes as complete
-    /// tags arrive, and flushes mapped batches to the UI continuously.
-    private func streamDownloadAndParse(
+    private func downloadToDiskAndParse(
         urlString: String,
         interestKeys: Set<String>,
-        keyToChannelId: [String: String],
         limitPerChannel: Int,
-        onBatch: (@MainActor ([String: [EpgProgram]]) -> Void)?,
-        onStatus: (@MainActor (String) -> Void)?
+        onStatus: (@Sendable (String) -> Void)?
     ) async -> [String: [EpgProgram]]? {
         guard let url = URL(string: urlString) else { return nil }
 
+        let tempDir = FileManager.default.temporaryDirectory
+        let dest = tempDir.appendingPathComponent("sportsdash-epg-\(UUID().uuidString).xml")
+
         do {
-            let (bytes, response) = try await session.bytes(from: url)
+            // Streams response body straight to a temp file — OS handles buffering.
+            let (fileURL, response) = try await session.download(from: url)
             guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else { return nil }
-
-            let now = Date()
-            let windowStart = now.addingTimeInterval(TimeInterval(-Self.windowHoursBehind) * 3600)
-            let windowEnd = now.addingTimeInterval(TimeInterval(Self.windowHoursAhead) * 3600)
-
-            // channelId → programmes (already mapped to app ids)
-            var byChannel: [String: [EpgProgram]] = [:]
-            var dirty: [String: [EpgProgram]] = [:]
-            var carry = Data()
-            carry.reserveCapacity(64 * 1024)
-
-            var bytesRead = 0
-            var programmesSeen = 0
-            var lastFlush = Date.distantPast
-            var lastStatus = Date.distantPast
-
-            let openToken = Data("<programme".utf8)
-            let closeToken = Data("</programme>".utf8)
-
-            // Batch bytes into 32KB chunks — single-byte Data.append is far too slow on multi‑MB EPG.
-            var chunk = [UInt8]()
-            chunk.reserveCapacity(32 * 1024)
-
-            func processCarry() {
-                if carry.count > Self.maxCarryBytes * 2 {
-                    carry = Data(carry.suffix(Self.maxCarryBytes))
-                }
-                while let extracted = Self.popCompleteProgramme(
-                    from: &carry,
-                    openToken: openToken,
-                    closeToken: closeToken
-                ) {
-                    programmesSeen += 1
-                    guard let prog = Self.parseProgrammeXML(
-                        extracted,
-                        interestKeys: interestKeys,
-                        keyToChannelId: keyToChannelId,
-                        windowStart: windowStart,
-                        windowEnd: windowEnd
-                    ) else { continue }
-
-                    let chId = prog.channelKey
-                    var list = byChannel[chId] ?? []
-                    if list.count < limitPerChannel {
-                        list.append(prog)
-                        byChannel[chId] = list
-                        dirty[chId] = list
-                    }
-                }
+                  (200...299).contains(http.statusCode) else {
+                try? FileManager.default.removeItem(at: fileURL)
+                return nil
             }
 
-            for try await byte in bytes {
-                chunk.append(byte)
-                if chunk.count >= 32 * 1024 {
-                    carry.append(contentsOf: chunk)
-                    bytesRead += chunk.count
-                    chunk.removeAll(keepingCapacity: true)
-                    processCarry()
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.moveItem(at: fileURL, to: dest)
 
-                    let nowTick = Date()
-                    if !dirty.isEmpty,
-                       nowTick.timeIntervalSince(lastFlush) >= Self.flushInterval {
-                        let batch = dirty
-                        dirty.removeAll(keepingCapacity: true)
-                        lastFlush = nowTick
-                        if let onBatch {
-                            await MainActor.run { onBatch(batch) }
-                        }
-                    }
-                    if nowTick.timeIntervalSince(lastStatus) >= 1.2 {
-                        lastStatus = nowTick
-                        let mb = Double(bytesRead) / 1_048_576
-                        await status(
-                            onStatus,
-                            String(format: "Streaming guide… %.1f MB · %d channels", mb, byChannel.count)
-                        )
-                    }
-                }
-            }
-            // Remainder
-            if !chunk.isEmpty {
-                carry.append(contentsOf: chunk)
-                bytesRead += chunk.count
-                processCarry()
+            let attrs = try FileManager.default.attributesOfItem(atPath: dest.path)
+            let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
+            if size <= 0 || size > Self.maxDownloadBytes {
+                try? FileManager.default.removeItem(at: dest)
+                onStatus?(size > Self.maxDownloadBytes
+                    ? "Guide file too large for this device"
+                    : "Empty guide file")
+                return nil
             }
 
-            // Final flush of remaining dirty + any leftover (none expected).
-            if !dirty.isEmpty, let onBatch {
-                await MainActor.run { onBatch(dirty) }
-            }
+            let mb = Double(size) / 1_048_576
+            onStatus?(String(format: "Downloaded %.1f MB — parsing on disk…", mb))
 
-            // Sort lists once at end (cheap; already capped).
-            for key in byChannel.keys {
-                byChannel[key]?.sort { $0.start < $1.start }
-            }
+            // Parse off the EpgService actor executor (true background).
+            let map = await Task.detached(priority: .utility) {
+                DiskXMLTVParser.parse(
+                    fileURL: dest,
+                    interestKeys: interestKeys,
+                    maxPerChannel: limitPerChannel,
+                    hoursBehind: EpgService.windowHoursBehind,
+                    hoursAhead: EpgService.windowHoursAhead
+                )
+            }.value
 
-            return byChannel.isEmpty ? nil : byChannel
+            try? FileManager.default.removeItem(at: dest)
+            return map.isEmpty ? nil : map
         } catch {
+            try? FileManager.default.removeItem(at: dest)
             return nil
         }
     }
 
-    /// Pull one complete `<programme…>…</programme>` from the front of `carry`, if present.
-    nonisolated private static func popCompleteProgramme(
-        from carry: inout Data,
-        openToken: Data,
-        closeToken: Data
-    ) -> Data? {
-        guard let openRange = carry.range(of: openToken) else {
-            // No open tag — discard most of the buffer (keep a small tail for partial matches).
-            if carry.count > openToken.count {
-                carry = carry.suffix(openToken.count - 1)
-            }
-            return nil
-        }
-        // Drop junk before the open tag.
-        if openRange.lowerBound > 0 {
-            carry.removeSubrange(0..<openRange.lowerBound)
-        }
-        guard let closeRange = carry.range(of: closeToken) else {
-            // Incomplete programme — wait for more bytes.
-            // Cap carry so one huge programme can't OOM us.
-            if carry.count > maxCarryBytes {
-                carry.removeAll(keepingCapacity: true)
-            }
-            return nil
-        }
-        let end = closeRange.upperBound
-        let slice = carry.subdata(in: 0..<end)
-        carry.removeSubrange(0..<end)
-        return slice
-    }
+    // MARK: - URLs
 
-    /// Lightweight parse of a single programme element (no full DOM).
-    nonisolated private static func parseProgrammeXML(
-        _ data: Data,
-        interestKeys: Set<String>,
-        keyToChannelId: [String: String],
-        windowStart: Date,
-        windowEnd: Date
-    ) -> EpgProgram? {
-        guard let xml = String(data: data, encoding: .utf8)
-                ?? String(data: data, encoding: .isoLatin1) else { return nil }
+    private func bulkURLs(config: IptvConfig?) async -> [String] {
+        var urls: [String] = []
+        guard let config else { return urls }
 
-        // channel="…"
-        guard let channel = attr(xml, "channel"),
-              let start = parseXmltvTime(attr(xml, "start")),
-              let end = parseXmltvTime(attr(xml, "stop")),
-              end > windowStart,
-              start < windowEnd else { return nil }
-
-        // Map to our channel id (skip unrelated XMLTV channels immediately).
-        let chId: String
-        if let id = keyToChannelId[channel] ?? keyToChannelId[channel.lowercased()] {
-            chId = id
-        } else if interestKeys.isEmpty {
-            chId = channel
-        } else {
-            return nil
+        if config.type == .m3u, let tvg = await discoverM3UXmltvURL(config: config) {
+            urls.append(tvg)
         }
 
-        let title = tag(xml, "title") ?? "Program"
-        return EpgProgram(
-            channelKey: chId,
-            title: unescape(title),
-            start: start,
-            end: end,
-            description: nil
-        )
-    }
-
-    nonisolated private static func attr(_ xml: String, _ name: String) -> String? {
-        // channel="value"  (first match)
-        guard let re = try? NSRegularExpression(
-            pattern: #"\#(name)\s*=\s*"([^"]*)""#,
-            options: [.caseInsensitive]
-        ),
-        let m = re.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
-        m.numberOfRanges >= 3,
-        let r = Range(m.range(at: 2), in: xml) else { return nil }
-        return String(xml[r])
-    }
-
-    nonisolated private static func tag(_ xml: String, _ name: String) -> String? {
-        guard let re = try? NSRegularExpression(
-            pattern: #"<\#(name)(?:\s[^>]*)?>([\s\S]*?)</\#(name)>"#,
-            options: [.caseInsensitive]
-        ),
-        let m = re.firstMatch(in: xml, range: NSRange(xml.startIndex..., in: xml)),
-        let r = Range(m.range(at: 1), in: xml) else { return nil }
-        return String(xml[r])
-    }
-
-    nonisolated private static func parseXmltvTime(_ raw: String?) -> Date? {
-        guard let raw else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 14 else { return nil }
-        let y = Int(trimmed.prefix(4)) ?? 0
-        let mo = Int(trimmed.dropFirst(4).prefix(2)) ?? 0
-        let d = Int(trimmed.dropFirst(6).prefix(2)) ?? 0
-        let h = Int(trimmed.dropFirst(8).prefix(2)) ?? 0
-        let mi = Int(trimmed.dropFirst(10).prefix(2)) ?? 0
-        let s = Int(trimmed.dropFirst(12).prefix(2)) ?? 0
-
-        var calendar = Calendar(identifier: .gregorian)
-        var secondsFromGMT = 0
-        if trimmed.count > 15 {
-            let tail = trimmed.dropFirst(14)
-            if let idx = tail.firstIndex(where: { $0 == "+" || $0 == "-" }) {
-                let sign: Int = tail[idx] == "+" ? 1 : -1
-                let digits = tail[idx...].filter(\.isNumber)
-                if digits.count >= 4 {
-                    let hh = Int(digits.prefix(2)) ?? 0
-                    let mm = Int(digits.dropFirst(2).prefix(2)) ?? 0
-                    secondsFromGMT = sign * (hh * 3600 + mm * 60)
-                }
-            }
-        }
-        calendar.timeZone = TimeZone(secondsFromGMT: secondsFromGMT) ?? .gmt
-        return calendar.date(from: DateComponents(
-            year: y, month: mo, day: d, hour: h, minute: mi, second: s
-        ))
-    }
-
-    nonisolated private static func unescape(_ s: String) -> String {
-        s.replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&apos;", with: "'")
-    }
-
-    // MARK: - Bulk URL candidates
-
-    private func bulkURLs(config: IptvConfig?) -> [String] {
-        guard let config else { return [] }
         if config.type == .xtream, config.isConfigured,
            let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
            let user = config.xtreamUsername,
@@ -382,76 +179,34 @@ actor EpgService {
             let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
             let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
             let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
-            return [
+            urls.append(contentsOf: [
                 "\(host)/xmltv.php?username=\(userQ)&password=\(passQ)",
                 "\(host)/xmltv.php?username=\(userQ)&password=\(passQ)&type=m3u_plus",
-            ]
+            ])
         }
-        return []
+        return urls
     }
 
-    // MARK: - File fallback (download whole file, SAX parse)
-
-    private func loadXtreamXmltvFile(
-        config: IptvConfig,
-        interestKeys: Set<String>,
-        onStatus: (@MainActor (String) -> Void)?
-    ) async -> [String: [EpgProgram]]? {
-        for urlString in bulkURLs(config: config) {
-            if let map = await downloadFileAndSAX(
-                urlString: urlString,
-                interestKeys: interestKeys,
-                onStatus: onStatus
-            ), !map.isEmpty {
-                return map
+    private func discoverM3UXmltvURL(config: IptvConfig) async -> String? {
+        guard let raw = config.m3uURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: raw) else { return nil }
+        do {
+            var req = URLRequest(url: url)
+            req.setValue("bytes=0-4095", forHTTPHeaderField: "Range")
+            let (data, _) = try await session.data(for: req)
+            let text = String(data: data, encoding: .utf8) ?? ""
+            for pattern in [#"url-tvg="([^"]+)""#, #"x-tvg-url="([^"]+)""#] {
+                if let re = try? NSRegularExpression(pattern: pattern),
+                   let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                   let r = Range(m.range(at: 1), in: text) {
+                    return String(text[r])
+                }
             }
-        }
+        } catch { return nil }
         return nil
     }
 
-    private func downloadFileAndSAX(
-        urlString: String,
-        interestKeys: Set<String>,
-        onStatus: (@MainActor (String) -> Void)?
-    ) async -> [String: [EpgProgram]]? {
-        guard let url = URL(string: urlString) else { return nil }
-        let temp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sportsdash-epg-\(UUID().uuidString).xml")
-        do {
-            let (tempURL, response) = try await session.download(from: url)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                try? FileManager.default.removeItem(at: tempURL)
-                return nil
-            }
-            try? FileManager.default.removeItem(at: temp)
-            try FileManager.default.moveItem(at: tempURL, to: temp)
-
-            let attrs = try FileManager.default.attributesOfItem(atPath: temp.path)
-            if let size = attrs[.size] as? NSNumber, size.intValue > 100 * 1024 * 1024 {
-                try? FileManager.default.removeItem(at: temp)
-                await status(onStatus, "Guide file too large for device")
-                return nil
-            }
-
-            await status(onStatus, "Parsing guide file…")
-            let map = await Task.detached(priority: .utility) {
-                StreamingXMLTVParser.parse(
-                    fileURL: temp,
-                    interestKeys: interestKeys,
-                    maxPerChannel: EpgService.maxProgramsPerChannel,
-                    hoursBehind: EpgService.windowHoursBehind,
-                    hoursAhead: EpgService.windowHoursAhead
-                )
-            }.value
-            try? FileManager.default.removeItem(at: temp)
-            return map
-        } catch {
-            try? FileManager.default.removeItem(at: temp)
-            return nil
-        }
-    }
-
-    // MARK: - Mapping helpers
+    // MARK: - Map XMLTV channel id → app channel id
 
     private func mapXmltv(
         _ byTvg: [String: [EpgProgram]],
@@ -459,12 +214,17 @@ actor EpgService {
         limit: Int
     ) -> [String: [EpgProgram]] {
         var lowerIndex: [String: String] = [:]
+        lowerIndex.reserveCapacity(byTvg.count)
         for key in byTvg.keys { lowerIndex[key.lowercased()] = key }
 
         var result: [String: [EpgProgram]] = [:]
+        result.reserveCapacity(min(channels.count, byTvg.count))
+
         for ch in channels {
             let candidates = [ch.epgChannelId, ch.tvgId, Self.xtreamStreamId(ch)]
-                .compactMap { $0 }.filter { !$0.isEmpty }
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+
             var programs: [EpgProgram] = []
             for k in candidates {
                 if let list = byTvg[k] { programs = list; break }
@@ -504,34 +264,13 @@ actor EpgService {
         return keys
     }
 
-    /// tvg/epg/stream key → SportsDash channel id (for progressive mapping during stream).
-    nonisolated private static func keyToChannelId(for channels: [IptvChannel]) -> [String: String] {
-        var map: [String: String] = [:]
-        map.reserveCapacity(channels.count * 3)
-        for ch in channels {
-            if let e = ch.epgChannelId, !e.isEmpty {
-                map[e] = ch.id
-                map[e.lowercased()] = ch.id
-            }
-            if let t = ch.tvgId, !t.isEmpty {
-                map[t] = ch.id
-                map[t.lowercased()] = ch.id
-            }
-            if let sid = xtreamStreamId(ch) {
-                map[sid] = ch.id
-            }
-        }
-        return map
-    }
-
-    // MARK: - Short EPG fallback
+    // MARK: - Short EPG fallback (bounded)
 
     private func loadXtreamShortBatch(
         channels: [IptvChannel],
         config: IptvConfig,
         limit: Int,
-        batchSize: Int,
-        onBatch: (([String: [EpgProgram]]) async -> Void)?
+        batchSize: Int
     ) async -> [String: [EpgProgram]] {
         guard let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
               let user = config.xtreamUsername,
@@ -545,7 +284,6 @@ actor EpgService {
         while i < channels.count {
             let end = min(i + batchSize, channels.count)
             let slice = Array(channels[i..<end])
-            var batch: [String: [EpgProgram]] = [:]
             await withTaskGroup(of: (String, [EpgProgram]).self) { group in
                 for ch in slice {
                     group.addTask {
@@ -564,11 +302,9 @@ actor EpgService {
                     }
                 }
                 for await (id, programs) in group where !programs.isEmpty {
-                    batch[id] = programs
                     result[id] = programs
                 }
             }
-            if let onBatch, !batch.isEmpty { await onBatch(batch) }
             i = end
         }
         return result
@@ -588,7 +324,7 @@ actor EpgService {
         )!
         let (data, response) = try await session.data(from: url)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        guard data.count < 512_000 else { return [] }
+        guard data.count < 256_000 else { return [] }
 
         let obj = try JSONSerialization.jsonObject(with: data)
         let listings: [[String: Any]]
@@ -621,32 +357,7 @@ actor EpgService {
         .sorted { $0.start < $1.start }
     }
 
-    private func discoverM3UXmltvURL(config: IptvConfig) async -> String? {
-        guard let raw = config.m3uURL?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let url = URL(string: raw) else { return nil }
-        do {
-            var req = URLRequest(url: url)
-            req.setValue("bytes=0-4095", forHTTPHeaderField: "Range")
-            let (data, _) = try await session.data(for: req)
-            let text = String(data: data, encoding: .utf8) ?? ""
-            for pattern in [#"url-tvg="([^"]+)""#, #"x-tvg-url="([^"]+)""#] {
-                if let re = try? NSRegularExpression(pattern: pattern),
-                   let m = re.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-                   let r = Range(m.range(at: 1), in: text) {
-                    return String(text[r])
-                }
-            }
-        } catch { return nil }
-        return nil
-    }
-
-    private func status(
-        _ onStatus: (@MainActor (String) -> Void)?,
-        _ message: String
-    ) async {
-        guard let onStatus else { return }
-        await MainActor.run { onStatus(message) }
-    }
+    // MARK: - Helpers
 
     nonisolated static func xtreamStreamId(_ ch: IptvChannel) -> String? {
         if ch.id.hasPrefix("xtream-") {
@@ -690,9 +401,10 @@ actor EpgService {
     }
 }
 
-// MARK: - File SAX parser (fallback)
+// MARK: - Disk SAX parser (low RAM)
 
-final class StreamingXMLTVParser: NSObject, XMLParserDelegate {
+/// Streams the XMLTV **file** with Foundation's `XMLParser` — never loads the full document as a String.
+final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private let interestKeys: Set<String>
     private let maxPerChannel: Int
     private let windowStart: Date
@@ -728,17 +440,20 @@ final class StreamingXMLTVParser: NSObject, XMLParserDelegate {
         hoursBehind: Int,
         hoursAhead: Int
     ) -> [String: [EpgProgram]] {
-        let delegate = StreamingXMLTVParser(
+        let delegate = DiskXMLTVParser(
             interestKeys: interestKeys,
             maxPerChannel: maxPerChannel,
             hoursBehind: hoursBehind,
             hoursAhead: hoursAhead
         )
+        // XMLParser streams from the file path; peak RAM ≈ parser state, not file size.
         guard let parser = XMLParser(contentsOf: fileURL) else { return [:] }
         parser.delegate = delegate
         parser.shouldProcessNamespaces = false
+        parser.shouldReportNamespacePrefixes = false
         parser.shouldResolveExternalEntities = false
         parser.parse()
+
         for key in delegate.map.keys {
             var list = delegate.map[key] ?? []
             list.sort { $0.start < $1.start }
@@ -772,7 +487,12 @@ final class StreamingXMLTVParser: NSObject, XMLParserDelegate {
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if captureTitle { currentText.append(string) }
+        if captureTitle {
+            // Titles are short; hard-cap to avoid pathological payloads.
+            if currentText.count < 200 {
+                currentText.append(string)
+            }
+        }
     }
 
     func parser(
@@ -830,8 +550,22 @@ final class StreamingXMLTVParser: NSObject, XMLParserDelegate {
         let h = Int(trimmed.dropFirst(8).prefix(2)) ?? 0
         let mi = Int(trimmed.dropFirst(10).prefix(2)) ?? 0
         let s = Int(trimmed.dropFirst(12).prefix(2)) ?? 0
+
+        var secondsFromGMT = 0
+        if trimmed.count > 15 {
+            let tail = trimmed.dropFirst(14)
+            if let idx = tail.firstIndex(where: { $0 == "+" || $0 == "-" }) {
+                let sign: Int = tail[idx] == "+" ? 1 : -1
+                let digits = tail[idx...].filter(\.isNumber)
+                if digits.count >= 4 {
+                    let hh = Int(digits.prefix(2)) ?? 0
+                    let mm = Int(digits.dropFirst(2).prefix(2)) ?? 0
+                    secondsFromGMT = sign * (hh * 3600 + mm * 60)
+                }
+            }
+        }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .gmt
+        calendar.timeZone = TimeZone(secondsFromGMT: secondsFromGMT) ?? .gmt
         return calendar.date(from: DateComponents(
             year: y, month: mo, day: d, hour: h, minute: mi, second: s
         ))
