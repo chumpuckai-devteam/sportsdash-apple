@@ -209,7 +209,7 @@ final class AppModel: ObservableObject {
 
     func removePlaylist(id: String) {
         let wasActive = activePlaylistId == id
-        var list = playlists.filter { $0.id != id }
+        let list = playlists.filter { $0.id != id }
         KeychainStore.delete(account: "iptv_pass_\(id)")
         let newActive: String? = wasActive ? list.first?.id : activePlaylistId
         if list.isEmpty {
@@ -317,14 +317,14 @@ final class AppModel: ObservableObject {
         isLoadingEpg = true
         epgError = nil
         epgStatus = "Downloading guide to disk…"
-        if force {
-            // Keep showing old listings while refreshing so Settings/Guide stay usable.
-        }
+        // Keep showing old listings while force-refreshing so Settings/Guide stay usable.
 
         // Heavy work runs off the main actor — Settings stays responsive.
         let service = epgService
         let storageRef = storage
         let task = Task.detached(priority: .utility) { [weak self] () -> [String: [EpgProgram]] in
+            // Capture once as an immutable optional for Swift 6 concurrency rules.
+            let model = self
             let map = await service.loadForChannels(
                 channels: snapshot,
                 config: config,
@@ -335,7 +335,7 @@ final class AppModel: ObservableObject {
                 onBatch: nil,
                 onStatus: { msg in
                     Task { @MainActor in
-                        self?.epgStatus = msg
+                        model?.epgStatus = msg
                     }
                 }
             )
@@ -349,21 +349,21 @@ final class AppModel: ObservableObject {
         epgLoadTask = Task { @MainActor in
             let map = await task.value
             guard !Task.isCancelled else {
-                self.isLoadingEpg = false
+                isLoadingEpg = false
                 return
             }
             let compact = map.filter { !$0.value.isEmpty }
             if !compact.isEmpty {
-                self.epgByChannel = compact
-                self.epgLoadedCount = compact.count
-                self.lastEpgReload = Date()
-                self.epgStatus = "Guide ready · \(compact.count) channels"
-                self.epgError = nil
+                epgByChannel = compact
+                epgLoadedCount = compact.count
+                lastEpgReload = Date()
+                epgStatus = "Guide ready · \(compact.count) channels"
+                epgError = nil
             } else {
-                self.epgError = "No EPG data returned. Provider may not expose XMLTV."
-                self.epgStatus = nil
+                epgError = "No EPG data returned. Provider may not expose XMLTV."
+                epgStatus = nil
             }
-            self.isLoadingEpg = false
+            isLoadingEpg = false
         }
         await epgLoadTask?.value
     }
