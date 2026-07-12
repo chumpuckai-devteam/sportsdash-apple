@@ -60,21 +60,20 @@ actor IptvService {
     }
 
     private func loadXtream(config: IptvConfig) async throws -> [IptvChannel] {
-        guard var host = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+        guard let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
               let user = config.xtreamUsername,
               let pass = config.xtreamPassword else {
             throw IptvError.invalidConfig
         }
-        if !host.hasPrefix("http") { host = "http://\(host)" }
+        // Immutable base URL — must not be a `var` captured by concurrent `async let` (Swift 6).
+        let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
         let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
         let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
+        let categoriesURL = URL(string: "\(host)/player_api.php?username=\(userQ)&password=\(passQ)&action=get_live_categories")!
+        let streamsURL = URL(string: "\(host)/player_api.php?username=\(userQ)&password=\(passQ)&action=get_live_streams")!
 
-        async let catDataTask = session.data(
-            from: URL(string: "\(host)/player_api.php?username=\(userQ)&password=\(passQ)&action=get_live_categories")!
-        )
-        async let streamsDataTask = session.data(
-            from: URL(string: "\(host)/player_api.php?username=\(userQ)&password=\(passQ)&action=get_live_streams")!
-        )
+        async let catDataTask = session.data(from: categoriesURL)
+        async let streamsDataTask = session.data(from: streamsURL)
 
         let (catData, _) = try await catDataTask
         let (streamData, streamResp) = try await streamsDataTask
