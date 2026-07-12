@@ -19,6 +19,21 @@ struct SettingsView: View {
                         )
                     }
                     .listRowBackground(SportsColors.panel)
+
+                    if appModel.isLoadingEpg {
+                        HStack(spacing: 10) {
+                            ProgressView().controlSize(.small).tint(SportsColors.gold)
+                            Text("Downloading EPG \(appModel.epgLoadedCount)/\(max(appModel.channels.count, 1))…")
+                                .font(.caption)
+                                .foregroundStyle(SportsColors.muted)
+                        }
+                        .listRowBackground(SportsColors.panel)
+                    } else if appModel.epgLoadedCount > 0 {
+                        Text("EPG ready · \(appModel.epgByChannel.values.filter { !$0.isEmpty }.count) channels with listings")
+                            .font(.caption)
+                            .foregroundStyle(SportsColors.muted)
+                            .listRowBackground(SportsColors.panel)
+                    }
                 }
 
                 Section("Advanced") {

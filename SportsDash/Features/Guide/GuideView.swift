@@ -84,10 +84,16 @@ struct GuideView: View {
                 if selectedGroup.isEmpty {
                     selectedGroup = groupNames.first ?? ""
                 }
-                await reloadEpg()
+                // Prefer full cache from app bootstrap; fill any gaps for this category.
+                await appModel.loadEpgIfNeeded(for: activeChannels)
             }
             .onChange(of: selectedGroup) { _, _ in
-                Task { await reloadEpg() }
+                Task { await appModel.loadEpgIfNeeded(for: activeChannels) }
+            }
+            .onChange(of: appModel.channels.count) { _, _ in
+                if selectedGroup.isEmpty {
+                    selectedGroup = groupNames.first ?? ""
+                }
             }
             .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { date in
                 nowTick = date
@@ -126,10 +132,10 @@ struct GuideView: View {
     private var guideSettingsMenu: some View {
         Menu {
             Button {
-                Task { await reloadEpg() }
+                Task { await appModel.reloadEpg(force: true) }
             } label: {
                 Label(
-                    appModel.isLoadingEpg ? "Refreshing…" : "Refresh Guide",
+                    appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
                     systemImage: "arrow.clockwise"
                 )
             }
@@ -167,11 +173,20 @@ struct GuideView: View {
 
     @ViewBuilder
     private var guideContent: some View {
-        if appModel.isLoadingEpg && guideRows.allSatisfy({ $0.programs.isEmpty }) {
-            ProgressView("Loading program guide…")
-                .tint(SportsColors.gold)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
+        VStack(spacing: 0) {
+            if appModel.isLoadingEpg {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(SportsColors.gold)
+                    Text(epgStatusText)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(SportsColors.muted)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(SportsColors.panel)
+            }
+
             switch displayMode {
             case .list:
                 GuideTimelineGrid(
@@ -187,6 +202,15 @@ struct GuideView: View {
                 guideCardList
             }
         }
+    }
+
+    private var epgStatusText: String {
+        let total = max(appModel.channels.count, 1)
+        let loaded = appModel.epgLoadedCount
+        if loaded == 0 {
+            return "Downloading program guide…"
+        }
+        return "EPG \(loaded)/\(total) channels"
     }
 
     /// Card-style Now / Next rows (grid view).
@@ -215,12 +239,6 @@ struct GuideView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-    }
-
-    private func reloadEpg() async {
-        let chans = Array(activeChannels.prefix(80))
-        guard !chans.isEmpty else { return }
-        await appModel.loadEpg(for: chans)
     }
 
     private static func snappedNowMinusOneHour() -> Date {
@@ -547,21 +565,21 @@ private struct GuideTimelineGrid: View {
     }
 
     private func visiblePrograms(for row: GuideChannelRowData) -> [EpgProgram] {
-        let programs = row.programs.isEmpty
-            ? [
-                EpgProgram(
-                    channelKey: row.channel.id,
-                    title: "No EPG data",
-                    start: windowStart,
-                    end: windowEnd,
-                    description: nil
-                )
-            ]
-            : row.programs
-
-        return programs.filter { p in
+        let inWindow = row.programs.filter { p in
             p.end > windowStart && p.start < windowEnd
         }
+        if !inWindow.isEmpty { return inWindow }
+        // Empty or all listings outside the visible 24h window.
+        let title = row.programs.isEmpty ? "No EPG data" : "No programs in this time range"
+        return [
+            EpgProgram(
+                channelKey: row.channel.id,
+                title: title,
+                start: windowStart,
+                end: min(windowEnd, windowStart.addingTimeInterval(3600 * 3)),
+                description: nil
+            )
+        ]
     }
 
     private func clippedRange(_ p: EpgProgram) -> (start: Date, end: Date) {

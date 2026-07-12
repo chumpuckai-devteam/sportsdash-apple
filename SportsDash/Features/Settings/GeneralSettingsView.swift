@@ -34,23 +34,44 @@ struct GeneralSettingsView: View {
 
             Section {
                 Button {
+                    Task {
+                        await appModel.reloadEpg(force: true)
+                        statusMessage = "EPG reloaded · \(appModel.epgLoadedCount) channels."
+                    }
+                } label: {
+                    if appModel.isLoadingEpg {
+                        HStack {
+                            ProgressView()
+                            Text("Reloading EPG \(appModel.epgLoadedCount)/\(max(appModel.channels.count, 1))…")
+                        }
+                    } else {
+                        Label("Reload EPG", systemImage: "calendar.badge.clock")
+                    }
+                }
+                .disabled(appModel.channels.isEmpty || appModel.isLoadingEpg)
+
+                Button {
                     appModel.epgByChannel = [:]
+                    appModel.epgLoadedCount = 0
+                    appModel.lastEpgReload = nil
                     statusMessage = "EPG cache cleared."
                 } label: {
-                    Label("EPG data", systemImage: "book")
+                    Label("Clear EPG data", systemImage: "book")
                 }
+
                 Button {
                     statusMessage = "Temporary playback state cleared."
                 } label: {
                     Label("Temporal files", systemImage: "folder")
                 }
+
                 if let statusMessage {
                     Text(statusMessage)
                         .font(.caption)
                         .foregroundStyle(SportsColors.muted)
                 }
             } header: {
-                Text("Clean up storage")
+                Text("EPG & storage")
             }
 
             Section {

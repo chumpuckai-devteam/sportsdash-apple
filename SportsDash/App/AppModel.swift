@@ -20,6 +20,10 @@ final class AppModel: ObservableObject {
     @Published var dashboardFilter: DashboardFilter = .live
     @Published var epgByChannel: [String: [EpgProgram]] = [:]
     @Published var isLoadingEpg = false
+    /// Channels with EPG entries loaded (may be empty lists).
+    @Published var epgLoadedCount = 0
+    @Published var lastEpgReload: Date?
+    @Published var epgError: String?
 
     let sportsAPI = SportsAPI()
     let iptvService = IptvService()
@@ -30,6 +34,7 @@ final class AppModel: ObservableObject {
     private var scoresTimer: Timer?
     private var playlistTimer: Timer?
     private var lastPlaylistReload: Date?
+    private var epgLoadTask: Task<Void, Never>?
 
     init() {
         favoriteTeamIds = storage.favoriteTeamIds()
@@ -44,6 +49,8 @@ final class AppModel: ObservableObject {
         if let config = iptvConfig, config.isConfigured {
             await reloadChannels()
             lastPlaylistReload = Date()
+            // Full guide for every channel — progressive so Guide paints early.
+            await reloadEpg(force: true)
         }
         startScoresPolling()
         startPlaylistPolling()
@@ -79,6 +86,7 @@ final class AppModel: ObservableObject {
         guard elapsed >= Double(hours) * 3600 else { return }
         await reloadChannels()
         lastPlaylistReload = Date()
+        await reloadEpg(force: true)
     }
 
     func refreshScores(silent: Bool = false) async {
@@ -106,6 +114,7 @@ final class AppModel: ObservableObject {
         MatchingService().matchGameToChannels(game, channels: channels)
     }
 
+    /// Reload playlist only (does not clear EPG until new channel ids differ).
     func reloadChannels() async {
         guard let config = iptvConfig, config.isConfigured else {
             channels = []
@@ -129,13 +138,99 @@ final class AppModel: ObservableObject {
             defer { isLoadingChannels = false }
             channels = try await iptvService.loadChannels(config: storage.loadIptvConfig() ?? config)
         }()
+        // Fresh playlist → pull full EPG in the background.
+        Task { await reloadEpg(force: true) }
     }
 
     func clearIptvConfig() {
+        epgLoadTask?.cancel()
         storage.clearIptvConfig()
         iptvConfig = nil
         channels = []
         epgByChannel = [:]
+        epgLoadedCount = 0
+        lastEpgReload = nil
+        epgError = nil
+    }
+
+    /// Full EPG for every loaded channel. Progressive merge so Guide updates live.
+    func reloadEpg(force: Bool = false) async {
+        guard !channels.isEmpty else {
+            epgByChannel = [:]
+            epgLoadedCount = 0
+            return
+        }
+        if isLoadingEpg, !force { return }
+        if !force, lastEpgReload != nil, !epgByChannel.isEmpty, epgLoadedCount >= channels.count {
+            return
+        }
+
+        epgLoadTask?.cancel()
+        let snapshot = channels
+        let config = iptvConfig
+        isLoadingEpg = true
+        epgError = nil
+        if force {
+            epgByChannel = [:]
+            epgLoadedCount = 0
+        }
+
+        let task = Task { @MainActor in
+            let map = await epgService.loadForChannels(
+                channels: snapshot,
+                config: config,
+                limitPerChannel: 24,
+                batchSize: 12
+            ) { [weak self] batch in
+                guard let self else { return }
+                var next = self.epgByChannel
+                for (k, v) in batch { next[k] = v }
+                self.epgByChannel = next
+                self.epgLoadedCount = next.count
+            }
+            guard !Task.isCancelled else { return }
+            // Final merge (covers empty batches).
+            var next = epgByChannel
+            for (k, v) in map { next[k] = v }
+            epgByChannel = next
+            epgLoadedCount = next.count
+            lastEpgReload = Date()
+            isLoadingEpg = false
+            if map.isEmpty {
+                epgError = "No EPG data returned from provider."
+            }
+        }
+        epgLoadTask = task
+        await task.value
+    }
+
+    /// Load EPG only for channels missing from the cache (used when opening a guide category early).
+    func loadEpgIfNeeded(for channels: [IptvChannel]) async {
+        let missing = channels.filter { epgByChannel[$0.id] == nil }
+        guard !missing.isEmpty else { return }
+        if isLoadingEpg {
+            // Full load already running — wait for it.
+            await epgLoadTask?.value
+            return
+        }
+        isLoadingEpg = true
+        defer { isLoadingEpg = false }
+        let map = await epgService.loadForChannels(
+            channels: missing,
+            config: iptvConfig,
+            limitPerChannel: 24,
+            batchSize: 12
+        ) { [weak self] batch in
+            guard let self else { return }
+            var next = self.epgByChannel
+            for (k, v) in batch { next[k] = v }
+            self.epgByChannel = next
+            self.epgLoadedCount = next.count
+        }
+        var next = epgByChannel
+        for (k, v) in map { next[k] = v }
+        epgByChannel = next
+        epgLoadedCount = next.count
     }
 
     func toggleFavorite(teamId: String) {
@@ -208,17 +303,5 @@ final class AppModel: ObservableObject {
         return order.map { (name: $0, channels: map[$0] ?? []) }
     }
 
-    func loadEpg(for channels: [IptvChannel], limitPerChannel: Int = 12) async {
-        isLoadingEpg = true
-        defer { isLoadingEpg = false }
-        let map = await epgService.loadForChannels(
-            channels: channels,
-            config: iptvConfig,
-            limitPerChannel: limitPerChannel
-        )
-        // Merge so switching groups doesn't wipe other channels' EPG.
-        var next = epgByChannel
-        for (k, v) in map { next[k] = v }
-        epgByChannel = next
-    }
 }
+

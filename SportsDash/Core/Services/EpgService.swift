@@ -3,14 +3,26 @@ import Foundation
 actor EpgService {
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            let cfg = URLSessionConfiguration.default
+            cfg.timeoutIntervalForRequest = 20
+            cfg.timeoutIntervalForResource = 45
+            cfg.httpMaximumConnectionsPerHost = 12
+            self.session = URLSession(configuration: cfg)
+        }
     }
 
+    /// Loads short EPG for many channels with bounded concurrency.
+    /// Calls `onBatch` on the main actor after each batch so the Guide can paint progressively.
     func loadForChannels(
         channels: [IptvChannel],
         config: IptvConfig?,
-        limitPerChannel: Int = 6
+        limitPerChannel: Int = 24,
+        batchSize: Int = 12,
+        onBatch: (@MainActor ([String: [EpgProgram]]) -> Void)? = nil
     ) async -> [String: [EpgProgram]] {
         guard !channels.isEmpty else { return [:] }
 
@@ -18,13 +30,19 @@ actor EpgService {
             return await loadXtreamBatch(
                 channels: channels,
                 config: config,
-                limit: limitPerChannel
+                limit: limitPerChannel,
+                batchSize: batchSize,
+                onBatch: onBatch
             )
         }
 
+        // M3U without XMLTV: placeholder so the grid isn't empty.
         var result: [String: [EpgProgram]] = [:]
         for ch in channels {
-            result[ch.id] = demoPrograms(for: ch)
+            result[ch.id] = Self.demoPrograms(for: ch)
+        }
+        if let onBatch {
+            await MainActor.run { onBatch(result) }
         }
         return result
     }
@@ -32,28 +50,29 @@ actor EpgService {
     private func loadXtreamBatch(
         channels: [IptvChannel],
         config: IptvConfig,
-        limit: Int
+        limit: Int,
+        batchSize: Int,
+        onBatch: (@MainActor ([String: [EpgProgram]]) -> Void)?
     ) async -> [String: [EpgProgram]] {
         guard let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
               let user = config.xtreamUsername,
               let pass = config.xtreamPassword else { return [:] }
-        // Immutable for concurrent TaskGroup captures (Swift 6).
         let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
 
         let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
         let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
 
         var result: [String: [EpgProgram]] = [:]
-        let batchSize = 6
         var i = 0
         while i < channels.count {
             let end = min(i + batchSize, channels.count)
             let slice = Array(channels[i..<end])
+            var batch: [String: [EpgProgram]] = [:]
             await withTaskGroup(of: (String, [EpgProgram]).self) { group in
                 for ch in slice {
                     group.addTask {
                         guard let streamId = Self.xtreamStreamId(ch) else {
-                            return (ch.id, self.demoPrograms(for: ch))
+                            return (ch.id, [])
                         }
                         do {
                             let programs = try await self.fetchShortEpg(
@@ -64,15 +83,19 @@ actor EpgService {
                                 limit: limit,
                                 channelKey: ch.id
                             )
-                            return (ch.id, programs.isEmpty ? self.demoPrograms(for: ch) : programs)
+                            return (ch.id, programs)
                         } catch {
                             return (ch.id, [])
                         }
                     }
                 }
                 for await (id, programs) in group {
+                    batch[id] = programs
                     result[id] = programs
                 }
+            }
+            if let onBatch, !batch.isEmpty {
+                await MainActor.run { onBatch(batch) }
             }
             i = end
         }
@@ -105,11 +128,20 @@ actor EpgService {
         }
 
         return listings.compactMap { item -> EpgProgram? in
-            let title = decodeBase64Maybe(item["title"] as? String) ?? "Program"
-            let start = parseEpgDate(item["start"] as? String ?? item["start_timestamp"] as? String)
-            let end = parseEpgDate(item["end"] as? String ?? item["stop"] as? String ?? item["end_timestamp"] as? String)
-            guard let start, let end else { return nil }
-            let desc = decodeBase64Maybe(item["description"] as? String)
+            let title = Self.decodeBase64Maybe(item["title"] as? String) ?? "Program"
+            // Prefer unix timestamps; fall back to date strings (often base64).
+            let start = Self.parseEpgDate(
+                item["start_timestamp"] as? String
+                    ?? item["start"] as? String
+            )
+            let end = Self.parseEpgDate(
+                item["end_timestamp"] as? String
+                    ?? item["stop_timestamp"] as? String
+                    ?? item["stop"] as? String
+                    ?? item["end"] as? String
+            )
+            guard let start, let end, end > start else { return nil }
+            let desc = Self.decodeBase64Maybe(item["description"] as? String)
             return EpgProgram(
                 channelKey: channelKey,
                 title: title,
@@ -118,10 +150,11 @@ actor EpgService {
                 description: desc
             )
         }
+        .sorted { $0.start < $1.start }
     }
 
-    /// Placeholder hour blocks so the traditional guide grid still looks usable without provider EPG.
-    nonisolated private func demoPrograms(for channel: IptvChannel) -> [EpgProgram] {
+    /// Placeholder hour blocks when provider has no EPG for a channel.
+    nonisolated static func demoPrograms(for channel: IptvChannel) -> [EpgProgram] {
         let now = Date()
         let cal = Calendar.current
         let hourStart = cal.dateInterval(of: .hour, for: now)?.start ?? now
@@ -140,7 +173,6 @@ actor EpgService {
     }
 
     nonisolated static func xtreamStreamId(_ ch: IptvChannel) -> String? {
-        // xtream-12345 or .../live/u/p/12345.m3u8
         if ch.id.hasPrefix("xtream-") {
             return String(ch.id.dropFirst("xtream-".count))
         }
@@ -153,26 +185,51 @@ actor EpgService {
         return nil
     }
 
-    nonisolated private func decodeBase64Maybe(_ s: String?) -> String? {
+    nonisolated private static func decodeBase64Maybe(_ s: String?) -> String? {
         guard let s, !s.isEmpty else { return nil }
-        if let data = Data(base64Encoded: s), let str = String(data: data, encoding: .utf8), !str.isEmpty {
+        // Xtream often base64-encodes titles/descriptions (and sometimes dates).
+        if let data = Data(base64Encoded: s),
+           let str = String(data: data, encoding: .utf8),
+           !str.isEmpty {
+            return str
+        }
+        // Some panels use base64 without padding.
+        let padded = s.padding(
+            toLength: ((s.count + 3) / 4) * 4,
+            withPad: "=",
+            startingAt: 0
+        )
+        if let data = Data(base64Encoded: padded),
+           let str = String(data: data, encoding: .utf8),
+           !str.isEmpty {
             return str
         }
         return s
     }
 
-    nonisolated private func parseEpgDate(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        if let ts = TimeInterval(raw) {
-            // Xtream often uses seconds
+    nonisolated private static func parseEpgDate(_ raw: String?) -> Date? {
+        guard var raw, !raw.isEmpty else { return nil }
+        // Date fields are sometimes base64-encoded strings.
+        if let decoded = decodeBase64Maybe(raw), decoded != raw {
+            raw = decoded
+        }
+        if let ts = TimeInterval(raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
             if ts > 1_000_000_000_000 { return Date(timeIntervalSince1970: ts / 1000) }
-            return Date(timeIntervalSince1970: ts)
+            if ts > 1_000_000_000 { return Date(timeIntervalSince1970: ts) }
         }
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        if let d = f.date(from: raw) { return d }
-        f.dateFormat = "yyyyMMddHHmmss Z"
-        return f.date(from: raw)
+        f.timeZone = TimeZone.current
+        for format in [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",
+            "yyyyMMddHHmmss Z",
+            "yyyyMMddHHmmss",
+        ] {
+            f.dateFormat = format
+            if let d = f.date(from: raw) { return d }
+        }
+        return nil
     }
 }
