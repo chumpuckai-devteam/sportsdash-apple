@@ -63,13 +63,16 @@ struct PlayerView: View {
                 errorOverlay(err)
             }
 
-            if showChrome {
-                playerChrome
-            }
-
-            if showScoresStrip, playback.error == nil {
-                VStack {
-                    Spacer()
+            // Top: controls. Bottom: channel/EPG info, then scores ticker (never covers buttons).
+            VStack(spacing: 0) {
+                if showChrome {
+                    topChrome
+                }
+                Spacer(minLength: 0)
+                if showChrome {
+                    bottomInfoChrome
+                }
+                if showScoresStrip, playback.error == nil {
                     LiveScoresStrip(
                         games: appModel.games.filter(\.isLive),
                         currentGameId: game?.id,
@@ -90,8 +93,8 @@ struct PlayerView: View {
                         }
                     )
                 }
-                .ignoresSafeArea(edges: .bottom)
             }
+            .allowsHitTesting(showChrome || showScoresStrip)
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
@@ -133,7 +136,7 @@ struct PlayerView: View {
             Button("Cycle subtitles") { playback.cycleSubtitleTrack() }
             Button("Cancel", role: .cancel) {}
         }
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: .top) {
             if let banner = playback.banner {
                 Text(banner)
                     .font(.caption.weight(.semibold))
@@ -141,7 +144,7 @@ struct PlayerView: View {
                     .padding(10)
                     .background(.black.opacity(0.75))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(.bottom, showScoresStrip ? 140 : 40)
+                    .padding(.top, 72)
             }
         }
     }
@@ -195,126 +198,55 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: - UHF-style chrome
-
-    private var playerChrome: some View {
-        VStack(spacing: 0) {
-            topChrome
-            Spacer()
-            bottomChrome
-        }
-        .transition(.opacity)
-    }
+    // MARK: - Chrome (controls top, info mid-bottom, ticker absolute bottom)
 
     private var topChrome: some View {
-        HStack(spacing: 10) {
-            chromeIconButton(systemName: "chevron.left") { dismiss() }
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                chromeIconButton(systemName: "chevron.left") { dismiss() }
 
-            Spacer()
+                Spacer()
 
-            // Engine / quality chip
-            Text(engineChip)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-
-            chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
-                playback.toggleMute()
-                scheduleChromeHide()
-            }
-
-            chromeIconButton(systemName: "aspectratio") {
-                cycleAspect()
-                scheduleChromeHide()
-            }
-
-            chromeIconButton(systemName: "ellipsis") {
-                showMoreMenu = true
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 24)
-        .background(
-            LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom)
-        )
-    }
-
-    private var bottomChrome: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Channel + program info (UHF-style)
-            VStack(alignment: .leading, spacing: 6) {
-                if let group = channel.group, !group.isEmpty {
-                    Text(group.uppercased())
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(SportsColors.gold)
-                }
-
-                Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
-                    .font(.title2.weight(.bold))
+                Text(engineChip)
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.white)
-                    .lineLimit(2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
 
-                if let prog = currentProgram {
-                    Text(prog.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .lineLimit(2)
-                    Text(prog.timeRangeLabel)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                } else if let g = game {
-                    Text(g.matchupLabel)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
+                chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
+                    playback.toggleMute()
+                    scheduleChromeHide()
                 }
 
-                if let next = nextProgram {
-                    Text("Next: \(next.title)")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.65))
-                        .lineLimit(1)
+                chromeIconButton(systemName: "aspectratio") {
+                    cycleAspect()
+                    scheduleChromeHide()
                 }
 
-                // Badges
-                HStack(spacing: 6) {
-                    badge(appModel.activePlaylist?.name ?? "IPTV", color: SportsColors.gold.opacity(0.85))
-                    badge(appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV", color: .white.opacity(0.25))
-                    if playback.isPlaying {
-                        badge("LIVE", color: SportsColors.live.opacity(0.35))
-                    }
-                    if multiSlots.count > 0 {
-                        badge("×\(totalActiveStreams)", color: .purple.opacity(0.5))
-                    }
+                chromeIconButton(systemName: "ellipsis") {
+                    showMoreMenu = true
                 }
             }
 
-            // Transport + utility buttons
-            HStack(spacing: 12) {
-                // Pause / play
+            // Transport + utilities stay at the top so the scores ticker never covers them.
+            HStack(spacing: 10) {
                 Button {
                     playback.togglePlayPause()
                     scheduleChromeHide()
                 } label: {
                     Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3.weight(.semibold))
+                        .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
+                        .frame(width: 44, height: 44)
                         .background(.ultraThinMaterial, in: Circle())
                 }
 
-                Spacer(minLength: 8)
-
-                HStack(spacing: 8) {
-                    // LIVE edge
+                HStack(spacing: 6) {
                     utilityButton(systemName: "dot.radiowaves.left.and.right", tint: SportsColors.live) {
                         playback.jumpToLive()
                         scheduleChromeHide()
                     }
-
-                    // Picture in Picture
                     utilityButton(
                         systemName: playback.isPiPActive ? "pip.exit" : "pip.enter",
                         tint: .white
@@ -322,8 +254,6 @@ struct PlayerView: View {
                         playback.togglePictureInPicture()
                         scheduleChromeHide()
                     }
-
-                    // Multiview
                     utilityButton(
                         systemName: "rectangle.split.2x2",
                         tint: multiSlots.isEmpty ? .white : SportsColors.gold
@@ -339,14 +269,10 @@ struct PlayerView: View {
                         }
                         scheduleChromeHide()
                     }
-
-                    // Captions
                     utilityButton(systemName: "captions.bubble", tint: .white) {
                         playback.cycleSubtitleTrack()
                         scheduleChromeHide()
                     }
-
-                    // Live scores ticker
                     utilityButton(
                         systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt",
                         tint: showScoresStrip ? SportsColors.gold : .white
@@ -354,24 +280,78 @@ struct PlayerView: View {
                         showScoresStrip.toggle()
                         scheduleChromeHide()
                     }
-
-                    // Stream list
                     utilityButton(systemName: "list.bullet", tint: SportsColors.gold) {
                         showStreamSheet = true
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
                 .background(.ultraThinMaterial, in: Capsule())
+
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
+        .background(
+            LinearGradient(colors: [.black.opacity(0.85), .clear], startPoint: .top, endPoint: .bottom)
+        )
+    }
+
+    /// Channel + EPG only — sits above the scores ticker.
+    private var bottomInfoChrome: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let group = channel.group, !group.isEmpty {
+                Text(group.uppercased())
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SportsColors.gold)
+            }
+
+            Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+
+            if let prog = currentProgram {
+                Text(prog.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .lineLimit(2)
+                Text(prog.timeRangeLabel)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            } else if let g = game {
+                Text(g.matchupLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+            }
+
+            if let next = nextProgram {
+                Text("Next: \(next.title)")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 6) {
+                badge(appModel.activePlaylist?.name ?? "IPTV", color: SportsColors.gold.opacity(0.85))
+                badge(appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV", color: .white.opacity(0.25))
+                if playback.isPlaying {
+                    badge("LIVE", color: SportsColors.live.opacity(0.35))
+                }
+                if multiSlots.count > 0 {
+                    badge("×\(totalActiveStreams)", color: .purple.opacity(0.5))
+                }
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 28)
-        .padding(.bottom, showScoresStrip ? 8 : 28)
+        .padding(.top, 20)
+        .padding(.bottom, showScoresStrip ? 10 : 28)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55), .black.opacity(0.92)],
+                colors: [.clear, .black.opacity(0.55), .black.opacity(0.9)],
                 startPoint: .top,
                 endPoint: .bottom
             )
