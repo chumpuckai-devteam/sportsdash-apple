@@ -47,12 +47,13 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrap() async {
+        // Scores first (lightweight). Playlist next. EPG in background so launch
+        // never blocks on a large guide download.
         await refreshScores()
         if let config = iptvConfig, config.isConfigured {
             await reloadChannels()
             lastPlaylistReload = Date()
-            // Full guide for every channel — progressive so Guide paints early.
-            await reloadEpg(force: true)
+            Task { await reloadEpg(force: true) }
         }
         startScoresPolling()
         startPlaylistPolling()
@@ -183,14 +184,15 @@ final class AppModel: ObservableObject {
             let map = await epgService.loadForChannels(
                 channels: snapshot,
                 config: config,
-                limitPerChannel: 16,
-                batchSize: 16,
+                limitPerChannel: EpgService.maxProgramsPerChannel,
+                batchSize: 12,
                 preferBulk: true,
                 fillMissingWithShortEpg: false,
                 onBatch: { [weak self] batch in
                     guard let self else { return }
+                    // Only merge non-empty listings; never materialize empty rows for all channels.
                     var next = self.epgByChannel
-                    for (k, v) in batch { next[k] = v }
+                    for (k, v) in batch where !v.isEmpty { next[k] = v }
                     self.epgByChannel = next
                     self.epgLoadedCount = next.count
                 },
@@ -198,19 +200,23 @@ final class AppModel: ObservableObject {
                     self?.epgStatus = msg
                 }
             )
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                self.isLoadingEpg = false
+                return
+            }
             var next = epgByChannel
-            for (k, v) in map { next[k] = v }
+            for (k, v) in map where !v.isEmpty { next[k] = v }
+            // Drop empty placeholders if any.
+            next = next.filter { !$0.value.isEmpty }
             epgByChannel = next
             epgLoadedCount = next.count
             lastEpgReload = Date()
             isLoadingEpg = false
-            let withData = next.values.filter { !$0.isEmpty }.count
-            if withData == 0 {
+            if next.isEmpty {
                 epgError = "No EPG data returned. Provider may not expose XMLTV."
                 epgStatus = nil
             } else {
-                epgStatus = "Guide ready · \(withData) channels with listings"
+                epgStatus = "Guide ready · \(next.count) channels with listings"
             }
         }
         epgLoadTask = task

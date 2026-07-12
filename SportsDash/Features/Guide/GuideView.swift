@@ -3,10 +3,11 @@ import SwiftUI
 // MARK: - Layout constants (mirror Flutter guide)
 
 private enum GuideMetrics {
-    static let hours = 24
-    static let pxPerHour: CGFloat = 160
-    static let channelColWidth: CGFloat = 128
-    static let rowHeight: CGFloat = 72
+    /// 12h window keeps horizontal content lighter on device memory.
+    static let hours = 12
+    static let pxPerHour: CGFloat = 140
+    static let channelColWidth: CGFloat = 120
+    static let rowHeight: CGFloat = 68
     static let timeHeaderHeight: CGFloat = 36
 
     static var timelineWidth: CGFloat { CGFloat(hours) * pxPerHour }
@@ -346,7 +347,7 @@ private struct GuideChannelRowData: Identifiable {
     let programs: [EpgProgram]
 }
 
-// MARK: - Timeline grid (channel column + hour-scrolled programs)
+// MARK: - Timeline grid (lazy rows — avoids O(channels × programs) views)
 
 private struct GuideTimelineGrid: View {
     let rows: [GuideChannelRowData]
@@ -370,13 +371,8 @@ private struct GuideTimelineGrid: View {
         nowOffset >= 0 && nowOffset <= GuideMetrics.timelineWidth
     }
 
-    private var bodyHeight: CGFloat {
-        CGFloat(rows.count) * GuideMetrics.rowHeight
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            // Sticky time header
             timeHeader
                 .frame(height: GuideMetrics.timeHeaderHeight)
                 .background(SportsColors.panel)
@@ -385,25 +381,32 @@ private struct GuideTimelineGrid: View {
                 .fill(SportsColors.border.opacity(0.5))
                 .frame(height: 1)
 
-            // Body: fixed channel column + horizontally scrolling timeline
+            // Lazy rows: only visible channels mount program views.
             ScrollView(.vertical, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 0) {
-                    channelColumn
-                    timelineBody
+                LazyVStack(spacing: 0) {
+                    ForEach(rows) { row in
+                        GuideTimelineRow(
+                            row: row,
+                            windowStart: windowStart,
+                            windowEnd: windowEnd,
+                            now: now,
+                            nowOffset: nowOffset,
+                            showNowLine: showNowLine,
+                            cleanUpNames: cleanUpNames,
+                            scrollSync: scrollSync,
+                            onPlay: onPlay
+                        )
+                    }
                 }
-                .frame(height: max(bodyHeight, 1))
             }
         }
         .background(SportsColors.voidBlack)
         .onAppear {
-            // Scroll so "now" sits slightly in from the left edge.
-            let target = max(0, nowOffset - 40)
-            scrollSync.jump(to: target)
+            scrollSync.jump(to: max(0, nowOffset - 40))
         }
         .onChange(of: windowStart) { _, _ in
-            let target = max(0, nowOffset - 40)
             DispatchQueue.main.async {
-                scrollSync.jump(to: target)
+                scrollSync.jump(to: max(0, nowOffset - 40))
             }
         }
     }
@@ -448,93 +451,119 @@ private struct GuideTimelineGrid: View {
         }
     }
 
-    private var channelColumn: some View {
-        VStack(spacing: 0) {
-            ForEach(rows) { row in
-                Button {
-                    onPlay(row.channel)
-                } label: {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(SportsColors.voidBlack)
-                            .frame(width: 32, height: 32)
-                            .overlay {
-                                Image(systemName: "tv")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(SportsColors.muted)
-                            }
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .stroke(SportsColors.border, lineWidth: 1)
-                            }
+    private func hourLabel(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "h a"
+        return f.string(from: date).lowercased()
+    }
+}
 
-                        Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(SportsColors.text)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
-                    .background(SportsColors.panel)
+/// One channel row: fixed label + horizontally synced program strip.
+private struct GuideTimelineRow: View {
+    let row: GuideChannelRowData
+    let windowStart: Date
+    let windowEnd: Date
+    let now: Date
+    let nowOffset: CGFloat
+    let showNowLine: Bool
+    let cleanUpNames: Bool
+    @ObservedObject var scrollSync: GuideScrollSync
+    let onPlay: (IptvChannel) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button {
+                onPlay(row.channel)
+            } label: {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(SportsColors.voidBlack)
+                        .frame(width: 32, height: 32)
+                        .overlay {
+                            Image(systemName: "tv")
+                                .font(.system(size: 13))
+                                .foregroundStyle(SportsColors.muted)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(SportsColors.border, lineWidth: 1)
+                        }
+
+                    Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(SportsColors.text)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
+                .background(SportsColors.panel)
+            }
+            .buttonStyle(.plain)
 
-                Rectangle()
-                    .fill(SportsColors.border.opacity(0.35))
-                    .frame(height: 0.5)
+            GuideLinkedScrollView(
+                axis: .horizontal,
+                showsIndicators: false,
+                sync: scrollSync,
+                role: .body
+            ) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(0...GuideMetrics.hours, id: \.self) { h in
+                        Rectangle()
+                            .fill(SportsColors.border.opacity(0.35))
+                            .frame(width: 1, height: GuideMetrics.rowHeight)
+                            .offset(x: CGFloat(h) * GuideMetrics.pxPerHour)
+                    }
+
+                    ForEach(visiblePrograms, id: \.id) { program in
+                        programBlock(program)
+                    }
+
+                    if showNowLine {
+                        Rectangle()
+                            .fill(SportsColors.live)
+                            .frame(width: 2, height: GuideMetrics.rowHeight)
+                            .offset(x: nowOffset)
+                    }
+                }
+                .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.rowHeight, alignment: .topLeading)
+                .background(SportsColors.voidBlack)
             }
         }
-        .frame(width: GuideMetrics.channelColWidth)
+        .frame(height: GuideMetrics.rowHeight)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SportsColors.border.opacity(0.35))
+                .frame(height: 0.5)
+        }
     }
 
-    private var timelineBody: some View {
-        GuideLinkedScrollView(
-            axis: .horizontal,
-            showsIndicators: true,
-            sync: scrollSync,
-            role: .body
-        ) {
-            ZStack(alignment: .topLeading) {
-                // Hour grid lines
-                ForEach(0...GuideMetrics.hours, id: \.self) { h in
-                    Rectangle()
-                        .fill(SportsColors.border.opacity(0.35))
-                        .frame(width: 1, height: bodyHeight)
-                        .offset(x: CGFloat(h) * GuideMetrics.pxPerHour)
-                }
-
-                // Program blocks
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    let top = CGFloat(index) * GuideMetrics.rowHeight
-                    ForEach(visiblePrograms(for: row), id: \.id) { program in
-                        programBlock(program, channel: row.channel, top: top)
-                    }
-                }
-
-                // Now line
-                if showNowLine {
-                    Rectangle()
-                        .fill(SportsColors.live)
-                        .frame(width: 2, height: bodyHeight)
-                        .offset(x: nowOffset)
-                }
-            }
-            .frame(width: GuideMetrics.timelineWidth, height: bodyHeight, alignment: .topLeading)
-            .background(SportsColors.voidBlack)
-        }
+    private var visiblePrograms: [EpgProgram] {
+        let inWindow = row.programs.filter { $0.end > windowStart && $0.start < windowEnd }
+        if !inWindow.isEmpty { return inWindow }
+        let title = row.programs.isEmpty ? "No EPG data" : "No programs in this time range"
+        return [
+            EpgProgram(
+                channelKey: row.channel.id,
+                title: title,
+                start: windowStart,
+                end: min(windowEnd, windowStart.addingTimeInterval(3600 * 3)),
+                description: nil
+            )
+        ]
     }
 
     @ViewBuilder
-    private func programBlock(_ program: EpgProgram, channel: IptvChannel, top: CGFloat) -> some View {
-        let clipped = clippedRange(program)
-        let left = xOffset(for: clipped.start)
-        let width = max(28, xOffset(for: clipped.end) - left)
+    private func programBlock(_ program: EpgProgram) -> some View {
+        let start = max(program.start, windowStart)
+        let end = min(program.end, windowEnd)
+        let left = CGFloat(start.timeIntervalSince(windowStart) / 3600.0) * GuideMetrics.pxPerHour
+        let width = max(28, CGFloat(end.timeIntervalSince(start) / 3600.0) * GuideMetrics.pxPerHour)
         let airing = program.start <= now && now < program.end
 
         Button {
-            onPlay(channel)
+            onPlay(row.channel)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(program.title)
@@ -562,42 +591,7 @@ private struct GuideTimelineGrid: View {
             }
         }
         .buttonStyle(.plain)
-        .offset(x: left + 2, y: top + 8)
-    }
-
-    private func visiblePrograms(for row: GuideChannelRowData) -> [EpgProgram] {
-        let inWindow = row.programs.filter { p in
-            p.end > windowStart && p.start < windowEnd
-        }
-        if !inWindow.isEmpty { return inWindow }
-        // Empty or all listings outside the visible 24h window.
-        let title = row.programs.isEmpty ? "No EPG data" : "No programs in this time range"
-        return [
-            EpgProgram(
-                channelKey: row.channel.id,
-                title: title,
-                start: windowStart,
-                end: min(windowEnd, windowStart.addingTimeInterval(3600 * 3)),
-                description: nil
-            )
-        ]
-    }
-
-    private func clippedRange(_ p: EpgProgram) -> (start: Date, end: Date) {
-        let start = max(p.start, windowStart)
-        let end = min(p.end, windowEnd)
-        return (start, end)
-    }
-
-    private func xOffset(for date: Date) -> CGFloat {
-        let minutes = date.timeIntervalSince(windowStart) / 60.0
-        return CGFloat(minutes / 60.0) * GuideMetrics.pxPerHour
-    }
-
-    private func hourLabel(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "h a"
-        return f.string(from: date).lowercased()
+        .offset(x: left + 2, y: 8)
     }
 
     private func shortTimeRange(_ p: EpgProgram) -> String {
@@ -607,36 +601,43 @@ private struct GuideTimelineGrid: View {
     }
 }
 
-// MARK: - Linked horizontal scroll (header ↔ body)
+// MARK: - Linked horizontal scroll (header ↔ many lazy body rows)
 
 @MainActor
 final class GuideScrollSync: ObservableObject {
     weak var headerScroll: UIScrollView?
-    weak var bodyScroll: UIScrollView?
+    /// Weak set of visible row scroll views (LazyVStack recycles these).
+    private let bodyScrolls = NSHashTable<UIScrollView>.weakObjects()
     private var locking = false
     private var pendingX: CGFloat?
 
     func register(_ scrollView: UIScrollView, role: GuideScrollRole) {
         switch role {
-        case .header: headerScroll = scrollView
-        case .body: bodyScroll = scrollView
+        case .header:
+            headerScroll = scrollView
+        case .body:
+            bodyScrolls.add(scrollView)
         }
         scrollView.delegate = bridge
         if let pendingX {
-            apply(pendingX)
+            apply(pendingX, excluding: nil)
         }
     }
 
     func jump(to x: CGFloat) {
         pendingX = max(0, x)
-        apply(pendingX!)
+        apply(pendingX!, excluding: nil)
     }
 
-    private func apply(_ x: CGFloat) {
+    private func apply(_ x: CGFloat, excluding: UIScrollView?) {
         locking = true
         let offset = CGPoint(x: x, y: 0)
-        headerScroll?.setContentOffset(offset, animated: false)
-        bodyScroll?.setContentOffset(offset, animated: false)
+        if headerScroll !== excluding {
+            headerScroll?.setContentOffset(offset, animated: false)
+        }
+        for body in bodyScrolls.allObjects where body !== excluding {
+            body.setContentOffset(offset, animated: false)
+        }
         locking = false
     }
 
@@ -644,15 +645,9 @@ final class GuideScrollSync: ObservableObject {
 
     fileprivate func didScroll(_ scrollView: UIScrollView) {
         guard !locking else { return }
-        locking = true
         let x = scrollView.contentOffset.x
         pendingX = x
-        if scrollView === bodyScroll {
-            headerScroll?.contentOffset.x = x
-        } else if scrollView === headerScroll {
-            bodyScroll?.contentOffset.x = x
-        }
-        locking = false
+        apply(x, excluding: scrollView)
     }
 }
 
