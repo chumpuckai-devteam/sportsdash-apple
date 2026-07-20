@@ -12,10 +12,11 @@
 |------|----------------|
 | **App** | Lifecycle, `AppModel`, tabs |
 | **Core/Models** | `Game`, `SportLeague`, IPTV types |
-| **Core/Services** | ESPN, playlist loaders |
+| **Core/Services** | ESPN, playlist loaders, EPG |
 | **Core/Matching** | Stream ranking (port from Flutter) |
 | **Features/** | UI per surface |
 | **Theme** | Brand colors |
+| **Future: Movie ratings** | Resolve now-playing EPG movie title → external ratings (RT-style critic/audience); cache; never block playback |
 
 Future: extract **SportsDashCore** SPM package shared by iOS/tvOS if targets diverge.
 
