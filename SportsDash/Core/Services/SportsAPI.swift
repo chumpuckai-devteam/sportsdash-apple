@@ -76,9 +76,6 @@ actor SportsAPI {
 
         var games: [Game] = []
         games.reserveCapacity(events.count)
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoBasic = ISO8601DateFormatter()
 
         for event in events {
             guard let id = event["id"] as? String else { continue }
@@ -106,8 +103,11 @@ actor SportsAPI {
                 status = .unknown
             }
 
+            // ESPN often emits `2026-10-05T04:00Z` (no seconds). Strict ISO8601
+            // formatters miss that and used to fall back to Date() → every card
+            // showed the same "now" clock time.
             let dateStr = (comp["date"] as? String) ?? (event["date"] as? String) ?? ""
-            let start = iso.date(from: dateStr) ?? isoBasic.date(from: dateStr) ?? Date()
+            let start = Self.parseESPNDate(dateStr) ?? Date.distantPast
 
             let competitors = comp["competitors"] as? [[String: Any]] ?? []
             var home = TeamInfo(id: "", name: "Home", abbreviation: "HOME")
@@ -160,5 +160,37 @@ actor SportsAPI {
             )
         }
         return games
+    }
+
+    /// ESPN scoreboard dates vary: with/without seconds, with/without fractional seconds, `Z` or offset.
+    nonisolated static func parseESPNDate(_ raw: String) -> Date? {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return nil }
+
+        let isoFrac = ISO8601DateFormatter()
+        isoFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = isoFrac.date(from: s) { return d }
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        if let d = iso.date(from: s) { return d }
+
+        // `2026-10-05T04:00Z` / `2026-10-05T04:00:00Z` / offsets without colon variants
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = TimeZone(secondsFromGMT: 0)
+        let patterns = [
+            "yyyy-MM-dd'T'HH:mmX",
+            "yyyy-MM-dd'T'HH:mm:ssX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+            "yyyy-MM-dd'T'HH:mm:ssZZZZZ",
+            "yyyy-MM-dd'T'HH:mmZZZZZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ",
+        ]
+        for p in patterns {
+            df.dateFormat = p
+            if let d = df.date(from: s) { return d }
+        }
+        return nil
     }
 }

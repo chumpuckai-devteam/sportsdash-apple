@@ -47,13 +47,11 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         return eventName ?? league.label
     }
 
-    /// ESPN-style short status (clock / period / FINAL).
+    /// ESPN-style short status (clock / period / FINAL / start time).
     var statusLine: String {
         if isFinal { return "FINAL" }
         if isUpcoming {
-            let f = DateFormatter()
-            f.dateFormat = "h:mm a"
-            return f.string(from: startTime)
+            return Self.formatStartTime(startTime, statusDetail: statusDetail)
         }
         if let detail = statusDetail?.trimmingCharacters(in: .whitespacesAndNewlines),
            !detail.isEmpty,
@@ -65,5 +63,32 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
             return league.sportPath == "soccer" && !clock.contains("'") ? "\(clock)'" : clock
         }
         return "LIVE"
+    }
+
+    /// Local start time for upcoming games. Includes weekday/date when not today.
+    /// Falls back to ESPN `shortDetail` when `startTime` is missing/invalid.
+    private static func formatStartTime(_ start: Date, statusDetail: String?) -> String {
+        // Invalid / unparsed dates were previously Date() (now). Treat distantPast as missing.
+        if start > Date.distantPast.addingTimeInterval(60) {
+            let cal = Calendar.current
+            let f = DateFormatter()
+            f.locale = .current
+            if cal.isDateInToday(start) {
+                f.dateFormat = "h:mm a"
+            } else if cal.isDateInTomorrow(start) {
+                f.dateFormat = "'Tomorrow' h:mm a"
+            } else if cal.component(.year, from: start) == cal.component(.year, from: Date()) {
+                f.dateFormat = "EEE M/d h:mm a"
+            } else {
+                f.dateFormat = "MMM d, yyyy h:mm a"
+            }
+            return f.string(from: start)
+        }
+        if let detail = statusDetail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !detail.isEmpty,
+           detail.uppercased() != "TBD" {
+            return detail
+        }
+        return "TBD"
     }
 }
