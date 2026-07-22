@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0FFEE01A55E7001C0DE0002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0FFEE01A55E7001C0DE0001 /* Assets.xcassets */; };
+		C0FFEE01A55E7001C0DE0003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0FFEE01A55E7001C0DE0001 /* Assets.xcassets */; };
 		B1C2D3E4F5061728394A5B02 /* MovieRatingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5061728394A5B01 /* MovieRatingsStore.swift */; };
 		B1C2D3E4F5061728394A5B03 /* MovieRatingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5061728394A5B01 /* MovieRatingsStore.swift */; };
 		A8B1C2D3E4F5061728394A5C /* AirPlayRoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */; };
@@ -113,6 +115,7 @@
 		EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchingService.swift; sourceTree = "<group>"; };
 		A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayRoutePicker.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5061728394A5B01 /* MovieRatingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieRatingsStore.swift; sourceTree = "<group>"; };
+		C0FFEE01A55E7001C0DE0001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -236,6 +239,7 @@
 			isa = PBXGroup;
 			children = (
 				D6FF7D536AC4F31916559C07 /* App */,
+				C0FFEE01A55E7001C0DE0001 /* Assets.xcassets */,
 				718503B9B9C7BECFB485BC1E /* Core */,
 				A3B9E3E4E938BC5BE2FE7BC5 /* Features */,
 				3F6F2D4706C335A9FF3B6418 /* Theme */,
