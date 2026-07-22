@@ -285,7 +285,7 @@ struct PlayerView: View {
 
             HStack(spacing: 6) {
                 badge(appModel.activePlaylist?.name ?? "IPTV", color: SportsColors.gold.opacity(0.85))
-                badge(appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV", color: .white.opacity(0.25))
+                badge(playback.activeEngine == .vlc ? "VLC" : "AV", color: .white.opacity(0.25))
                 if playback.isPlaying {
                     badge("LIVE", color: SportsColors.live.opacity(0.35))
                 }
@@ -305,7 +305,10 @@ struct PlayerView: View {
     }
 
     private var engineChip: String {
-        appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV"
+        switch playback.activeEngine {
+        case .vlc: return "VLC"
+        case .avPlayer: return "AV"
+        }
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -365,29 +368,26 @@ struct PlayerView: View {
                 Button("Back") { dismiss() }
                     .buttonStyle(.bordered)
             }
-            if appModel.playerPrefs.primaryPlayer != .ksPlayer {
-                Button("Retry with KSPlayer (Metal)") {
-                    var prefs = appModel.playerPrefs
-                    prefs.primaryPlayer = .ksPlayer
-                    prefs.fallbackPlayers = true
-                    appModel.setPlayerPrefs(prefs)
-                    playback.configure(prefs: prefs)
-                    playback.start(url: channel.url)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SportsColors.gold)
-            } else {
-                Button("Retry with AVKit") {
-                    var prefs = appModel.playerPrefs
-                    prefs.primaryPlayer = .avKit
-                    prefs.fallbackPlayers = true
-                    appModel.setPlayerPrefs(prefs)
-                    playback.configure(prefs: prefs)
-                    playback.start(url: channel.url)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SportsColors.gold)
+            Button("Retry with VLC") {
+                var prefs = appModel.playerPrefs
+                prefs.primaryPlayer = .vlc
+                prefs.fallbackPlayers = true
+                appModel.setPlayerPrefs(prefs)
+                playback.configure(prefs: prefs)
+                playback.start(url: channel.url)
             }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(SportsColors.gold)
+            Button("Retry with AVKit") {
+                var prefs = appModel.playerPrefs
+                prefs.primaryPlayer = .avKit
+                prefs.fallbackPlayers = true
+                appModel.setPlayerPrefs(prefs)
+                playback.configure(prefs: prefs)
+                playback.start(url: channel.url)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(SportsColors.gold)
         }
         .padding()
     }

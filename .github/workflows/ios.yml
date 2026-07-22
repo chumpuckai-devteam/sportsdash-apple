@@ -13,13 +13,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
-      - name: Generate project
+      - name: Install tools
         run: |
-          brew install xcodegen
+          brew install xcodegen cocoapods || true
+          gem install cocoapods -N || true
+      - name: Generate project + pods
+        run: |
           xcodegen generate
+          pod install --repo-update
       - name: Build iOS
         run: |
           xcodebuild \
+            -workspace SportsDash.xcworkspace \
             -scheme SportsDash \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
