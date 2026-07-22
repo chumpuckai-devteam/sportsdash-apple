@@ -199,7 +199,7 @@ final class PlaybackController: ObservableObject {
         let tracks = player.tracks(mediaType: .subtitle)
         if let name,
            let track = tracks.first(where: { $0.name == name || "\($0.name)" == name }) {
-            player.select(track: track)
+            selectTrack(player: player, track: track)
             banner = "Subtitles: \(track.name.isEmpty ? "On" : track.name)"
         } else {
             // Disable all by re-selecting none when possible — pick first disabled pattern.
@@ -217,8 +217,7 @@ final class PlaybackController: ObservableObject {
     }
 
     func cycleSubtitleTrack() {
-        let tracks = subtitleOptions()
-        guard !tracks.isEmpty else {
+        guard let player = coordinator.playerLayer?.player else {
             banner = "No captions on this stream"
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -226,26 +225,43 @@ final class PlaybackController: ObservableObject {
             }
             return
         }
-        guard let player = coordinator.playerLayer?.player else { return }
         let mediaTracks = player.tracks(mediaType: .subtitle)
+        guard !mediaTracks.isEmpty else {
+            banner = "No captions on this stream"
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                if banner?.contains("captions") == true { banner = nil }
+            }
+            return
+        }
+
         if let currentIdx = mediaTracks.firstIndex(where: \.isEnabled) {
             let next = currentIdx + 1
             if next < mediaTracks.count {
-                player.select(track: mediaTracks[next])
-                let name = mediaTracks[next].name
+                let track = mediaTracks[next]
+                selectTrack(player: player, track: track)
+                let name = track.name
                 banner = "Subtitles: \(name.isEmpty ? "Track \(next + 1)" : name)"
             } else {
                 // Cycle off — re-select first with a note; true off isn't always supported.
                 banner = "Subtitles: cycle complete"
             }
         } else if let first = mediaTracks.first {
-            player.select(track: first)
+            selectTrack(player: player, track: first)
             banner = "Subtitles: \(first.name.isEmpty ? "On" : first.name)"
         }
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             if banner?.hasPrefix("Subtitles") == true { banner = nil }
         }
+    }
+
+    /// KSPlayer's `select(track:)` takes `some MediaPlayerTrack`; array elements are `any`.
+    private func selectTrack(player: some MediaPlayerProtocol, track: any MediaPlayerTrack) {
+        func open<T: MediaPlayerTrack>(_ t: T) {
+            player.select(track: t)
+        }
+        _openExistential(track, do: open)
     }
 
     // MARK: - Global KSPlayer config
