@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Compact critic / audience chips (RT-style, generic labels — no RT trademark required).
+/// Compact critic / audience chips (RT-style labels — no RT trademark assets).
 struct MovieRatingBadge: View {
     let rating: MovieRating
     var compact: Bool = false
@@ -9,14 +9,16 @@ struct MovieRatingBadge: View {
         HStack(spacing: compact ? 6 : 8) {
             if let critic = rating.criticLabel {
                 scoreChip(
-                    systemName: "percent",
+                    // Star = reviews/score — universally recognized
+                    systemName: "star.fill",
                     label: compact ? critic : "Critic \(critic)",
                     tint: Color(red: 0.95, green: 0.35, blue: 0.35)
                 )
             }
             if let audience = rating.audienceLabel {
                 scoreChip(
-                    systemName: "person.2.fill",
+                    // Popcorn = audience score (familiar movie UI pattern)
+                    systemName: "popcorn.fill",
                     label: compact ? audience : "Audience \(audience)",
                     tint: SportsColors.gold
                 )
@@ -86,7 +88,6 @@ struct MovieRatingLoader: View {
             } else if let rating = store.rating(forCacheKey: cacheKey) {
                 MovieRatingBadge(rating: rating, compact: compact)
             } else if store.isLoading(cacheKey) || !store.hasAttempted(cacheKey) {
-                // Visible placeholder so the row has height and user sees activity
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.mini)
@@ -99,7 +100,6 @@ struct MovieRatingLoader: View {
                 }
                 .frame(height: compact ? 20 : 22)
             } else {
-                // Attempted, no score — keep tiny spacer so layout stable
                 Color.clear.frame(height: 1)
             }
         }
