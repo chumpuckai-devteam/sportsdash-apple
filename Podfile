@@ -1,27 +1,11 @@
-platform :ios, '17.0'
-use_frameworks!
-inhibit_all_warnings!
+# Optional CocoaPods path (not required)
 
-# Official VideoLAN binaries (LGPL). After `xcodegen generate`:
-#   pod install
-#   open SportsDash.xcworkspace
+Path A now uses **Swift Package Manager**:
+https://github.com/tylerjonesio/vlckit-spm
 
-target 'SportsDash' do
-  pod 'MobileVLCKit', '~> 3.6'
-end
+```bash
+xcodegen generate
+open SportsDash.xcodeproj
+```
 
-target 'SportsDashTV' do
-  platform :tvos, '17.0'
-  pod 'TVVLCKit', '~> 3.6'
-end
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-      config.build_settings['TVOS_DEPLOYMENT_TARGET'] = '17.0'
-      # Silence bitcode leftovers on older pod specs
-      config.build_settings['ENABLE_BITCODE'] = 'NO'
-    end
-  end
-end
+This Podfile is kept only as a fallback reference. Prefer SPM.

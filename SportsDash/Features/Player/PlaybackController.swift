@@ -2,12 +2,7 @@ import AVFoundation
 import AVKit
 import Combine
 import Foundation
-
-#if os(iOS)
-import MobileVLCKit
-#elseif os(tvOS)
-import TVVLCKit
-#endif
+import VLCKitSPM
 
 /// Which concrete engine is currently driving the surface.
 enum PlaybackEngineKind: String, Sendable {

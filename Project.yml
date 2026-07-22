@@ -8,8 +8,12 @@ options:
   groupSortPosition: top
   developmentLanguage: en
 
-# Path A: hard IPTV engine is VLCKit (CocoaPods — see Podfile).
-# Native AVPlayer is built-in (no SPM player dependency).
+# Path A: VLCKit via SPM (iOS MobileVLCKit + tvOS TVVLCKit re-exported as VLCKitSPM).
+# Native AVPlayer is built-in.
+packages:
+  VLCKitSPM:
+    url: https://github.com/tylerjonesio/vlckit-spm
+    from: 3.6.0
 
 settings:
   base:
@@ -38,6 +42,9 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: VLCKitSPM
+        product: VLCKitSPM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
@@ -47,6 +54,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
       testTargets: []
 
@@ -57,11 +65,15 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: VLCKitSPM
+        product: VLCKitSPM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos
         TARGETED_DEVICE_FAMILY: "3"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
       testTargets: []

@@ -4,7 +4,7 @@ Native **SwiftUI** app for **iOS** and **Apple TV (tvOS)**.
 
 Flutter prototype (reference only): https://github.com/chumpuckai-devteam/sportsdash
 
-## Features (ported from Flutter)
+## Features
 
 | Area | Status |
 |------|--------|
@@ -20,60 +20,41 @@ Flutter prototype (reference only): https://github.com/chumpuckai-devteam/sports
 | Fullscreen player (**VLC** + **AVKit**) | ✅ Path A |
 | Engine picker (Auto / VLC / AVKit) | ✅ |
 | LIVE jump, aspect prefs | ✅ |
-| Live scores strip (sport/league collapse) | ✅ |
+| Live scores strip | ✅ |
 | Guide timeline + card grid | ✅ |
-| 45s scores refresh | ✅ |
-| Movie ratings (OMDb/TMDB) for now-playing films | ✅ |
+| Movie ratings (OMDb/TMDB) | ✅ |
 
 ## Open / run
 
 ```bash
 cd sportsdash-apple
-brew install xcodegen cocoapods   # once
-xcodegen generate
-pod install                      # pulls MobileVLCKit / TVVLCKit (large download)
-open SportsDash.xcworkspace      # ← workspace, not .xcodeproj
+git pull origin main
+brew install xcodegen          # once
+xcodegen generate              # REQUIRED after pull — refreshes packages
+open SportsDash.xcodeproj
 ```
 
-1. **Signing** → your Team + unique bundle id (e.g. `com.samirpatel.sportsdash.ios`)
-2. Physical **iPhone** for IPTV (best)
-3. Settings → Xtream/M3U → **Save & Load**
-4. Scores → card → **Choose a stream** → play
+In Xcode:
+1. Wait for **package resolve** (VLCKit SPM is a large binary — first time can take several minutes)
+2. Signing → your Team
+3. Run on your **iPhone**
 
-> Always open **`SportsDash.xcworkspace`** after `pod install`. Opening the bare `.xcodeproj` will miss VLC.
-
-## Layout
-
-```
-SportsDash/
-  App/           AppModel, tabs
-  Core/          Models, ESPN, IPTV, EPG, Matching, Storage, Keychain
-  Features/      Scores, Channels, Guide, Settings, Player
-  Theme/
-Podfile          MobileVLCKit (iOS) + TVVLCKit (tvOS)
-```
+If you still see `No such module 'MobileVLCKit'` or old **FFmpegKit** warnings:
+- You opened a stale project. Run `xcodegen generate` again, then **File → Packages → Reset Package Caches**, then resolve.
+- Delete DerivedData for SportsDash if needed.
 
 ## Video engines (Path A)
 
 | Setting | Behavior |
 |---------|----------|
 | **Auto (default)** | Clean `.m3u8` → AVKit first; TS / hard IPTV → VLC first; swap on failure |
-| **VLC (libVLC)** | Best for messy IPTV / MPEG-TS |
-| **AVKit (native)** | Clean HLS; best system PiP / AirPlay story |
+| **VLC** | libVLC via [vlckit-spm](https://github.com/tylerjonesio/vlckit-spm) (LGPL) |
+| **AVKit** | Native AVPlayer — clean HLS, system routes |
 
-Configure under **Settings → Video player**. On error, retry with VLC or AVKit.
+**KSPlayer / FFmpegKit removed** (GPL + package friction).
 
-**License:** VLCKit is **LGPLv2.1+**. SportsDash app code stays private; ship VLC as a **dynamic framework** (CocoaPods `use_frameworks!`) and keep attribution — see `docs/LGPL-NOTICE.md` and [video-player-options.md](docs/video-player-options.md).
-
-KSPlayer / FFmpegKit (**GPL**) have been **removed**.
-
-## Next enhancements
-
-- Deeper EPG / XMLTV  
-- Apple TV focus polish  
-- Android repo (Kotlin + Compose + ExoPlayer)  
-- Multiview (deferred)
+LGPL notes: `docs/LGPL-NOTICE.md` · decision brief: `docs/video-player-options.md`
 
 ## License
 
-Private / unpublished app code. Third-party: VLCKit LGPL; ESPN public scoreboards (unofficial).
+Private app code. Third-party: VLCKit LGPL (VideoLAN).
