@@ -55,6 +55,7 @@ In Xcode:
 | Open `SportsDash.xcodeproj` instead of `.xcworkspace` | `No such module 'MobileVLCKit'` |
 | Skip `pod install` | Same module error |
 | Skip `xcodegen generate` after Project.yml changes | Stale project / old packages |
+| `Sandbox: rsync deny` / MobileVLCKit copy fails | User Script Sandboxing — fixed in repo; re-run `xcodegen generate && pod install`, Clean Build |
 | Still see **FFmpegKit** | Stale DerivedData — delete `~/Library/Developer/Xcode/DerivedData/SportsDash-*` |
 
 ## Video engines (Path A)
