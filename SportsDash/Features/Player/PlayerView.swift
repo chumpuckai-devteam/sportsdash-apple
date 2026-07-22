@@ -262,6 +262,14 @@ struct PlayerView: View {
                 Text(prog.timeRangeLabel)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
+                MovieRatingLoader(
+                    title: prog.title,
+                    categories: prog.categories,
+                    channelGroup: channel.group,
+                    channelName: channel.name,
+                    compact: false
+                )
+                .padding(.top, 2)
             } else if let g = game {
                 Text(g.matchupLabel)
                     .font(.subheadline.weight(.semibold))

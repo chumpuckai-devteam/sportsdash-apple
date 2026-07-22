@@ -305,6 +305,16 @@ private struct GuideCardRow: View {
                     .foregroundStyle(SportsColors.textSecondary)
                     .lineLimit(2)
 
+                if let now {
+                    MovieRatingLoader(
+                        title: now.title,
+                        categories: now.categories,
+                        channelGroup: channel.group,
+                        channelName: channel.name,
+                        compact: true
+                    )
+                }
+
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
@@ -533,10 +543,22 @@ private struct GuideTimelineRow: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(SportsColors.text)
                     .lineLimit(1)
-                Text(shortTimeRange(program))
-                    .font(.system(size: 10))
-                    .foregroundStyle(SportsColors.muted)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(shortTimeRange(program))
+                        .font(.system(size: 10))
+                        .foregroundStyle(SportsColors.muted)
+                        .lineLimit(1)
+                    if airing {
+                        MovieRatingLoader(
+                            title: program.title,
+                            categories: program.categories,
+                            channelGroup: row.channel.group,
+                            channelName: row.channel.name,
+                            compact: true
+                        )
+                    }
+                }
+                .lineLimit(1)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)

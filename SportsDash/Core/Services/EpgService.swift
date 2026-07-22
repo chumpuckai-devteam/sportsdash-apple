@@ -416,8 +416,10 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var currentEnd: Date?
     private var currentText = ""
     private var currentTitle: String?
+    private var currentCategories: [String] = []
     private var inProgramme = false
     private var captureTitle = false
+    private var captureCategory = false
 
     private init(
         interestKeys: Set<String>,
@@ -476,6 +478,7 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         if name == "programme" {
             inProgramme = true
             currentTitle = nil
+            currentCategories = []
             currentText = ""
             currentChannel = attributeDict["channel"]
             currentStart = Self.parseXmltvTime(attributeDict["start"])
@@ -483,12 +486,15 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         } else if inProgramme, name == "title" {
             captureTitle = true
             currentText = ""
+        } else if inProgramme, name == "category" {
+            captureCategory = true
+            currentText = ""
         }
     }
 
     func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if captureTitle {
-            // Titles are short; hard-cap to avoid pathological payloads.
+        if captureTitle || captureCategory {
+            // Titles/categories are short; hard-cap to avoid pathological payloads.
             if currentText.count < 200 {
                 currentText.append(string)
             }
@@ -506,6 +512,13 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
             currentTitle = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
             captureTitle = false
             currentText = ""
+        } else if name == "category", captureCategory {
+            let cat = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cat.isEmpty, currentCategories.count < 8 {
+                currentCategories.append(cat)
+            }
+            captureCategory = false
+            currentText = ""
         } else if name == "programme" {
             defer {
                 inProgramme = false
@@ -513,6 +526,7 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                 currentStart = nil
                 currentEnd = nil
                 currentTitle = nil
+                currentCategories = []
             }
             guard let channel = currentChannel,
                   let start = currentStart,
@@ -533,7 +547,8 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                     title: (currentTitle?.isEmpty == false ? currentTitle! : "Program"),
                     start: start,
                     end: end,
-                    description: nil
+                    description: nil,
+                    categories: currentCategories
                 )
             )
             map[channel] = list

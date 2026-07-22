@@ -312,3 +312,22 @@ Frozen behavior for PRD §5 / Sprint 1 stories S1.2–S1.6. Provider-neutral; co
 - TMDB attribution/terms notes via FAQ + site terms  
 - Live OMDb sample payload for `i=tt1375666` (Inception) confirming `Ratings[]` RT/IMDb/Metacritic  
 - Repo: `docs/ARCHITECTURE.md`, `.gitignore`, `KeychainStore.swift`, Sprint plan `.hermes/plans/2026-07-22_154258-sportsdash-agile-board-and-sprint1.md`
+
+---
+
+## Implementation status (Tech Lead — Sprint 1)
+
+Shipped on `main` after this brief:
+
+| Piece | Path |
+|-------|------|
+| Model + detection + title parse | `SportsDash/Core/Models/MovieRating.swift` |
+| OMDb → TMDB actor service + 7d disk cache | `SportsDash/Core/Services/MovieRatingsService.swift` |
+| XMLTV `<category>` on programs | `EpgProgram.categories` + `EpgService` DiskXMLTVParser |
+| Critic/Audience chips + async loader | `Features/Player/MovieRatingBadge.swift` |
+| Player + Guide surfaces | `PlayerView`, `GuideView` |
+| Keychain key UI | Settings → General → Movie ratings |
+
+**Aligned with this brief:** OMDb primary, TMDB fallback, Keychain accounts `omdb_api_key` / `tmdb_api_key`, env overrides, generic Critic/Audience labels, fail-closed, non-blocking `.task` loads.
+
+**Device setup:** Settings → General → paste free OMDb key → Save → open a Movies-group channel with film EPG.

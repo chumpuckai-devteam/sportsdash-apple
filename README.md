@@ -70,7 +70,7 @@ xcodebuild -downloadComponent MetalToolchain
 ## Next enhancements
 
 - Deeper EPG / XMLTV  
-- **Movie ratings (Rotten Tomatoes–style)** for films currently playing on IPTV channels — guide + player overlay; match EPG title/year; non-blocking fetch; hide when not a movie / no match (see `sportsdash` PRD §5)  
+- **Movie ratings (RT-style)** — ✅ Sprint 1: OMDb/TMDB + Guide/Player chips (see `docs/movie-ratings.md`); needs API key in Settings  
 - Apple TV focus polish  
 - Android repo (Kotlin + Compose + ExoPlayer)
 

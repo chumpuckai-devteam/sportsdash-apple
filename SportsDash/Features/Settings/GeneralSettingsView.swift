@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// General settings — playlist refresh, storage, user agent, live stream format.
+/// General settings — playlist refresh, storage, user agent, live stream format, movie ratings keys.
 struct GeneralSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var statusMessage: String?
+    @State private var omdbKey: String = ""
+    @State private var tmdbKey: String = ""
+    @State private var omdbSaved = false
+    @State private var tmdbSaved = false
 
     private var refreshBinding: Binding<PlaylistRefreshInterval> {
         PrefsBinding.field(appModel, get: \.playlistRefresh) { $0.playlistRefresh = $1 }
@@ -30,6 +34,53 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(SportsColors.muted)
             } header: {
                 Text("Update playlists")
+            }
+
+            Section {
+                SecureField("OMDb API key", text: $omdbKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button {
+                    let trimmed = omdbKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty {
+                        KeychainStore.delete(account: MovieRatingsService.omdbKeyAccount)
+                        omdbSaved = false
+                        statusMessage = "OMDb key cleared."
+                    } else {
+                        KeychainStore.set(trimmed, account: MovieRatingsService.omdbKeyAccount)
+                        omdbSaved = true
+                        statusMessage = "OMDb key saved to Keychain."
+                    }
+                } label: {
+                    Label("Save OMDb key", systemImage: "key.fill")
+                }
+
+                SecureField("TMDB API key (optional fallback)", text: $tmdbKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button {
+                    let trimmed = tmdbKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty {
+                        KeychainStore.delete(account: MovieRatingsService.tmdbKeyAccount)
+                        tmdbSaved = false
+                        statusMessage = "TMDB key cleared."
+                    } else {
+                        KeychainStore.set(trimmed, account: MovieRatingsService.tmdbKeyAccount)
+                        tmdbSaved = true
+                        statusMessage = "TMDB key saved to Keychain."
+                    }
+                } label: {
+                    Label("Save TMDB key", systemImage: "key.fill")
+                }
+
+                Text(
+                    "Used for RT-style critic/audience scores on movie EPG titles. Keys stay in Keychain — never committed to git. OMDb is preferred (includes Rotten Tomatoes % when available). Free keys: omdbapi.com · themoviedb.org"
+                        + (omdbSaved || tmdbSaved ? " · key on device." : "")
+                )
+                .font(.caption)
+                .foregroundStyle(SportsColors.muted)
+            } header: {
+                Text("Movie ratings")
             }
 
             Section {
@@ -122,5 +173,9 @@ struct GeneralSettingsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .onAppear {
+            omdbSaved = KeychainStore.get(account: MovieRatingsService.omdbKeyAccount) != nil
+            tmdbSaved = KeychainStore.get(account: MovieRatingsService.tmdbKeyAccount) != nil
+        }
     }
 }
