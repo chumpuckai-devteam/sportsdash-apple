@@ -8,6 +8,9 @@ struct GeneralSettingsView: View {
     @State private var tmdbKey: String = ""
     @State private var omdbSaved = false
     @State private var tmdbSaved = false
+    @State private var omdbMask: String?
+    @State private var tmdbMask: String?
+    @State private var isTesting = false
 
     private var refreshBinding: Binding<PlaylistRefreshInterval> {
         PrefsBinding.field(appModel, get: \.playlistRefresh) { $0.playlistRefresh = $1 }
@@ -37,61 +40,58 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                SecureField("OMDb API key", text: $omdbKey)
+                keyStatusRow(title: "OMDb", saved: omdbSaved, mask: omdbMask)
+                SecureField("Paste OMDb API key", text: $omdbKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                Button {
-                    let trimmed = omdbKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if trimmed.isEmpty {
-                        KeychainStore.delete(account: MovieRatingsService.omdbKeyAccount)
-                        omdbSaved = false
-                        statusMessage = "OMDb key cleared."
-                    } else {
-                        KeychainStore.set(trimmed, account: MovieRatingsService.omdbKeyAccount)
-                        omdbSaved = true
-                        omdbKey = "" // do not keep secret in view state after save
-                        statusMessage = "OMDb key saved to Keychain."
-                    }
-                } label: {
-                    Label("Save OMDb key", systemImage: "key.fill")
+                    .textContentType(.password)
+                    #if os(iOS)
+                    .keyboardType(.asciiCapable)
+                    #endif
+                    .onSubmit { saveOmdb() }
+                Button(action: saveOmdb) {
+                    Label(omdbSaved ? "Update OMDb key" : "Save OMDb key", systemImage: "key.fill")
                 }
 
-                SecureField("TMDB API key (optional fallback)", text: $tmdbKey)
+                keyStatusRow(title: "TMDB", saved: tmdbSaved, mask: tmdbMask)
+                SecureField("Paste TMDB API key (optional)", text: $tmdbKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                Button {
-                    let trimmed = tmdbKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if trimmed.isEmpty {
-                        KeychainStore.delete(account: MovieRatingsService.tmdbKeyAccount)
-                        tmdbSaved = false
-                        statusMessage = "TMDB key cleared."
-                    } else {
-                        KeychainStore.set(trimmed, account: MovieRatingsService.tmdbKeyAccount)
-                        tmdbSaved = true
-                        tmdbKey = "" // do not keep secret in view state after save
-                        statusMessage = "TMDB key saved to Keychain."
-                    }
-                } label: {
-                    Label("Save TMDB key", systemImage: "key.fill")
+                    .textContentType(.password)
+                    #if os(iOS)
+                    .keyboardType(.asciiCapable)
+                    #endif
+                    .onSubmit { saveTmdb() }
+                Button(action: saveTmdb) {
+                    Label(tmdbSaved ? "Update TMDB key" : "Save TMDB key", systemImage: "key.fill")
                 }
 
                 Text(
-                    "Used for Critic/Audience scores on movie EPG titles. Keys stay in Keychain — never committed to git. OMDb preferred (Rotten Tomatoes % when available). Free keys: omdbapi.com · themoviedb.org"
-                        + (omdbSaved || tmdbSaved ? " · key on device." : "")
+                    "Keys power Critic/Audience scores on movie guide rows (e.g. UK | Movies). Free OMDb key: omdbapi.com — tap Save after pasting. Field clears on success; status above stays green."
                 )
                 .font(.caption)
                 .foregroundStyle(SportsColors.muted)
 
                 Button {
-                    Task {
-                        statusMessage = "Testing…"
-                        let result = await MovieRatingsService.shared.testLookup(title: "Inception")
-                        statusMessage = result
-                    }
+                    Task { await runTest() }
                 } label: {
-                    Label("Test ratings lookup (Inception)", systemImage: "wand.and.stars")
+                    if isTesting {
+                        HStack {
+                            ProgressView()
+                            Text("Testing lookup…")
+                        }
+                    } else {
+                        Label("Test ratings (Inception)", systemImage: "wand.and.stars")
+                    }
                 }
-                .disabled(!(omdbSaved || tmdbSaved))
+                .disabled(isTesting)
+
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(statusColor(statusMessage))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } header: {
                 Text("Movie ratings")
             }
@@ -129,12 +129,6 @@ struct GeneralSettingsView: View {
                     statusMessage = "Temporary playback state cleared."
                 } label: {
                     Label("Temporal files", systemImage: "folder")
-                }
-
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
                 }
             } header: {
                 Text("EPG & storage")
@@ -186,9 +180,86 @@ struct GeneralSettingsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .onAppear {
-            omdbSaved = KeychainStore.get(account: MovieRatingsService.omdbKeyAccount) != nil
-            tmdbSaved = KeychainStore.get(account: MovieRatingsService.tmdbKeyAccount) != nil
+        .onAppear { refreshKeyStatus() }
+    }
+
+    // MARK: - Keys
+
+    private func refreshKeyStatus() {
+        omdbSaved = KeychainStore.hasValue(account: MovieRatingsService.omdbKeyAccount)
+        tmdbSaved = KeychainStore.hasValue(account: MovieRatingsService.tmdbKeyAccount)
+        omdbMask = KeychainStore.maskedPreview(account: MovieRatingsService.omdbKeyAccount)
+        tmdbMask = KeychainStore.maskedPreview(account: MovieRatingsService.tmdbKeyAccount)
+    }
+
+    private func saveOmdb() {
+        let trimmed = omdbKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            KeychainStore.delete(account: MovieRatingsService.omdbKeyAccount)
+            omdbKey = ""
+            refreshKeyStatus()
+            statusMessage = "OMDb key cleared."
+            return
         }
+        let ok = KeychainStore.set(trimmed, account: MovieRatingsService.omdbKeyAccount)
+        omdbKey = ""
+        refreshKeyStatus()
+        if ok, omdbSaved {
+            statusMessage = "OMDb key saved · on device \(omdbMask ?? "••••"). Tap Test ratings next."
+        } else {
+            statusMessage = "OMDb save failed — try again."
+        }
+    }
+
+    private func saveTmdb() {
+        let trimmed = tmdbKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            KeychainStore.delete(account: MovieRatingsService.tmdbKeyAccount)
+            tmdbKey = ""
+            refreshKeyStatus()
+            statusMessage = "TMDB key cleared."
+            return
+        }
+        let ok = KeychainStore.set(trimmed, account: MovieRatingsService.tmdbKeyAccount)
+        tmdbKey = ""
+        refreshKeyStatus()
+        if ok, tmdbSaved {
+            statusMessage = "TMDB key saved · on device \(tmdbMask ?? "••••")."
+        } else {
+            statusMessage = "TMDB save failed — try again."
+        }
+    }
+
+    private func runTest() async {
+        isTesting = true
+        defer { isTesting = false }
+        refreshKeyStatus()
+        let result = await MovieRatingsService.shared.testLookup(title: "Inception")
+        statusMessage = result
+    }
+
+    @ViewBuilder
+    private func keyStatusRow(title: String, saved: Bool, mask: String?) -> some View {
+        HStack {
+            Image(systemName: saved ? "checkmark.seal.fill" : "xmark.seal")
+                .foregroundStyle(saved ? SportsColors.live : SportsColors.danger)
+            Text(saved ? "\(title) key on device" : "\(title) key not saved")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SportsColors.text)
+            Spacer()
+            if let mask {
+                Text(mask)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(SportsColors.muted)
+            }
+        }
+        .listRowBackground(SportsColors.panel)
+    }
+
+    private func statusColor(_ message: String) -> Color {
+        let m = message.lowercased()
+        if m.contains("ok") || m.contains("saved") { return SportsColors.live }
+        if m.contains("fail") || m.contains("no api") || m.contains("no score") { return SportsColors.danger }
+        return SportsColors.muted
     }
 }

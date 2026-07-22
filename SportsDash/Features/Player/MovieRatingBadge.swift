@@ -53,15 +53,33 @@ struct MovieRatingLoader: View {
     var compact: Bool = false
 
     @State private var rating: MovieRating?
-    @State private var attempted = false
+    @State private var phase: Phase = .idle
+
+    private enum Phase {
+        case idle, loading, loaded, skipped
+    }
+
+    private var taskKey: String {
+        "\(title)|\(channelGroup ?? "")|\(channelName ?? "")|\(categories.joined(separator: ","))"
+    }
 
     var body: some View {
         Group {
-            if let rating {
-                MovieRatingBadge(rating: rating, compact: compact)
+            switch phase {
+            case .loading where !compact:
+                ProgressView()
+                    .controlSize(.mini)
+            case .loaded:
+                if let rating {
+                    MovieRatingBadge(rating: rating, compact: compact)
+                }
+            default:
+                if let rating {
+                    MovieRatingBadge(rating: rating, compact: compact)
+                }
             }
         }
-        .task(id: title) {
+        .task(id: taskKey) {
             await load()
         }
     }
@@ -74,17 +92,21 @@ struct MovieRatingLoader: View {
             channelName: channelName
         )
         guard hint else {
-            rating = nil
+            await MainActor.run {
+                rating = nil
+                phase = .skipped
+            }
             return
         }
+        await MainActor.run { phase = .loading }
         let result = await MovieRatingsService.shared.rating(
             forTitle: title,
             year: nil,
-            isMovieHint: hint
+            isMovieHint: true
         )
         await MainActor.run {
             rating = result
-            attempted = true
+            phase = .loaded
         }
     }
 }
