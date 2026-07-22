@@ -28,7 +28,6 @@
 		414B4CEB24C5F3815C02D66B /* IptvService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471471EC528E70A5EA1F34F4 /* IptvService.swift */; };
 		5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785D98CA7F09D53B9A8CBA3 /* AppModel.swift */; };
 		54D313710DDC00E7528EDA46 /* SportLeague.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785157AB5153580FDAA7ADD3 /* SportLeague.swift */; };
-		5B9F1E32EBE2993CAE752B72 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = CECEE4E6B727E93E81A17B3A /* KSPlayer */; };
 		5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */; };
 		66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */; };
 		6DDDC13FB9D09AF25CF96984 /* SportsDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD10E6BB67618A1B4DBDB5 /* SportsDashApp.swift */; };
@@ -63,7 +62,6 @@
 		E3731096DEF391C521AA4BE3 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
 		E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
 		E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
-		EABDE1757E19EE695022B781 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 8324BB23E6E033259ED3F87B /* KSPlayer */; };
 		ED5C4D115EB738D9C198EA9C /* PlayerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1766E4AC3A474D23ACC17F82 /* PlayerSettingsView.swift */; };
 		F04604922EF810D75410544B /* PlayerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1766E4AC3A474D23ACC17F82 /* PlayerSettingsView.swift */; };
 		F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
@@ -114,7 +112,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EABDE1757E19EE695022B781 /* KSPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,7 +119,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5B9F1E32EBE2993CAE752B72 /* KSPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -296,7 +292,6 @@
 			);
 			name = SportsDashTV;
 			packageProductDependencies = (
-				CECEE4E6B727E93E81A17B3A /* KSPlayer */,
 			);
 			productName = SportsDashTV;
 			productReference = 69622EC9F8240505A1991EBF /* SportsDashTV.app */;
@@ -315,7 +310,6 @@
 			);
 			name = SportsDash;
 			packageProductDependencies = (
-				8324BB23E6E033259ED3F87B /* KSPlayer */,
 			);
 			productName = SportsDash;
 			productReference = 3034744E5A3A79A03FECA0DF /* SportsDash.app */;
@@ -350,7 +344,6 @@
 			mainGroup = 52B211B5B13246F55DA1D583;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1757B28A0A63C78D857DD8F5 /* Products */;
@@ -697,27 +690,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		8324BB23E6E033259ED3F87B /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
-		CECEE4E6B727E93E81A17B3A /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 15DE2BCE2DE0674CCE0C9E17 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C571534C6AAADFB57F64A9ED /* Project object */;
