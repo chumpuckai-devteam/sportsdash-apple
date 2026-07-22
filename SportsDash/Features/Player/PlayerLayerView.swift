@@ -1,9 +1,12 @@
 import AVFoundation
 import AVKit
 import SwiftUI
-import VLCKitSPM
 
-#if canImport(UIKit)
+#if os(iOS)
+import MobileVLCKit
+import UIKit
+#elseif os(tvOS)
+import TVVLCKit
 import UIKit
 #endif
 
@@ -28,7 +31,7 @@ struct PlayerSurface: View {
 // Back-compat name used across PlayerView / FloatingPlayerView.
 typealias KSPlayerSurface = PlayerSurface
 
-// MARK: - VLC
+// MARK: - VLC (official MobileVLCKit / TVVLCKit)
 
 struct VLCPlayerSurface: UIViewRepresentable {
     @ObservedObject var playback: PlaybackController

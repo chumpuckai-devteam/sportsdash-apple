@@ -8,12 +8,10 @@ options:
   groupSortPosition: top
   developmentLanguage: en
 
-# Path A: VLCKit via SPM (iOS MobileVLCKit + tvOS TVVLCKit re-exported as VLCKitSPM).
-# Native AVPlayer is built-in.
-packages:
-  VLCKitSPM:
-    url: https://github.com/tylerjonesio/vlckit-spm
-    from: 3.6.0
+# Path A: official VLCKit via CocoaPods (MobileVLCKit / TVVLCKit) — see Podfile.
+# No SPM player packages. Native AVPlayer is built-in.
+# After Project.yml changes:
+#   xcodegen generate && pod install && open SportsDash.xcworkspace
 
 settings:
   base:
@@ -42,9 +40,6 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
-    dependencies:
-      - package: VLCKitSPM
-        product: VLCKitSPM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
@@ -55,6 +50,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
         OTHER_LDFLAGS: "$(inherited) -ObjC"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
     scheme:
       testTargets: []
 
@@ -65,9 +61,6 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
-    dependencies:
-      - package: VLCKitSPM
-        product: VLCKitSPM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos
@@ -75,5 +68,6 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
         OTHER_LDFLAGS: "$(inherited) -ObjC"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
     scheme:
       testTargets: []

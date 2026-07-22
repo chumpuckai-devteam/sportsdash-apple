@@ -17,43 +17,69 @@ Flutter prototype (reference only): https://github.com/chumpuckai-devteam/sports
 | Channel browser by provider group | ✅ |
 | Stream matching (teams / groups / broadcasts) | ✅ |
 | Game detail → choose stream | ✅ |
-| Fullscreen player (**VLC** + **AVKit**) | ✅ Path A |
+| Fullscreen player (**official VLCKit** + **AVKit**) | ✅ Path A |
 | Engine picker (Auto / VLC / AVKit) | ✅ |
 | LIVE jump, aspect prefs | ✅ |
 | Live scores strip | ✅ |
 | Guide timeline + card grid | ✅ |
 | Movie ratings (OMDb/TMDB) | ✅ |
 
-## Open / run
+## Open / run (CocoaPods + XcodeGen)
+
+VLC uses **official VideoLAN pods** (`MobileVLCKit` / `TVVLCKit`) — not third-party SPM wrappers.
 
 ```bash
 cd sportsdash-apple
 git pull origin main
-brew install xcodegen          # once
-xcodegen generate              # REQUIRED after pull — refreshes packages
-open SportsDash.xcodeproj
+
+# tools (once)
+brew install xcodegen cocoapods
+
+# regenerate project + install official VLCKit
+xcodegen generate
+pod install          # first time is a large download
+
+# ALWAYS open the workspace (pods live here)
+open SportsDash.xcworkspace
 ```
 
 In Xcode:
-1. Wait for **package resolve** (VLCKit SPM is a large binary — first time can take several minutes)
+1. Scheme **SportsDash** → your **iPhone**
 2. Signing → your Team
-3. Run on your **iPhone**
+3. **Product → Clean Build Folder** (⇧⌘K) once after pull
+4. Run (⌘R)
 
-If you still see `No such module 'MobileVLCKit'` or old **FFmpegKit** warnings:
-- You opened a stale project. Run `xcodegen generate` again, then **File → Packages → Reset Package Caches**, then resolve.
-- Delete DerivedData for SportsDash if needed.
+### Common mistakes
+| Mistake | Result |
+|---------|--------|
+| Open `SportsDash.xcodeproj` instead of `.xcworkspace` | `No such module 'MobileVLCKit'` |
+| Skip `pod install` | Same module error |
+| Skip `xcodegen generate` after Project.yml changes | Stale project / old packages |
+| Still see **FFmpegKit** | Stale DerivedData — delete `~/Library/Developer/Xcode/DerivedData/SportsDash-*` |
 
 ## Video engines (Path A)
 
 | Setting | Behavior |
 |---------|----------|
 | **Auto (default)** | Clean `.m3u8` → AVKit first; TS / hard IPTV → VLC first; swap on failure |
-| **VLC** | libVLC via [vlckit-spm](https://github.com/tylerjonesio/vlckit-spm) (LGPL) |
+| **VLC** | Official **MobileVLCKit** / **TVVLCKit** (libVLC, LGPL) |
 | **AVKit** | Native AVPlayer — clean HLS, system routes |
 
-**KSPlayer / FFmpegKit removed** (GPL + package friction).
+KSPlayer / FFmpegKit / third-party VLC SPM wrappers are **not** used.
 
-LGPL notes: `docs/LGPL-NOTICE.md` · decision brief: `docs/video-player-options.md`
+LGPL notes: `docs/LGPL-NOTICE.md` · research: `docs/video-player-options.md`
+
+## Layout
+
+```
+SportsDash/
+  App/           AppModel, tabs
+  Core/          Models, ESPN, IPTV, EPG, Matching, Storage, Keychain
+  Features/      Scores, Channels, Guide, Settings, Player
+  Theme/
+Podfile          MobileVLCKit (iOS) + TVVLCKit (tvOS)
+Project.yml      XcodeGen (no SPM player deps)
+```
 
 ## License
 

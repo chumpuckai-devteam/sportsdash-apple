@@ -2,7 +2,12 @@ import AVFoundation
 import AVKit
 import Combine
 import Foundation
-import VLCKitSPM
+
+#if os(iOS)
+import MobileVLCKit
+#elseif os(tvOS)
+import TVVLCKit
+#endif
 
 /// Which concrete engine is currently driving the surface.
 enum PlaybackEngineKind: String, Sendable {
@@ -10,8 +15,8 @@ enum PlaybackEngineKind: String, Sendable {
     case avPlayer
 }
 
-/// Multi-engine playback: **VLCKit** (hard IPTV) + **AVPlayer** (clean HLS).
-/// Path A — replaces GPL KSPlayer / FFmpegKit.
+/// Multi-engine playback: **official VLCKit** (hard IPTV) + **AVPlayer** (clean HLS).
+/// Path A — CocoaPods MobileVLCKit / TVVLCKit (not SPM wrappers).
 @MainActor
 final class PlaybackController: ObservableObject {
     @Published private(set) var isLoading = false
