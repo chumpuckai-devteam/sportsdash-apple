@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A8B1C2D3E4F5061728394A5C /* AirPlayRoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */; };
+		A8B1C2D3E4F5061728394A5D /* AirPlayRoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */; };
 		D4E5F60718293A4B5C6D7E8F /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B2C3D4E5F60718293A4B5C6D /* KSPlayer */; };
 		E5F60718293A4B5C6D7E8F90 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = C3D4E5F60718293A4B5C6D7E /* KSPlayer */; };
 		04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
@@ -107,6 +109,7 @@
 		E24C42B15674881585E8FF1D /* GameDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDetailSheet.swift; sourceTree = "<group>"; };
 		E7974E8727B3CE9311C7030D /* SportsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsAPI.swift; sourceTree = "<group>"; };
 		EA41D2A9F852DC4E54B31D18 /* MatchingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchingService.swift; sourceTree = "<group>"; };
+		A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayRoutePicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -265,6 +268,7 @@
 				7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */,
 				2B8E8CB70B9909B421B80422 /* PlaybackController.swift */,
 				9A6536F79A69B3125D554008 /* PlayerLayerView.swift */,
+				A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */,
 				1090AD445B621B9B48C6CF6B /* PlayerView.swift */,
 			);
 			path = Player;
@@ -387,6 +391,7 @@
 				C670A937357141492D03695E /* PlayerLayerView.swift in Sources */,
 				66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */,
 				F04604922EF810D75410544B /* PlayerSettingsView.swift in Sources */,
+				A8B1C2D3E4F5061728394A5C /* AirPlayRoutePicker.swift in Sources */,
 				26A4ACD47019AADF2A30F586 /* PlayerView.swift in Sources */,
 				7C8D762EE163E8377461C855 /* PlaylistSettingsView.swift in Sources */,
 				76646428DD6C7FC99E4B190C /* RootTabView.swift in Sources */,
@@ -425,6 +430,7 @@
 				A064A1B0B08FB3E589A312C0 /* PlayerLayerView.swift in Sources */,
 				26636196C15CE3CC16A6D566 /* PlayerPrefs.swift in Sources */,
 				ED5C4D115EB738D9C198EA9C /* PlayerSettingsView.swift in Sources */,
+				A8B1C2D3E4F5061728394A5D /* AirPlayRoutePicker.swift in Sources */,
 				D8DB5EE2079668AFF024DDB4 /* PlayerView.swift in Sources */,
 				2CE57797D6E6C57BD3DB0E6F /* PlaylistSettingsView.swift in Sources */,
 				F9B245814AE3C15D3DF07166 /* RootTabView.swift in Sources */,
