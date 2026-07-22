@@ -11,6 +11,9 @@ final class StorageService {
     private let favoritesKey = "favorite_team_ids"
     private let lastPlayedKey = "last_played_game_ids"
     private let playerPrefsKey = "player_prefs_json"
+    /// Bump when we need a one-shot prefs migration on existing installs.
+    private let playerPrefsMigrationKey = "player_prefs_migration_v"
+    private let playerPrefsMigrationVersion = 2
     private let selectedLeaguesKey = "selected_leagues"
     private let maxLastPlayed = 30
 
@@ -51,9 +54,24 @@ final class StorageService {
     // MARK: - Player prefs
 
     func playerPrefs() -> PlayerPrefs {
-        guard let data = defaults.data(forKey: playerPrefsKey),
-              let prefs = try? JSONDecoder().decode(PlayerPrefs.self, from: data) else {
-            return PlayerPrefs()
+        var prefs: PlayerPrefs = {
+            guard let data = defaults.data(forKey: playerPrefsKey),
+                  let decoded = try? JSONDecoder().decode(PlayerPrefs.self, from: data) else {
+                return PlayerPrefs()
+            }
+            return decoded
+        }()
+
+        // One-shot: force KSPlayer as default after VLC experiments left AVKit selected.
+        let migrated = defaults.integer(forKey: playerPrefsMigrationKey)
+        if migrated < playerPrefsMigrationVersion {
+            prefs.primaryPlayer = .ksPlayer
+            // Keep fallback on so AV can still try if KS fails a stream.
+            if migrated < 2 {
+                prefs.fallbackPlayers = true
+            }
+            setPlayerPrefs(prefs)
+            defaults.set(playerPrefsMigrationVersion, forKey: playerPrefsMigrationKey)
         }
         return prefs
     }

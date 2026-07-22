@@ -276,6 +276,7 @@ final class PlaybackController: ObservableObject {
         KSOptions.isSecondOpen = true
         KSOptions.logLevel = .warning
 
+        // Default / recommended: FFmpeg KS first. Native AV only when user picks AVKit.
         switch prefs.primaryPlayer {
         case .ksPlayer:
             KSOptions.firstPlayerType = KSMEPlayer.self

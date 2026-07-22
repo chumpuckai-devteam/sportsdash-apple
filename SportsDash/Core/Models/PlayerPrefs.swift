@@ -22,7 +22,7 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable, Codable, Sendable {
 // MARK: - Primary video player (UHF-style)
 
 enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
-    /// KSPlayer Metal / FFmpeg (KSMEPlayer)
+    /// KSPlayer Metal / FFmpeg (KSMEPlayer) — default for IPTV
     case ksPlayer
     /// Apple AVKit / AVPlayer
     case avKit
@@ -31,7 +31,7 @@ enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var label: String {
         switch self {
-        case .ksPlayer: return "KSPlayer (Metal)"
+        case .ksPlayer: return "KSPlayer (Metal) · Default"
         case .avKit: return "AVKit (Native)"
         }
     }
@@ -39,9 +39,9 @@ enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
     var detail: String {
         switch self {
         case .ksPlayer:
-            return "FFmpeg-backed player. Best for live IPTV and TS streams."
+            return "FFmpeg-backed player. Best for live IPTV and TS streams. Recommended."
         case .avKit:
-            return "Apple’s player. Fast for clean HLS; less reliable on messy panels."
+            return "Apple’s player. Faster start on clean HLS; often fails on messy panels."
         }
     }
 }
@@ -185,8 +185,17 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         cleanUpNames = try c.decodeIfPresent(Bool.self, forKey: .cleanUpNames) ?? true
         launchTab = try c.decodeIfPresent(LaunchTab.self, forKey: .launchTab) ?? .scores
 
-        if let primary = try c.decodeIfPresent(PrimaryVideoPlayer.self, forKey: .primaryPlayer) {
-            primaryPlayer = primary
+        // Decode as String so unknown/legacy values (vlc, auto) don't fail the whole prefs blob.
+        if let raw = try c.decodeIfPresent(String.self, forKey: .primaryPlayer) {
+            switch raw {
+            case PrimaryVideoPlayer.ksPlayer.rawValue, "ffmpeg", "vlc":
+                primaryPlayer = .ksPlayer
+            case PrimaryVideoPlayer.avKit.rawValue, "avPlayer":
+                primaryPlayer = .avKit
+            default:
+                // "auto" and anything else → KS (best IPTV reliability)
+                primaryPlayer = .ksPlayer
+            }
             fallbackPlayers = try c.decodeIfPresent(Bool.self, forKey: .fallbackPlayers) ?? true
         } else if let legacy = try c.decodeIfPresent(String.self, forKey: .engine) {
             // Migrate old PlayerEngine raw values
@@ -194,7 +203,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
             case "avPlayer":
                 primaryPlayer = .avKit
                 fallbackPlayers = false
-            case "ffmpeg":
+            case "ffmpeg", "ksPlayer", "vlc":
                 primaryPlayer = .ksPlayer
                 fallbackPlayers = false
             default: // auto

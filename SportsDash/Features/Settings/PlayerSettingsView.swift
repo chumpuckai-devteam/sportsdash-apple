@@ -68,6 +68,9 @@ struct PlayerSettingsView: View {
                 }
             } header: {
                 Text("Primary video player")
+            } footer: {
+                Text("KSPlayer is the default — most reliable for live IPTV. Native AVKit is optional for clean HLS only.")
+                    .font(.caption2)
             }
 
             Section {
