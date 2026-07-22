@@ -211,10 +211,12 @@ struct PlayerView: View {
                         popOutToFloatingPlayer()
                     }
                     #if os(iOS)
-                    // System AirPlay / external display route picker
+                    // System AirPlay / external display route picker.
+                    // Note: KSPlayer (FFmpeg) usually AirPlays audio only; AVKit can mirror video.
                     AirPlayRoutePicker()
                         .frame(width: 28, height: 28)
                         .accessibilityLabel("AirPlay")
+                        .accessibilityHint("Video AirPlay works best with AVKit player in Settings")
                     #endif
                     utilityButton(systemName: "captions.bubble", tint: .white) {
                         playback.cycleSubtitleTrack()

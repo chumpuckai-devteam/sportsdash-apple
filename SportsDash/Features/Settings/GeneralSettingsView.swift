@@ -76,11 +76,22 @@ struct GeneralSettingsView: View {
                 }
 
                 Text(
-                    "Used for RT-style critic/audience scores on movie EPG titles. Keys stay in Keychain — never committed to git. OMDb is preferred (includes Rotten Tomatoes % when available). Free keys: omdbapi.com · themoviedb.org"
+                    "Used for Critic/Audience scores on movie EPG titles. Keys stay in Keychain — never committed to git. OMDb preferred (Rotten Tomatoes % when available). Free keys: omdbapi.com · themoviedb.org"
                         + (omdbSaved || tmdbSaved ? " · key on device." : "")
                 )
                 .font(.caption)
                 .foregroundStyle(SportsColors.muted)
+
+                Button {
+                    Task {
+                        statusMessage = "Testing…"
+                        let result = await MovieRatingsService.shared.testLookup(title: "Inception")
+                        statusMessage = result
+                    }
+                } label: {
+                    Label("Test ratings lookup (Inception)", systemImage: "wand.and.stars")
+                }
+                .disabled(!(omdbSaved || tmdbSaved))
             } header: {
                 Text("Movie ratings")
             }

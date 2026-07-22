@@ -7,7 +7,7 @@ private enum GuideMetrics {
     static let hours = 12
     static let pxPerHour: CGFloat = 140
     static let channelColWidth: CGFloat = 120
-    static let rowHeight: CGFloat = 68
+    static let rowHeight: CGFloat = 78
     static let timeHeaderHeight: CGFloat = 36
 
     static var timelineWidth: CGFloat { CGFloat(hours) * pxPerHour }
@@ -313,6 +313,7 @@ private struct GuideCardRow: View {
                         channelName: channel.name,
                         compact: true
                     )
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 GeometryReader { geo in
@@ -543,26 +544,23 @@ private struct GuideTimelineRow: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(SportsColors.text)
                     .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(shortTimeRange(program))
-                        .font(.system(size: 10))
-                        .foregroundStyle(SportsColors.muted)
-                        .lineLimit(1)
-                    if airing {
-                        MovieRatingLoader(
-                            title: program.title,
-                            categories: program.categories,
-                            channelGroup: row.channel.group,
-                            channelName: row.channel.name,
-                            compact: true
-                        )
-                    }
+                Text(shortTimeRange(program))
+                    .font(.system(size: 10))
+                    .foregroundStyle(SportsColors.muted)
+                    .lineLimit(1)
+                if airing {
+                    MovieRatingLoader(
+                        title: program.title,
+                        categories: program.categories,
+                        channelGroup: row.channel.group,
+                        channelName: row.channel.name,
+                        compact: true
+                    )
                 }
-                .lineLimit(1)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .frame(width: width - 4, height: GuideMetrics.rowHeight - 16, alignment: .leading)
+            .frame(width: width - 4, height: GuideMetrics.rowHeight - 12, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelElevated)

@@ -33,7 +33,7 @@ actor MovieRatingsService {
                 return hit
             }
         }
-        if let neg = negativeCache[key], Date().timeIntervalSince(neg) < 24 * 3600 {
+        if let neg = negativeCache[key], Date().timeIntervalSince(neg) < 6 * 3600 {
             return nil
         }
 
@@ -42,9 +42,15 @@ actor MovieRatingsService {
         let tmdbKey = await MainActor.run { KeychainStore.get(account: Self.tmdbKeyAccount) }
             ?? ProcessInfo.processInfo.environment["TMDB_API_KEY"]
 
+        // No keys at all — fail closed quietly
+        let hasOmdb = omdbKey.map { !$0.isEmpty } ?? false
+        let hasTmdb = tmdbKey.map { !$0.isEmpty } ?? false
+        guard hasOmdb || hasTmdb else { return nil }
+
         if let omdbKey, !omdbKey.isEmpty {
             if let r = await fetchOMDb(title: title, year: y, apiKey: omdbKey, cacheKey: key) {
                 memory[key] = r
+                negativeCache.removeValue(forKey: key)
                 await persistDisk()
                 return r
             }
@@ -52,6 +58,7 @@ actor MovieRatingsService {
         if let tmdbKey, !tmdbKey.isEmpty {
             if let r = await fetchTMDB(title: title, year: y, apiKey: tmdbKey, cacheKey: key) {
                 memory[key] = r
+                negativeCache.removeValue(forKey: key)
                 await persistDisk()
                 return r
             }
@@ -72,15 +79,59 @@ actor MovieRatingsService {
         return await rating(forTitle: program.title, year: nil, isMovieHint: hint)
     }
 
+    /// Debug/settings: verify keys + network with a known title.
+    func testLookup(title: String = "Inception") async -> String {
+        let omdb = await MainActor.run { KeychainStore.get(account: Self.omdbKeyAccount) }
+        let tmdb = await MainActor.run { KeychainStore.get(account: Self.tmdbKeyAccount) }
+        let omdbOK = omdb.map { !$0.isEmpty } ?? false
+        let tmdbOK = tmdb.map { !$0.isEmpty } ?? false
+        if !omdbOK && !tmdbOK {
+            return "No API keys in Keychain. Save OMDb and/or TMDB under Settings → General."
+        }
+        // Bypass negative cache for test
+        let (clean, year) = MovieTitleParser.parse(title)
+        let key = MovieTitleParser.cacheKey(title: clean, year: year)
+        negativeCache.removeValue(forKey: key)
+        memory.removeValue(forKey: key)
+
+        if let r = await rating(forTitle: title, year: year, isMovieHint: true) {
+            var parts: [String] = ["OK · \(r.source) · \(r.title)"]
+            if let c = r.criticLabel { parts.append("Critic \(c)") }
+            if let a = r.audienceLabel { parts.append("Audience \(a)") }
+            return parts.joined(separator: " · ")
+        }
+        var hint = "No score for “\(clean)”."
+        if omdbOK { hint += " OMDb key present." }
+        if tmdbOK { hint += " TMDB key present." }
+        hint += " Check key validity / network."
+        return hint
+    }
+
     // MARK: - OMDb
 
     private func fetchOMDb(title: String, year: Int?, apiKey: String, cacheKey: String) async -> MovieRating? {
+        // Try with type=movie first, then without (some EPGs match series-like titles).
+        if let r = await fetchOMDbOnce(title: title, year: year, apiKey: apiKey, cacheKey: cacheKey, typeMovie: true) {
+            return r
+        }
+        return await fetchOMDbOnce(title: title, year: year, apiKey: apiKey, cacheKey: cacheKey, typeMovie: false)
+    }
+
+    private func fetchOMDbOnce(
+        title: String,
+        year: Int?,
+        apiKey: String,
+        cacheKey: String,
+        typeMovie: Bool
+    ) async -> MovieRating? {
         var comps = URLComponents(string: "https://www.omdbapi.com/")!
         var items: [URLQueryItem] = [
             URLQueryItem(name: "t", value: title),
-            URLQueryItem(name: "type", value: "movie"),
             URLQueryItem(name: "apikey", value: apiKey),
         ]
+        if typeMovie {
+            items.append(URLQueryItem(name: "type", value: "movie"))
+        }
         if let year { items.append(URLQueryItem(name: "y", value: String(year))) }
         comps.queryItems = items
         guard let url = comps.url else { return nil }
@@ -105,15 +156,18 @@ actor MovieRatingsService {
                     if src.contains("rotten") {
                         critic = Self.parsePercent(val)
                     } else if src.contains("internet movie database") || src == "imdb" {
-                        // "8.2/10"
                         if let slash = val.split(separator: "/").first, let d = Double(slash) {
                             audience = Int((d * 10).rounded())
                         }
                     }
                 }
             }
-            if audience == nil, let imdb = json["imdbRating"] as? String, let d = Double(imdb) {
+            if audience == nil, let imdb = json["imdbRating"] as? String, let d = Double(imdb), d > 0 {
                 audience = Int((d * 10).rounded())
+            }
+            // Metascore as weak critic if RT missing
+            if critic == nil, let meta = json["Metascore"] as? String, let m = Int(meta), (0 ... 100).contains(m) {
+                critic = m
             }
 
             guard critic != nil || audience != nil else { return nil }
@@ -132,7 +186,7 @@ actor MovieRatingsService {
         }
     }
 
-    // MARK: - TMDB fallback (audience-style vote_average only)
+    // MARK: - TMDB fallback
 
     private func fetchTMDB(title: String, year: Int?, apiKey: String, cacheKey: String) async -> MovieRating? {
         var search = URLComponents(string: "https://api.themoviedb.org/3/search/movie")!
