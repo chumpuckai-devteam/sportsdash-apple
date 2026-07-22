@@ -1,12 +1,9 @@
 import AVFoundation
 import AVKit
 import SwiftUI
+import VLCKitSPM
 
-#if os(iOS)
-import MobileVLCKit
-import UIKit
-#elseif os(tvOS)
-import TVVLCKit
+#if canImport(UIKit)
 import UIKit
 #endif
 
@@ -48,11 +45,9 @@ struct VLCPlayerSurface: UIViewRepresentable {
             playback.vlcPlayer.drawable = uiView
         }
         uiView.contentMode = playback.aspectFill ? .scaleAspectFill : .scaleAspectFit
-        // VLC uses videoAspectRatio / scale for some cases; contentMode on drawable helps letterbox.
     }
 
     static func dismantleUIView(_ uiView: VLCDrawableView, coordinator: ()) {
-        // Drawable cleared when controller stops / swaps engines.
         _ = uiView
     }
 }
