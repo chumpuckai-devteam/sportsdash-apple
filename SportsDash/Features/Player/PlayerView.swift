@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Fullscreen IPTV player with UHF-style chrome: channel/EPG info, pause, PiP, multiview, captions, scores.
+/// Fullscreen IPTV player with UHF-style chrome: channel/EPG info, pause, PiP, captions, scores.
 struct PlayerView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -13,15 +13,8 @@ struct PlayerView: View {
     @State private var showScoresStrip = true
     @State private var showStreamSheet = false
     @State private var showGamePicker: Game?
-    @State private var showMultiviewPicker = false
     @State private var showMoreMenu = false
-    @State private var multiviewGroup: String = ""
-    @State private var multiviewSearch: String = ""
     @State private var chromeTask: Task<Void, Never>?
-    /// Extra streams for multiview (primary is `channel` / `playback`).
-    @State private var multiSlots: [MultiviewSlot] = []
-    /// Which pane owns audio (`primary` or a multiview slot id). Video keeps playing on all panes.
-    @State private var audioFocusId: String = MultiviewAudioFocus.primary
     /// When true, dismissing full-screen hands off to the floating mini player (don't stop audio).
     @State private var isPoppingOut = false
 
@@ -29,16 +22,6 @@ struct PlayerView: View {
         _channel = State(initialValue: channel)
         _game = State(initialValue: game)
         _alternates = State(initialValue: alternateMatches)
-    }
-
-    /// Max concurrent streams: Xtream max_connections, default 2, hard cap 4.
-    private var maxMultiviewSlots: Int {
-        let fromAccount = appModel.xtreamAccount?.maxConnections ?? 2
-        return min(4, max(1, fromAccount))
-    }
-
-    private var totalActiveStreams: Int {
-        1 + multiSlots.count
     }
 
     private var currentProgram: EpgProgram? {
@@ -56,16 +39,16 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            videoSurface
+            KSPlayerSurface(playback: playback)
                 .ignoresSafeArea()
                 .onTapGesture { toggleChrome() }
 
-            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying && multiSlots.isEmpty {
+            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
                 loadingOverlay
                     .allowsHitTesting(false)
             }
 
-            if let err = playback.error, multiSlots.isEmpty {
+            if let err = playback.error {
                 errorOverlay(err)
             }
 
@@ -115,7 +98,6 @@ struct PlayerView: View {
             scheduleChromeHide()
         }
         .onDisappear {
-            multiSlots.forEach { $0.playback.stop() }
             chromeTask?.cancel()
             // Keep decoding only if we handed off to the floating pop-out player.
             if !isPoppingOut {
@@ -134,9 +116,6 @@ struct PlayerView: View {
                 matches: MatchingService().matchGameToChannels(g, channels: appModel.channels),
                 forGame: g
             )
-        }
-        .sheet(isPresented: $showMultiviewPicker) {
-            multiviewChannelPicker
         }
         .confirmationDialog("Player options", isPresented: $showMoreMenu, titleVisibility: .visible) {
             Button("Cycle aspect (\(appModel.playerPrefs.aspect.label))") { cycleAspect() }
@@ -158,43 +137,6 @@ struct PlayerView: View {
                     .padding(.top, 72)
             }
         }
-    }
-
-    // MARK: - Video surface (single or multiview grid)
-
-    @ViewBuilder
-    private var videoSurface: some View {
-        if multiSlots.isEmpty {
-            KSPlayerSurface(playback: playback)
-        } else {
-            multiviewGrid
-        }
-    }
-
-    private var multiviewGrid: some View {
-        let columns = multiSlots.count >= 2
-            ? [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)]
-            : [GridItem(.flexible())]
-        return LazyVGrid(columns: columns, spacing: 2) {
-            MultiviewCell(
-                title: ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames),
-                playback: playback,
-                hasAudioFocus: audioFocusId == MultiviewAudioFocus.primary,
-                onSelectAudio: { setAudioFocus(MultiviewAudioFocus.primary) },
-                onClose: nil
-            )
-            ForEach(multiSlots) { slot in
-                MultiviewCell(
-                    title: ChannelNameCleanup.displayName(slot.channel.name, enabled: appModel.playerPrefs.cleanUpNames),
-                    playback: slot.playback,
-                    hasAudioFocus: audioFocusId == slot.id.uuidString,
-                    onSelectAudio: { setAudioFocus(slot.id.uuidString) },
-                    onClose: { removeMultiviewSlot(id: slot.id) }
-                )
-            }
-        }
-        .background(Color.black)
-        .onAppear { applyMultiviewAudioFocus() }
     }
 
     private var loadingOverlay: some View {
@@ -268,21 +210,6 @@ struct PlayerView: View {
                     ) {
                         popOutToFloatingPlayer()
                     }
-                    utilityButton(
-                        systemName: "rectangle.split.2x2",
-                        tint: multiSlots.isEmpty ? .white : SportsColors.gold
-                    ) {
-                        if totalActiveStreams >= maxMultiviewSlots {
-                            playback.banner = "Max \(maxMultiviewSlots) streams (account limit)"
-                            Task {
-                                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                                playback.banner = nil
-                            }
-                        } else {
-                            showMultiviewPicker = true
-                        }
-                        scheduleChromeHide()
-                    }
                     utilityButton(systemName: "captions.bubble", tint: .white) {
                         playback.cycleSubtitleTrack()
                         scheduleChromeHide()
@@ -354,9 +281,6 @@ struct PlayerView: View {
                 if playback.isPlaying {
                     badge("LIVE", color: SportsColors.live.opacity(0.35))
                 }
-                if multiSlots.count > 0 {
-                    badge("×\(totalActiveStreams)", color: .purple.opacity(0.5))
-                }
             }
         }
         .padding(.horizontal, 20)
@@ -401,214 +325,6 @@ struct PlayerView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(tint)
                 .frame(width: 36, height: 36)
-        }
-    }
-
-    // MARK: - Multiview
-
-    private var multiviewGroupNames: [String] {
-        appModel.channelGroups.map(\.name)
-    }
-
-    /// Channels in the selected multiview group (optional name filter).
-    private var multiviewPickerChannels: [IptvChannel] {
-        let group = multiviewGroup.isEmpty ? multiviewGroupNames.first : multiviewGroup
-        var list = appModel.channelGroups.first(where: { $0.name == group })?.channels
-            ?? appModel.channels
-        let q = multiviewSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if !q.isEmpty {
-            list = list.filter {
-                $0.name.lowercased().contains(q)
-                    || ($0.group?.lowercased().contains(q) ?? false)
-            }
-        }
-        return list
-    }
-
-    private var multiviewChannelPicker: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text("You can watch up to \(maxMultiviewSlots) streams at once (from your IPTV package). Currently \(totalActiveStreams)/\(maxMultiviewSlots).")
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
-                        .listRowBackground(SportsColors.panel)
-
-                    if !multiviewGroupNames.isEmpty {
-                        Picker("Group", selection: $multiviewGroup) {
-                            ForEach(multiviewGroupNames, id: \.self) { name in
-                                Text(name).tag(name)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(SportsColors.gold)
-                        .listRowBackground(SportsColors.panel)
-                    }
-                } header: {
-                    Text("Category")
-                }
-
-                Section {
-                    if multiviewPickerChannels.isEmpty {
-                        Text("No channels in this group.")
-                            .font(.caption)
-                            .foregroundStyle(SportsColors.muted)
-                            .listRowBackground(SportsColors.panel)
-                    } else {
-                        ForEach(multiviewPickerChannels) { ch in
-                            Button {
-                                addMultiviewChannel(ch)
-                                showMultiviewPicker = false
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(ChannelNameCleanup.displayName(
-                                            ch.name,
-                                            enabled: appModel.playerPrefs.cleanUpNames
-                                        ))
-                                        .foregroundStyle(SportsColors.text)
-                                        if let g = ch.group, !g.isEmpty {
-                                            Text(g)
-                                                .font(.caption2)
-                                                .foregroundStyle(SportsColors.muted)
-                                        }
-                                    }
-                                    Spacer()
-                                    if ch.id == channel.id
-                                        || multiSlots.contains(where: { $0.channel.id == ch.id }) {
-                                        Text("ON")
-                                            .font(.caption.weight(.black))
-                                            .foregroundStyle(SportsColors.gold)
-                                    }
-                                }
-                            }
-                            .listRowBackground(SportsColors.panelElevated)
-                        }
-                    }
-                } header: {
-                    let group = multiviewGroup.isEmpty ? (multiviewGroupNames.first ?? "Channels") : multiviewGroup
-                    Text("\(group) · \(multiviewPickerChannels.count)")
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(SportsColors.voidBlack)
-            .navigationTitle("Multiview")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $multiviewSearch, prompt: "Search in group")
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { showMultiviewPicker = false }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if !multiviewGroupNames.isEmpty {
-                        Menu {
-                            Picker("Group", selection: $multiviewGroup) {
-                                ForEach(multiviewGroupNames, id: \.self) { name in
-                                    Text(name).tag(name)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(multiviewGroup.isEmpty ? "Group" : multiviewGroup)
-                                    .lineLimit(1)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.caption.weight(.semibold))
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(SportsColors.gold)
-                        }
-                    }
-                }
-            }
-            .onAppear {
-                if multiviewGroup.isEmpty {
-                    // Prefer the primary stream’s group when opening the picker.
-                    multiviewGroup = channel.group
-                        ?? multiviewGroupNames.first
-                        ?? ""
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func addMultiviewChannel(_ ch: IptvChannel) {
-        guard totalActiveStreams < maxMultiviewSlots else { return }
-        guard ch.id != channel.id, !multiSlots.contains(where: { $0.channel.id == ch.id }) else {
-            playback.banner = "Already playing"
-            return
-        }
-        let slot = MultiviewSlot(channel: ch)
-        slot.playback.configure(prefs: appModel.playerPrefs)
-        slot.playback.start(url: ch.url)
-        // New pane starts muted; primary keeps audio until user taps another pane.
-        slot.playback.setMuted(true)
-        multiSlots.append(slot)
-        // Keep every stream decoding video.
-        playback.ensurePlaying()
-        applyMultiviewAudioFocus()
-        playback.banner = "Multiview \(totalActiveStreams)/\(maxMultiviewSlots) · tap a pane for audio"
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            if playback.banner?.contains("Multiview") == true { playback.banner = nil }
-        }
-        // After secondary has time to open, re-assert play on all panes.
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            applyMultiviewAudioFocus()
-            for _ in 0..<6 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                applyMultiviewAudioFocus()
-            }
-        }
-    }
-
-    private func removeMultiviewSlot(id: UUID) {
-        if let idx = multiSlots.firstIndex(where: { $0.id == id }) {
-            multiSlots[idx].playback.stop()
-            multiSlots.remove(at: idx)
-        }
-        if audioFocusId == id.uuidString {
-            audioFocusId = MultiviewAudioFocus.primary
-        }
-        if multiSlots.isEmpty {
-            playback.setMuted(false)
-            playback.ensurePlaying()
-        } else {
-            applyMultiviewAudioFocus()
-        }
-    }
-
-    private func setAudioFocus(_ id: String) {
-        audioFocusId = id
-        applyMultiviewAudioFocus()
-        let name: String
-        if id == MultiviewAudioFocus.primary {
-            name = ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames)
-        } else if let slot = multiSlots.first(where: { $0.id.uuidString == id }) {
-            name = ChannelNameCleanup.displayName(slot.channel.name, enabled: appModel.playerPrefs.cleanUpNames)
-        } else {
-            name = "stream"
-        }
-        playback.banner = "Audio: \(name)"
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if playback.banner?.hasPrefix("Audio:") == true { playback.banner = nil }
-        }
-    }
-
-    /// All panes keep video; only the focused pane has sound.
-    private func applyMultiviewAudioFocus() {
-        let focus = multiSlots.isEmpty ? MultiviewAudioFocus.primary : audioFocusId
-        let primaryHasAudio = focus == MultiviewAudioFocus.primary
-        playback.setMuted(!primaryHasAudio)
-        playback.ensurePlaying()
-        for slot in multiSlots {
-            let on = slot.id.uuidString == focus
-            slot.playback.setMuted(!on)
-            slot.playback.ensurePlaying()
         }
     }
 
@@ -772,109 +488,10 @@ struct PlayerView: View {
 
     /// Leave fullscreen and show UHF-style floating player over tabs.
     private func popOutToFloatingPlayer() {
-        // Close multiview extras — floating session is single-stream.
-        multiSlots.forEach { $0.playback.stop() }
-        multiSlots = []
         isPoppingOut = true
         // Release fullscreen decoder; floating session starts its own player.
         playback.stop()
         appModel.popOutPlayer(channel: channel, game: game)
         dismiss()
-    }
-}
-
-// MARK: - Multiview models
-
-enum MultiviewAudioFocus {
-    static let primary = "primary"
-}
-
-@MainActor
-final class MultiviewSlot: Identifiable, ObservableObject {
-    let id = UUID()
-    let channel: IptvChannel
-    let playback = PlaybackController()
-
-    init(channel: IptvChannel) {
-        self.channel = channel
-    }
-}
-
-private struct MultiviewCell: View {
-    let title: String
-    @ObservedObject var playback: PlaybackController
-    var hasAudioFocus: Bool
-    var onSelectAudio: () -> Void
-    var onClose: (() -> Void)?
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            KSPlayerSurface(playback: playback)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .background(Color.black)
-                .contentShape(Rectangle())
-                .onTapGesture { onSelectAudio() }
-
-            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
-                ProgressView()
-                    .tint(SportsColors.gold)
-                    .allowsHitTesting(false)
-            }
-
-            VStack {
-                HStack {
-                    Text(title)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.black.opacity(0.55), in: Capsule())
-
-                    if hasAudioFocus {
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(SportsColors.gold)
-                            .padding(6)
-                            .background(.black.opacity(0.55), in: Circle())
-                    } else {
-                        Image(systemName: "speaker.slash.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.55))
-                            .padding(6)
-                            .background(.black.opacity(0.4), in: Circle())
-                    }
-
-                    Spacer()
-                    if let onClose {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.white.opacity(0.9))
-                                .padding(6)
-                        }
-                    }
-                }
-                Spacer()
-                if !hasAudioFocus {
-                    Text("Tap for audio")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.black.opacity(0.45), in: Capsule())
-                        .padding(.bottom, 8)
-                }
-            }
-            .padding(6)
-            .allowsHitTesting(true)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(
-                    hasAudioFocus ? SportsColors.gold.opacity(0.85) : SportsColors.border.opacity(0.4),
-                    lineWidth: hasAudioFocus ? 2 : 1
-                )
-        }
     }
 }
