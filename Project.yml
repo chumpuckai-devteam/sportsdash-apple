@@ -8,9 +8,13 @@ options:
   groupSortPosition: top
   developmentLanguage: en
 
-# Path A: official VLCKit via CocoaPods (MobileVLCKit / TVVLCKit) — see Podfile.
-# After Project.yml changes:
-#   xcodegen generate && pod install && open SportsDash.xcworkspace
+# Official VideoLAN VLCKit binaries via SPM (same MobileVLCKit/TVVLCKit as CocoaPods).
+# Avoids CocoaPods [CP] Embed rsync + Xcode User Script Sandbox failures.
+#   xcodegen generate && open SportsDash.xcodeproj
+packages:
+  VLCKitSPM:
+    url: https://github.com/tylerjonesio/vlckit-spm
+    from: "3.6.0"
 
 settings:
   base:
@@ -20,14 +24,10 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_CFBundleDisplayName: SportsDash
-    # IPTV providers often use HTTP
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
-    # Background audio while locked / switching apps
     INFOPLIST_KEY_UIBackgroundModes: "audio"
-    # Personal Team (Samir Patel) — keeps signing after xcodegen regenerate
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: "2H57Y8GR9D"
-    # REQUIRED for CocoaPods rsync of MobileVLCKit.framework (Xcode 15+ sandbox)
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     STRING_CATALOG_GENERATE_SYMBOLS: YES
     DEAD_CODE_STRIPPING: YES
@@ -40,6 +40,9 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: VLCKitSPM
+        product: VLCKitSPM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
@@ -61,6 +64,9 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: VLCKitSPM
+        product: VLCKitSPM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos

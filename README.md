@@ -2,86 +2,43 @@
 
 Native **SwiftUI** app for **iOS** and **Apple TV (tvOS)**.
 
-Flutter prototype (reference only): https://github.com/chumpuckai-devteam/sportsdash
+## Open / run
 
-## Features
-
-| Area | Status |
-|------|--------|
-| Scores by **sport → league** shelves | ✅ |
-| LIVE / UPCOMING / FAVES / ALL filters | ✅ |
-| Favorite teams | ✅ |
-| ESPN scoreboards (multi-league) | ✅ |
-| Select leagues in Settings | ✅ |
-| Xtream + M3U load (Keychain password) | ✅ |
-| Channel browser by provider group | ✅ |
-| Stream matching (teams / groups / broadcasts) | ✅ |
-| Game detail → choose stream | ✅ |
-| Fullscreen player (**official VLCKit** + **AVKit**) | ✅ Path A |
-| Engine picker (Auto / VLC / AVKit) | ✅ |
-| LIVE jump, aspect prefs | ✅ |
-| Live scores strip | ✅ |
-| Guide timeline + card grid | ✅ |
-| Movie ratings (OMDb/TMDB) | ✅ |
-
-## Open / run (CocoaPods + XcodeGen)
-
-VLC uses **official VideoLAN pods** (`MobileVLCKit` / `TVVLCKit`) — not third-party SPM wrappers.
+VLC uses **official VideoLAN MobileVLCKit / TVVLCKit binaries** via SPM  
+([vlckit-spm](https://github.com/tylerjonesio/vlckit-spm) — same frameworks as CocoaPods, no pod rsync).
 
 ```bash
 cd sportsdash-apple
 git pull origin main
 
-# tools (once)
-brew install xcodegen cocoapods
+# Quit Xcode first
+rm -rf Pods/ *.xcworkspace Podfile.lock   # remove old CocoaPods leftovers if present
+rm -rf ~/Library/Developer/Xcode/DerivedData/SportsDash-*
 
-# regenerate project + install official VLCKit
+brew install xcodegen   # once
 xcodegen generate
-pod install          # first time is a large download
-
-# ALWAYS open the workspace (pods live here)
-open SportsDash.xcworkspace
+open SportsDash.xcodeproj
 ```
 
 In Xcode:
-1. Scheme **SportsDash** → your **iPhone**
-2. Signing → your Team
-3. **Product → Clean Build Folder** (⇧⌘K) once after pull
-4. Run (⌘R)
+1. Wait for **package resolve** (VLC binary is large — first download can take several minutes)
+2. If stuck: **File → Packages → Reset Package Caches**, then resolve again
+3. Scheme **SportsDash** → your iPhone → **Clean Build Folder** (⇧⌘K) → Run
 
-### Common mistakes
-| Mistake | Result |
-|---------|--------|
-| Open `SportsDash.xcodeproj` instead of `.xcworkspace` | `No such module 'MobileVLCKit'` |
-| Skip `pod install` | Same module error |
-| Skip `xcodegen generate` after Project.yml changes | Stale project / old packages |
-| `Sandbox: rsync deny` / MobileVLCKit copy fails | User Script Sandboxing — fixed in repo; re-run `xcodegen generate && pod install`, Clean Build |
-| Still see **FFmpegKit** | Stale DerivedData — delete `~/Library/Developer/Xcode/DerivedData/SportsDash-*` |
+**Do not** open an old `SportsDash.xcworkspace` from CocoaPods — use **`.xcodeproj`** after `xcodegen generate`.
 
 ## Video engines (Path A)
 
 | Setting | Behavior |
 |---------|----------|
-| **Auto (default)** | Clean `.m3u8` → AVKit first; TS / hard IPTV → VLC first; swap on failure |
-| **VLC** | Official **MobileVLCKit** / **TVVLCKit** (libVLC, LGPL) |
-| **AVKit** | Native AVPlayer — clean HLS, system routes |
+| **Auto** | HLS → AVKit first; TS / hard IPTV → VLC first |
+| **VLC** | Official libVLC (MobileVLCKit) |
+| **AVKit** | Native AVPlayer |
 
-KSPlayer / FFmpegKit / third-party VLC SPM wrappers are **not** used.
+## Why not CocoaPods right now?
 
-LGPL notes: `docs/LGPL-NOTICE.md` · research: `docs/video-player-options.md`
-
-## Layout
-
-```
-SportsDash/
-  App/           AppModel, tabs
-  Core/          Models, ESPN, IPTV, EPG, Matching, Storage, Keychain
-  Features/      Scores, Channels, Guide, Settings, Player
-  Theme/
-Podfile          MobileVLCKit (iOS) + TVVLCKit (tvOS)
-Project.yml      XcodeGen (no SPM player deps)
-```
+Xcode’s User Script Sandbox was blocking CocoaPods’ `rsync` copy of `MobileVLCKit.framework` on this machine. SPM links the same VLC binaries without that script.
 
 ## License
 
-Private app code. Third-party: VLCKit LGPL (VideoLAN).
+Private app code. VLCKit: LGPL (VideoLAN) — see `docs/LGPL-NOTICE.md`.

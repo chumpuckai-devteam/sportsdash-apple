@@ -2,12 +2,7 @@ import AVFoundation
 import AVKit
 import Combine
 import Foundation
-
-#if os(iOS)
-import MobileVLCKit
-#elseif os(tvOS)
-import TVVLCKit
-#endif
+import VLCKitSPM
 
 /// Which concrete engine is currently driving the surface.
 enum PlaybackEngineKind: String, Sendable {
@@ -15,8 +10,8 @@ enum PlaybackEngineKind: String, Sendable {
     case avPlayer
 }
 
-/// Multi-engine playback: **official VLCKit** (hard IPTV) + **AVPlayer** (clean HLS).
-/// Path A — CocoaPods MobileVLCKit / TVVLCKit (not SPM wrappers).
+/// Multi-engine playback: **VLCKit** (hard IPTV) + **AVPlayer** (clean HLS).
+/// VLCKitSPM re-exports official MobileVLCKit (iOS) / TVVLCKit (tvOS) binaries.
 @MainActor
 final class PlaybackController: ObservableObject {
     @Published private(set) var isLoading = false
@@ -40,11 +35,10 @@ final class PlaybackController: ObservableObject {
     private var engineOrder: [PlaybackEngineKind] = [.vlc]
     private var loadGeneration = 0
     private var prefs = PlayerPrefs()
-    private var vlcObserver: NSObjectProtocol?
-    private var avTimeObserver: Any?
     private var avStatusCancellable: AnyCancellable?
     private var avItemCancellable: AnyCancellable?
     private var stallWatch: Task<Void, Never>?
+    private var avFailObserver: NSObjectProtocol?
 
     init() {
         avPlayer.automaticallyWaitsToMinimizeStalling = true
@@ -54,19 +48,14 @@ final class PlaybackController: ObservableObject {
         #endif
     }
 
-    deinit {
-        // MainActor class — cleanup via stop when possible; remove observers best-effort.
-    }
-
     func configure(prefs: PlayerPrefs) {
         self.prefs = prefs
         engineLabel = prefs.primaryPlayer.label
             + (prefs.fallbackPlayers ? " · fallback on" : "")
     }
 
-    /// No-op global retained for settings call sites (was KSOptions).
+    /// No-op retained for settings call sites.
     static func applyGlobal(_ prefs: PlayerPrefs) {
-        // Network caching / audio session configured per start.
         _ = prefs
     }
 
@@ -118,7 +107,6 @@ final class PlaybackController: ObservableObject {
     func jumpToLive() {
         switch activeEngine {
         case .vlc:
-            // VLC live: stop/start is the reliable live-edge rejoin.
             if let url = currentURL {
                 start(url: url)
                 banner = "Rejoined live stream"
@@ -218,7 +206,6 @@ final class PlaybackController: ObservableObject {
     }
 
     func togglePictureInPicture() {
-        // System PiP is strongest on AVPlayer; VLC path shows guidance.
         if activeEngine == .avPlayer {
             banner = "Use the system PiP control or pop-out player"
         } else {
@@ -240,7 +227,6 @@ final class PlaybackController: ObservableObject {
 
     func subtitleOptions() -> [SubtitleOption] {
         guard activeEngine == .vlc else { return [] }
-        // VLC exposes tracks via videoSubTitlesIndexes / Names when available.
         let indexes = vlcPlayer.videoSubTitlesIndexes as? [NSNumber] ?? []
         let names = vlcPlayer.videoSubTitlesNames as? [String] ?? []
         return indexes.enumerated().map { idx, num in
@@ -309,7 +295,6 @@ final class PlaybackController: ObservableObject {
             case .vlc: return .vlc
             case .avKit: return .avPlayer
             case .auto:
-                // Clean HLS → AV first; TS / unknown IPTV → VLC first.
                 return looksHLS && !looksTS ? .avPlayer : .vlc
             }
         }()
@@ -418,7 +403,7 @@ final class PlaybackController: ObservableObject {
                 }
             }
 
-        NotificationCenter.default.addObserver(
+        avFailObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemFailedToPlayToEndTime,
             object: item,
             queue: .main
@@ -448,9 +433,9 @@ final class PlaybackController: ObservableObject {
         avStatusCancellable = nil
         avItemCancellable?.cancel()
         avItemCancellable = nil
-        if let avTimeObserver {
-            avPlayer.removeTimeObserver(avTimeObserver)
-            self.avTimeObserver = nil
+        if let avFailObserver {
+            NotificationCenter.default.removeObserver(avFailObserver)
+            self.avFailObserver = nil
         }
     }
 
@@ -487,7 +472,6 @@ final class PlaybackController: ObservableObject {
             handleFail("VLC playback failed", generation: generation)
         case .stopped, .ended:
             if let url = currentURL {
-                // Live reconnect
                 banner = "Stream ended — rejoining…"
                 start(url: url)
             }
@@ -499,7 +483,6 @@ final class PlaybackController: ObservableObject {
     private func handleFail(_ message: String, generation: Int) {
         guard generation == loadGeneration else { return }
 
-        // Next engine for this URL
         let nextEngine = engineAttemptIndex + 1
         if nextEngine < engineOrder.count {
             engineAttemptIndex = nextEngine
@@ -515,7 +498,6 @@ final class PlaybackController: ObservableObject {
             return
         }
 
-        // Next URL candidate, reset engines
         let nextURL = candidateIndex + 1
         if nextURL < candidateURLs.count {
             candidateIndex = nextURL
@@ -553,7 +535,7 @@ final class PlaybackController: ObservableObject {
     }
 }
 
-// MARK: - VLC delegate bridge (ObjC delegate → MainActor controller)
+// MARK: - VLC delegate bridge
 
 @MainActor
 final class VLCPlayerBridge: NSObject, VLCMediaPlayerDelegate {

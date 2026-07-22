@@ -1,42 +1,18 @@
-platform :ios, '17.0'
-use_frameworks!
-inhibit_all_warnings!
+# CocoaPods path (optional / not used by default)
 
-# Official VideoLAN VLCKit (LGPL) — original binaries.
-#   xcodegen generate
-#   pod install
-#   open SportsDash.xcworkspace   # required
+Default integration is **SPM** via `Project.yml` → [tylerjonesio/vlckit-spm](https://github.com/tylerjonesio/vlckit-spm)
+(official MobileVLCKit / TVVLCKit binaries).
 
-target 'SportsDash' do
-  pod 'MobileVLCKit', '~> 3.6'
-end
+Use this Podfile only if you deliberately switch back to CocoaPods:
 
-target 'SportsDashTV' do
-  platform :tvos, '17.0'
-  pod 'TVVLCKit', '~> 3.6'
-end
+```ruby
+# See git history for full Podfile
+pod 'MobileVLCKit', '~> 3.6'
+```
 
-post_install do |installer|
-  # Xcode 15+ User Script Sandbox blocks CocoaPods' rsync of MobileVLCKit.framework
-  # ("Sandbox: rsync deny …"). Disable sandbox on every Pods + user target.
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-      config.build_settings['TVOS_DEPLOYMENT_TARGET'] = '17.0'
-      config.build_settings['ENABLE_BITCODE'] = 'NO'
-      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
-    end
-  end
-
-  installer.aggregate_targets.each do |aggregate|
-    aggregate.user_project.native_targets.each do |target|
-      target.build_configurations.each do |config|
-        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
-      end
-    end
-    aggregate.user_project.build_configurations.each do |config|
-      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
-    end
-    aggregate.user_project.save
-  end
-end
+If you do:
+1. Remove the VLCKitSPM package from Project.yml
+2. `xcodegen generate && pod install`
+3. Open `.xcworkspace`
+4. Set **User Script Sandboxing = No** on the app target
+5. Prefer: `install! 'cocoapods', :disable_input_output_paths => true`

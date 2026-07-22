@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D4E5F60718293A4B5C6D7E8F /* VLCKitSPM in Frameworks */ = {isa = PBXBuildFile; productRef = B2C3D4E5F60718293A4B5C6D /* VLCKitSPM */; };
+		E5F60718293A4B5C6D7E8F90 /* VLCKitSPM in Frameworks */ = {isa = PBXBuildFile; productRef = C3D4E5F60718293A4B5C6D7E /* VLCKitSPM */; };
 		04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
 		05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
 		16B0D1704242DBBB9DF61E57 /* UISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2635CCB93A485DFB19FD12C9 /* UISettingsView.swift */; };
@@ -112,6 +114,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4E5F60718293A4B5C6D7E8F /* VLCKitSPM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,6 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5F60718293A4B5C6D7E8F90 /* VLCKitSPM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,6 +296,7 @@
 			);
 			name = SportsDashTV;
 			packageProductDependencies = (
+				C3D4E5F60718293A4B5C6D7E /* VLCKitSPM */,
 			);
 			productName = SportsDashTV;
 			productReference = 69622EC9F8240505A1991EBF /* SportsDashTV.app */;
@@ -310,6 +315,7 @@
 			);
 			name = SportsDash;
 			packageProductDependencies = (
+				B2C3D4E5F60718293A4B5C6D /* VLCKitSPM */,
 			);
 			productName = SportsDash;
 			productReference = 3034744E5A3A79A03FECA0DF /* SportsDash.app */;
@@ -344,6 +350,7 @@
 			mainGroup = 52B211B5B13246F55DA1D583;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "vlckit-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1757B28A0A63C78D857DD8F5 /* Products */;
@@ -690,9 +697,27 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "vlckit-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tylerjonesio/vlckit-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		B2C3D4E5F60718293A4B5C6D /* VLCKitSPM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "vlckit-spm" */;
+			productName = VLCKitSPM;
+		};
+		C3D4E5F60718293A4B5C6D7E /* VLCKitSPM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "vlckit-spm" */;
+			productName = VLCKitSPM;
+		};
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C571534C6AAADFB57F64A9ED /* Project object */;
