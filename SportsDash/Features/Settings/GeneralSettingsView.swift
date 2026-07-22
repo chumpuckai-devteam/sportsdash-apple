@@ -204,7 +204,10 @@ struct GeneralSettingsView: View {
         let ok = KeychainStore.set(trimmed, account: MovieRatingsService.omdbKeyAccount)
         omdbKey = ""
         refreshKeyStatus()
-        Task { await MovieRatingsService.shared.clearNegativeCache() }
+        Task {
+            await MovieRatingsService.shared.clearNegativeCache()
+            await MainActor.run { MovieRatingsStore.shared.clearAttempts() }
+        }
         if ok, omdbSaved {
             statusMessage = "OMDb key saved · on device \(omdbMask ?? "••••"). Tap Test ratings next."
         } else {
@@ -224,7 +227,10 @@ struct GeneralSettingsView: View {
         let ok = KeychainStore.set(trimmed, account: MovieRatingsService.tmdbKeyAccount)
         tmdbKey = ""
         refreshKeyStatus()
-        Task { await MovieRatingsService.shared.clearNegativeCache() }
+        Task {
+            await MovieRatingsService.shared.clearNegativeCache()
+            await MainActor.run { MovieRatingsStore.shared.clearAttempts() }
+        }
         if ok, tmdbSaved {
             statusMessage = "TMDB key saved · on device \(tmdbMask ?? "••••")."
         } else {

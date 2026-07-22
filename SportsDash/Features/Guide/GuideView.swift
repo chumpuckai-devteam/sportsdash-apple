@@ -87,9 +87,16 @@ struct GuideView: View {
                 }
                 // Prefer full cache from app bootstrap; fill any gaps for this category.
                 await appModel.loadEpgIfNeeded(for: activeChannels)
+                prefetchRatings()
             }
             .onChange(of: selectedGroup) { _, _ in
-                Task { await appModel.loadEpgIfNeeded(for: activeChannels) }
+                Task {
+                    await appModel.loadEpgIfNeeded(for: activeChannels)
+                    prefetchRatings()
+                }
+            }
+            .onChange(of: appModel.epgLoadedCount) { _, _ in
+                prefetchRatings()
             }
             .onChange(of: appModel.channels.count) { _, _ in
                 if selectedGroup.isEmpty {
@@ -220,12 +227,11 @@ struct GuideView: View {
         List {
             Section {
                 ForEach(guideRows) { row in
-                    // IMPORTANT: do not wrap async rating loaders inside Button labels —
-                    // List recycles cells and cancels .task, so chips never appear.
                     GuideCardRow(
                         channel: row.channel,
                         programs: row.programs,
                         cleanUpNames: cleanNames,
+                        categoryName: selectedGroup,
                         onPlay: {
                             playerRoute = PlayerRoute(channel: row.channel, game: nil, alternates: [])
                         }
@@ -244,6 +250,14 @@ struct GuideView: View {
         .scrollContentBackground(.hidden)
     }
 
+    private func prefetchRatings() {
+        MovieRatingsStore.shared.prefetch(
+            channels: activeChannels,
+            epgByChannel: appModel.epgByChannel,
+            categoryName: selectedGroup
+        )
+    }
+
     private static func snappedNowMinusOneHour() -> Date {
         let n = Date()
         let cal = Calendar.current
@@ -258,6 +272,7 @@ private struct GuideCardRow: View {
     let channel: IptvChannel
     let programs: [EpgProgram]
     var cleanUpNames: Bool = true
+    var categoryName: String = ""
     var onPlay: () -> Void
 
     private var now: EpgProgram? {
@@ -277,9 +292,16 @@ private struct GuideCardRow: View {
         return min(1, max(0, elapsed / total))
     }
 
-    /// Prefer explicit EPG group, then selected category-style channel.group.
-    private var groupForRatings: String? {
-        channel.group
+    private var groupForRatings: String {
+        channel.group ?? categoryName
+    }
+
+    private var forceMovieRatings: Bool {
+        let g = groupForRatings.lowercased()
+        let n = channel.name.lowercased()
+        return g.contains("movie") || g.contains("cinema") || g.contains("film")
+            || n.contains("cinema") || n.contains("movie") || n.contains("hbo")
+            || n.contains("starz") || n.contains("showtime")
     }
 
     var body: some View {
@@ -299,7 +321,7 @@ private struct GuideCardRow: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("NOW")
                         .font(.caption2.weight(.bold))
@@ -315,17 +337,15 @@ private struct GuideCardRow: View {
                     .foregroundStyle(SportsColors.textSecondary)
                     .lineLimit(2)
 
-                // Outside Button so .task is not cancelled by List/Button
                 if let now {
                     MovieRatingLoader(
                         title: now.title,
                         categories: now.categories,
                         channelGroup: groupForRatings,
                         channelName: channel.name,
-                        compact: true
+                        compact: true,
+                        forceMovie: forceMovieRatings
                     )
-                    .frame(minHeight: 18, alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 GeometryReader { geo in
@@ -567,7 +587,9 @@ private struct GuideTimelineRow: View {
                     categories: program.categories,
                     channelGroup: row.channel.group,
                     channelName: row.channel.name,
-                    compact: true
+                    compact: true,
+                    forceMovie: (row.channel.group ?? "").localizedCaseInsensitiveContains("movie")
+                        || row.channel.name.localizedCaseInsensitiveContains("cinema")
                 )
             }
         }

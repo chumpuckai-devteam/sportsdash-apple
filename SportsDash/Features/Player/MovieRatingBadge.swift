@@ -8,10 +8,18 @@ struct MovieRatingBadge: View {
     var body: some View {
         HStack(spacing: compact ? 6 : 8) {
             if let critic = rating.criticLabel {
-                scoreChip(systemName: "percent", label: compact ? critic : "Critic \(critic)", tint: SportsColors.danger)
+                scoreChip(
+                    systemName: "percent",
+                    label: compact ? critic : "Critic \(critic)",
+                    tint: Color(red: 0.95, green: 0.35, blue: 0.35)
+                )
             }
             if let audience = rating.audienceLabel {
-                scoreChip(systemName: "person.2.fill", label: compact ? audience : "Audience \(audience)", tint: SportsColors.gold)
+                scoreChip(
+                    systemName: "person.2.fill",
+                    label: compact ? audience : "Audience \(audience)",
+                    tint: SportsColors.gold
+                )
             }
         }
         .accessibilityElement(children: .combine)
@@ -28,80 +36,91 @@ struct MovieRatingBadge: View {
     private func scoreChip(systemName: String, label: String, tint: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: systemName)
-                .font(.system(size: compact ? 9 : 11, weight: .bold))
+                .font(.system(size: compact ? 10 : 11, weight: .bold))
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
             Text(label)
-                .font(.system(size: compact ? 10 : 11, weight: .bold))
-                .foregroundStyle(SportsColors.text)
+                .font(.system(size: compact ? 11 : 12, weight: .bold))
+                .foregroundStyle(.white)
         }
-        .padding(.horizontal, compact ? 6 : 8)
-        .padding(.vertical, compact ? 3 : 4)
-        .background(SportsColors.panelElevated.opacity(0.95), in: Capsule())
+        .padding(.horizontal, compact ? 7 : 8)
+        .padding(.vertical, compact ? 4 : 5)
+        .background(Color.white.opacity(0.12), in: Capsule())
         .overlay {
-            Capsule().stroke(SportsColors.border.opacity(0.8), lineWidth: 1)
+            Capsule().stroke(tint.opacity(0.7), lineWidth: 1)
         }
     }
 }
 
-/// Loads a rating for a title without blocking the parent layout.
-/// Uses a detached Task + onAppear path that survives List cell recycling better than
-/// `.task` nested inside Button labels (which SwiftUI cancels).
+/// Reads from `MovieRatingsStore` and kicks a request. Always reserves vertical space
+/// so List cells lay out and updates paint when the store publishes.
 struct MovieRatingLoader: View {
     let title: String
     var categories: [String] = []
     var channelGroup: String? = nil
     var channelName: String? = nil
     var compact: Bool = false
+    /// When true, skip MovieDetection and always fetch (movie folders).
+    var forceMovie: Bool = false
 
-    @State private var rating: MovieRating?
-    @State private var loadToken = UUID()
+    @ObservedObject private var store = MovieRatingsStore.shared
 
-    private var cacheIdentity: String {
-        "\(title)|\(channelGroup ?? "")|\(channelName ?? "")|\(categories.joined(separator: ","))"
+    private var cacheKey: String {
+        let (clean, year) = MovieTitleParser.parse(title)
+        return MovieTitleParser.cacheKey(title: clean, year: year)
+    }
+
+    private var isCandidate: Bool {
+        forceMovie || MovieDetection.isMovieCandidate(
+            title: title,
+            categories: categories,
+            channelGroup: channelGroup,
+            channelName: channelName
+        )
     }
 
     var body: some View {
         Group {
-            if let rating {
+            if !isCandidate {
+                EmptyView()
+            } else if let rating = store.rating(forCacheKey: cacheKey) {
                 MovieRatingBadge(rating: rating, compact: compact)
-            } else if !compact {
-                ProgressView()
-                    .controlSize(.mini)
+            } else if store.isLoading(cacheKey) || !store.hasAttempted(cacheKey) {
+                // Visible placeholder so the row has height and user sees activity
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(SportsColors.gold)
+                    if !compact {
+                        Text("Ratings…")
+                            .font(.caption2)
+                            .foregroundStyle(SportsColors.muted)
+                    }
+                }
+                .frame(height: compact ? 20 : 22)
+            } else {
+                // Attempted, no score — keep tiny spacer so layout stable
+                Color.clear.frame(height: 1)
             }
         }
-        .onAppear { startLoad() }
-        .onChange(of: cacheIdentity) { _, _ in
-            rating = nil
-            startLoad()
-        }
-    }
-
-    private func startLoad() {
-        let token = UUID()
-        loadToken = token
-        let title = self.title
-        let categories = self.categories
-        let channelGroup = self.channelGroup
-        let channelName = self.channelName
-
-        Task {
-            let hint = MovieDetection.isMovieCandidate(
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            store.request(
                 title: title,
                 categories: categories,
                 channelGroup: channelGroup,
-                channelName: channelName
+                channelName: channelName,
+                forceMovie: forceMovie
             )
-            guard hint else { return }
-            let result = await MovieRatingsService.shared.rating(
-                forTitle: title,
-                year: nil,
-                isMovieHint: true
+        }
+        .onChange(of: title) { _, _ in
+            store.request(
+                title: title,
+                categories: categories,
+                channelGroup: channelGroup,
+                channelName: channelName,
+                forceMovie: forceMovie
             )
-            await MainActor.run {
-                guard loadToken == token else { return }
-                rating = result
-            }
         }
     }
 }
