@@ -204,6 +204,7 @@ struct GeneralSettingsView: View {
         let ok = KeychainStore.set(trimmed, account: MovieRatingsService.omdbKeyAccount)
         omdbKey = ""
         refreshKeyStatus()
+        Task { await MovieRatingsService.shared.clearNegativeCache() }
         if ok, omdbSaved {
             statusMessage = "OMDb key saved · on device \(omdbMask ?? "••••"). Tap Test ratings next."
         } else {
@@ -223,6 +224,7 @@ struct GeneralSettingsView: View {
         let ok = KeychainStore.set(trimmed, account: MovieRatingsService.tmdbKeyAccount)
         tmdbKey = ""
         refreshKeyStatus()
+        Task { await MovieRatingsService.shared.clearNegativeCache() }
         if ok, tmdbSaved {
             statusMessage = "TMDB key saved · on device \(tmdbMask ?? "••••")."
         } else {
@@ -234,6 +236,7 @@ struct GeneralSettingsView: View {
         isTesting = true
         defer { isTesting = false }
         refreshKeyStatus()
+        await MovieRatingsService.shared.clearNegativeCache()
         let result = await MovieRatingsService.shared.testLookup(title: "Inception")
         statusMessage = result
     }

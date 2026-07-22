@@ -45,6 +45,8 @@ struct MovieRatingBadge: View {
 }
 
 /// Loads a rating for a title without blocking the parent layout.
+/// Uses a detached Task + onAppear path that survives List cell recycling better than
+/// `.task` nested inside Button labels (which SwiftUI cancels).
 struct MovieRatingLoader: View {
     let title: String
     var categories: [String] = []
@@ -53,60 +55,53 @@ struct MovieRatingLoader: View {
     var compact: Bool = false
 
     @State private var rating: MovieRating?
-    @State private var phase: Phase = .idle
+    @State private var loadToken = UUID()
 
-    private enum Phase {
-        case idle, loading, loaded, skipped
-    }
-
-    private var taskKey: String {
+    private var cacheIdentity: String {
         "\(title)|\(channelGroup ?? "")|\(channelName ?? "")|\(categories.joined(separator: ","))"
     }
 
     var body: some View {
         Group {
-            switch phase {
-            case .loading where !compact:
+            if let rating {
+                MovieRatingBadge(rating: rating, compact: compact)
+            } else if !compact {
                 ProgressView()
                     .controlSize(.mini)
-            case .loaded:
-                if let rating {
-                    MovieRatingBadge(rating: rating, compact: compact)
-                }
-            default:
-                if let rating {
-                    MovieRatingBadge(rating: rating, compact: compact)
-                }
             }
         }
-        .task(id: taskKey) {
-            await load()
+        .onAppear { startLoad() }
+        .onChange(of: cacheIdentity) { _, _ in
+            rating = nil
+            startLoad()
         }
     }
 
-    private func load() async {
-        let hint = MovieDetection.isMovieCandidate(
-            title: title,
-            categories: categories,
-            channelGroup: channelGroup,
-            channelName: channelName
-        )
-        guard hint else {
+    private func startLoad() {
+        let token = UUID()
+        loadToken = token
+        let title = self.title
+        let categories = self.categories
+        let channelGroup = self.channelGroup
+        let channelName = self.channelName
+
+        Task {
+            let hint = MovieDetection.isMovieCandidate(
+                title: title,
+                categories: categories,
+                channelGroup: channelGroup,
+                channelName: channelName
+            )
+            guard hint else { return }
+            let result = await MovieRatingsService.shared.rating(
+                forTitle: title,
+                year: nil,
+                isMovieHint: true
+            )
             await MainActor.run {
-                rating = nil
-                phase = .skipped
+                guard loadToken == token else { return }
+                rating = result
             }
-            return
-        }
-        await MainActor.run { phase = .loading }
-        let result = await MovieRatingsService.shared.rating(
-            forTitle: title,
-            year: nil,
-            isMovieHint: true
-        )
-        await MainActor.run {
-            rating = result
-            phase = .loaded
         }
     }
 }

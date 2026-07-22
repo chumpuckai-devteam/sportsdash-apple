@@ -220,15 +220,16 @@ struct GuideView: View {
         List {
             Section {
                 ForEach(guideRows) { row in
-                    Button {
-                        playerRoute = PlayerRoute(channel: row.channel, game: nil, alternates: [])
-                    } label: {
-                        GuideCardRow(
-                            channel: row.channel,
-                            programs: row.programs,
-                            cleanUpNames: cleanNames
-                        )
-                    }
+                    // IMPORTANT: do not wrap async rating loaders inside Button labels —
+                    // List recycles cells and cancels .task, so chips never appear.
+                    GuideCardRow(
+                        channel: row.channel,
+                        programs: row.programs,
+                        cleanUpNames: cleanNames,
+                        onPlay: {
+                            playerRoute = PlayerRoute(channel: row.channel, game: nil, alternates: [])
+                        }
+                    )
                     .listRowBackground(SportsColors.panel)
                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                 }
@@ -257,6 +258,7 @@ private struct GuideCardRow: View {
     let channel: IptvChannel
     let programs: [EpgProgram]
     var cleanUpNames: Bool = true
+    var onPlay: () -> Void
 
     private var now: EpgProgram? {
         programs.first(where: \.isNow) ?? programs.first
@@ -275,19 +277,27 @@ private struct GuideCardRow: View {
         return min(1, max(0, elapsed / total))
     }
 
+    /// Prefer explicit EPG group, then selected category-style channel.group.
+    private var groupForRatings: String? {
+        channel.group
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(SportsColors.text)
-                    .lineLimit(1)
-                Spacer()
-                Image(systemName: "play.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(SportsColors.gold)
-                    .symbolRenderingMode(.hierarchical)
+            Button(action: onPlay) {
+                HStack {
+                    Text(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(SportsColors.text)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "play.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(SportsColors.gold)
+                        .symbolRenderingMode(.hierarchical)
+                }
             }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -305,14 +315,16 @@ private struct GuideCardRow: View {
                     .foregroundStyle(SportsColors.textSecondary)
                     .lineLimit(2)
 
+                // Outside Button so .task is not cancelled by List/Button
                 if let now {
                     MovieRatingLoader(
                         title: now.title,
                         categories: now.categories,
-                        channelGroup: channel.group,
+                        channelGroup: groupForRatings,
                         channelName: channel.name,
                         compact: true
                     )
+                    .frame(minHeight: 18, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -327,6 +339,8 @@ private struct GuideCardRow: View {
                 }
                 .frame(height: 3)
             }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onPlay)
 
             if let next {
                 HStack(alignment: .top, spacing: 6) {
@@ -344,6 +358,8 @@ private struct GuideCardRow: View {
                     }
                 }
                 .padding(.top, 2)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onPlay)
             }
         }
         .padding(.vertical, 2)
@@ -536,44 +552,41 @@ private struct GuideTimelineRow: View {
         let width = max(28, CGFloat(end.timeIntervalSince(start) / 3600.0) * GuideMetrics.pxPerHour)
         let airing = program.start <= now && now < program.end
 
-        Button {
-            onPlay(row.channel)
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(program.title)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(SportsColors.text)
-                    .lineLimit(1)
-                Text(shortTimeRange(program))
-                    .font(.system(size: 10))
-                    .foregroundStyle(SportsColors.muted)
-                    .lineLimit(1)
-                if airing {
-                    MovieRatingLoader(
-                        title: program.title,
-                        categories: program.categories,
-                        channelGroup: row.channel.group,
-                        channelName: row.channel.name,
-                        compact: true
-                    )
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .frame(width: width - 4, height: GuideMetrics.rowHeight - 12, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelElevated)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(
-                        airing ? SportsColors.gold.opacity(0.55) : SportsColors.border,
-                        lineWidth: 1
-                    )
+        VStack(alignment: .leading, spacing: 2) {
+            Text(program.title)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(SportsColors.text)
+                .lineLimit(1)
+            Text(shortTimeRange(program))
+                .font(.system(size: 10))
+                .foregroundStyle(SportsColors.muted)
+                .lineLimit(1)
+            if airing {
+                MovieRatingLoader(
+                    title: program.title,
+                    categories: program.categories,
+                    channelGroup: row.channel.group,
+                    channelName: row.channel.name,
+                    compact: true
+                )
             }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(width: width - 4, height: GuideMetrics.rowHeight - 12, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelElevated)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    airing ? SportsColors.gold.opacity(0.55) : SportsColors.border,
+                    lineWidth: 1
+                )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onPlay(row.channel) }
         .offset(x: left + 2, y: 8)
     }
 

@@ -88,7 +88,7 @@ actor MovieRatingsService {
         if !omdbOK && !tmdbOK {
             return "No API keys in Keychain. Save OMDb and/or TMDB under Settings → General."
         }
-        // Bypass negative cache for test
+        // Bypass caches for test
         let (clean, year) = MovieTitleParser.parse(title)
         let key = MovieTitleParser.cacheKey(title: clean, year: year)
         negativeCache.removeValue(forKey: key)
@@ -105,6 +105,18 @@ actor MovieRatingsService {
         if tmdbOK { hint += " TMDB key present." }
         hint += " Check key validity / network."
         return hint
+    }
+
+    /// Clear failed-lookup short circuit (call after saving keys).
+    func clearNegativeCache() {
+        negativeCache.removeAll()
+    }
+
+    /// Drop all in-memory rating state (keeps disk cache of successes).
+    func resetSessionCaches() {
+        negativeCache.removeAll()
+        memory.removeAll()
+        loadedDisk = false
     }
 
     // MARK: - OMDb
