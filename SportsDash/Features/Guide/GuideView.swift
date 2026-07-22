@@ -20,26 +20,31 @@ struct GuideView: View {
     @State private var windowStart: Date = GuideView.snappedNowMinusOneHour()
     @State private var playerRoute: PlayerRoute?
     @State private var nowTick = Date()
+    @State private var sideWorkTask: Task<Void, Never>?
+    @State private var ratingsTask: Task<Void, Never>?
 
     private var displayMode: GuideLayoutMode {
         appModel.playerPrefs.guideLayout
     }
 
     private var groupNames: [String] {
-        appModel.channelGroups.map(\.name)
+        appModel.channelGroupNames
     }
 
     private var activeChannels: [IptvChannel] {
         guard !selectedGroup.isEmpty else {
-            return appModel.channelGroups.first?.channels ?? []
+            return appModel.channels(inGroup: groupNames.first ?? "")
         }
-        return appModel.channelGroups.first(where: { $0.name == selectedGroup })?.channels ?? []
+        return appModel.channels(inGroup: selectedGroup)
     }
 
     private var cleanNames: Bool { appModel.playerPrefs.cleanUpNames }
 
     private var guideRows: [GuideChannelRowData] {
-        activeChannels.map { ch in
+        // Cap first paint for huge categories; List still scrolls all if we map all —
+        // keep full list but avoid heavy program copy work by referencing EPG map.
+        let chans = activeChannels
+        return chans.map { ch in
             GuideChannelRowData(
                 channel: ch,
                 programs: appModel.epgByChannel[ch.id] ?? []
@@ -85,25 +90,30 @@ struct GuideView: View {
                 if selectedGroup.isEmpty {
                     selectedGroup = groupNames.first ?? ""
                 }
-                // Prefer full cache from app bootstrap; fill any gaps for this category.
-                await appModel.loadEpgIfNeeded(for: activeChannels)
-                prefetchRatings()
+                // Background only — never block first Guide paint on EPG network.
+                scheduleGuideSideWork()
             }
             .onChange(of: selectedGroup) { _, _ in
-                Task {
-                    await appModel.loadEpgIfNeeded(for: activeChannels)
-                    prefetchRatings()
-                }
+                // Category switch must feel instant: UI updates from selectedGroup immediately;
+                // EPG fill + ratings run deferred.
+                scheduleGuideSideWork()
             }
             .onChange(of: appModel.epgLoadedCount) { _, _ in
-                prefetchRatings()
+                // Debounced ratings only (EPG already published)
+                scheduleRatingsOnly()
+            }
+            .onChange(of: appModel.channelGroupNames) { _, names in
+                if selectedGroup.isEmpty || !names.contains(selectedGroup) {
+                    selectedGroup = names.first ?? ""
+                }
             }
             .onChange(of: appModel.channels.count) { _, _ in
                 if selectedGroup.isEmpty {
                     selectedGroup = groupNames.first ?? ""
                 }
             }
-            .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { date in
+            .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in
+                // Progress bars only need minute-level refresh (was 30s full guide redraw).
                 nowTick = date
             }
             .fullScreenCover(item: $playerRoute) { route in
@@ -256,6 +266,29 @@ struct GuideView: View {
             epgByChannel: appModel.epgByChannel,
             categoryName: selectedGroup
         )
+    }
+
+    /// Coalesce rapid category taps / EPG updates.
+    private func scheduleGuideSideWork() {
+        sideWorkTask?.cancel()
+        let group = selectedGroup
+        let chans = activeChannels
+        sideWorkTask = Task {
+            try? await Task.sleep(nanoseconds: 120_000_000) // 120ms debounce
+            guard !Task.isCancelled else { return }
+            await appModel.loadEpgIfNeeded(for: chans)
+            guard !Task.isCancelled, selectedGroup == group else { return }
+            prefetchRatings()
+        }
+    }
+
+    private func scheduleRatingsOnly() {
+        ratingsTask?.cancel()
+        ratingsTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            prefetchRatings()
+        }
     }
 
     private static func snappedNowMinusOneHour() -> Date {

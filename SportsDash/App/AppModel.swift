@@ -32,6 +32,9 @@ final class AppModel: ObservableObject {
     @Published var epgError: String?
     /// Human status while EPG loads (e.g. “Downloading full guide (XMLTV)…”).
     @Published var epgStatus: String?
+    /// Precomputed category → channels (avoid O(n) rebuild every SwiftUI body).
+    @Published private(set) var channelGroupNames: [String] = []
+    @Published private(set) var channelsByGroup: [String: [IptvChannel]] = [:]
 
     // MARK: - Floating / full-screen player session (UHF-style pop-out)
 
@@ -68,17 +71,86 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrap() async {
-        // Scores first (lightweight). Playlist next. EPG in background so launch
-        // never blocks on a large guide download.
-        await refreshScores()
-        if let config = iptvConfig, config.isConfigured {
-            await reloadChannels()
-            lastPlaylistReload = Date()
-            Task { await refreshXtreamAccount() }
-            Task { await reloadEpg(force: false) }
+        // 1) Instant paint from disk caches (channels + EPG) — no network.
+        let playlistId = activePlaylistId
+        async let cachedChannels = Task.detached(priority: .userInitiated) {
+            StorageService.loadChannelsCacheData(playlistId: playlistId)
+        }.value
+        async let cachedEpg = Task.detached(priority: .userInitiated) {
+            StorageService.loadEpgCacheData()
+        }.value
+
+        if let chans = await cachedChannels, !chans.isEmpty, channels.isEmpty {
+            applyChannels(chans, persistCache: false)
         }
+        if let epg = await cachedEpg, epgByChannel.isEmpty {
+            epgByChannel = epg.map
+            epgLoadedCount = epg.map.count
+            lastEpgReload = epg.savedAt
+            epgStatus = "Guide from cache · \(epg.map.count) channels"
+        }
+
+        // 2) Network in background so first frame isn't blocked on Xtream/scores.
+        let hasChannelCache = !channels.isEmpty
+        let needsEpgNetwork = epgByChannel.isEmpty
+        let epgStale: Bool = {
+            guard let saved = lastEpgReload else { return false }
+            return Date().timeIntervalSince(saved) > 3 * 3600
+        }()
+
+        Task { @MainActor in
+            await refreshScores()
+        }
+
+        if let config = iptvConfig, config.isConfigured {
+            if hasChannelCache {
+                Task { @MainActor in
+                    await reloadChannels(showLoading: false)
+                    lastPlaylistReload = Date()
+                }
+            } else {
+                await reloadChannels(showLoading: true)
+                lastPlaylistReload = Date()
+            }
+            Task { @MainActor in
+                await refreshXtreamAccount()
+            }
+            if needsEpgNetwork || epgStale {
+                Task { @MainActor in
+                    await reloadEpg(force: true)
+                }
+            }
+        }
+
         startScoresPolling()
         startPlaylistPolling()
+    }
+
+    /// Rebuild category maps after channel list changes.
+    private func applyChannels(_ list: [IptvChannel], persistCache: Bool) {
+        channels = list
+        rebuildChannelGroups(from: list)
+        if persistCache {
+            storage.saveChannelsCache(list, playlistId: activePlaylistId)
+        }
+    }
+
+    private func rebuildChannelGroups(from list: [IptvChannel]) {
+        var order: [String] = []
+        var map: [String: [IptvChannel]] = [:]
+        order.reserveCapacity(64)
+        map.reserveCapacity(64)
+        for ch in list {
+            let g = (ch.group?.isEmpty == false) ? ch.group! : "Other"
+            if map[g] == nil {
+                order.append(g)
+                map[g] = []
+                map[g]?.reserveCapacity(32)
+            }
+            map[g]?.append(ch)
+        }
+        channelGroupNames = order
+        channelsByGroup = map
     }
 
     func startScoresPolling() {
@@ -140,18 +212,20 @@ final class AppModel: ObservableObject {
     }
 
     /// Reload playlist only (does not clear EPG until new channel ids differ).
-    func reloadChannels() async {
+    func reloadChannels(showLoading: Bool = true) async {
         guard let config = iptvConfig, config.isConfigured else {
-            channels = []
+            applyChannels([], persistCache: false)
             return
         }
-        isLoadingChannels = true
+        if showLoading { isLoadingChannels = true }
         channelsError = nil
-        defer { isLoadingChannels = false }
+        defer { if showLoading { isLoadingChannels = false } }
         do {
-            channels = try await iptvService.loadChannels(config: config)
+            let list = try await iptvService.loadChannels(config: config)
+            applyChannels(list, persistCache: true)
         } catch {
             channelsError = error.localizedDescription
+            // Keep cached channels if network fails
         }
     }
 
@@ -168,7 +242,8 @@ final class AppModel: ObservableObject {
         try await {
             isLoadingChannels = true
             defer { isLoadingChannels = false }
-            channels = try await iptvService.loadChannels(config: config)
+            let list = try await iptvService.loadChannels(config: config)
+            applyChannels(list, persistCache: true)
         }()
         Task { await refreshXtreamAccount() }
         Task { await reloadEpg(force: true) }
@@ -193,7 +268,8 @@ final class AppModel: ObservableObject {
             isLoadingChannels = true
             defer { isLoadingChannels = false }
             guard let cfg = storage.loadActiveConfig() else { return }
-            channels = try await iptvService.loadChannels(config: cfg)
+            let list = try await iptvService.loadChannels(config: cfg)
+            applyChannels(list, persistCache: true)
         }()
         Task { await refreshXtreamAccount() }
         Task { await reloadEpg(force: true) }
@@ -204,11 +280,12 @@ final class AppModel: ObservableObject {
         storage.savePlaylists(playlists, activeId: id)
         activePlaylistId = id
         iptvConfig = storage.loadActiveConfig()
-        channels = []
+        applyChannels([], persistCache: false)
         epgByChannel = [:]
         epgLoadedCount = 0
         xtreamAccount = nil
         storage.clearEpgCache()
+        storage.clearChannelsCache()
         await reloadChannels()
         lastPlaylistReload = Date()
         Task { await refreshXtreamAccount() }
@@ -229,9 +306,10 @@ final class AppModel: ObservableObject {
         activePlaylistId = newActive
         iptvConfig = storage.loadActiveConfig()
         if wasActive {
-            channels = []
+            applyChannels([], persistCache: false)
             epgByChannel = [:]
             storage.clearEpgCache()
+            storage.clearChannelsCache()
             Task {
                 await reloadChannels()
                 await refreshXtreamAccount()
@@ -256,7 +334,8 @@ final class AppModel: ObservableObject {
             try await {
                 isLoadingChannels = true
                 defer { isLoadingChannels = false }
-                channels = try await iptvService.loadChannels(config: config)
+                let list = try await iptvService.loadChannels(config: config)
+                applyChannels(list, persistCache: true)
             }()
             Task { await refreshXtreamAccount() }
             Task { await reloadEpg(force: true) }
@@ -270,7 +349,8 @@ final class AppModel: ObservableObject {
         activePlaylistId = nil
         iptvConfig = nil
         xtreamAccount = nil
-        channels = []
+        applyChannels([], persistCache: false)
+        storage.clearChannelsCache()
         epgByChannel = [:]
         epgLoadedCount = 0
         lastEpgReload = nil
@@ -407,6 +487,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Fill gaps for a guide category without blocking UI; uses short EPG only.
+    /// Does not flip global isLoadingEpg (that freezes Guide chrome) — background fill only.
     func loadEpgIfNeeded(for channels: [IptvChannel]) async {
         let missing = channels.filter { ch in
             guard let list = epgByChannel[ch.id] else { return true }
@@ -423,18 +504,17 @@ final class AppModel: ObservableObject {
             if still.isEmpty { return }
         }
 
-        isLoadingEpg = true
-        epgStatus = "Filling \(missing.count) channels…"
         let service = epgService
         let config = iptvConfig
-        let need = Array(missing.prefix(80))
+        // Small batches keep category switches snappy
+        let need = Array(missing.prefix(24))
 
         let map = await Task.detached(priority: .utility) {
             await service.loadForChannels(
                 channels: need,
                 config: config,
-                limitPerChannel: 8,
-                batchSize: 12,
+                limitPerChannel: 6,
+                batchSize: 8,
                 preferBulk: false,
                 fillMissingWithShortEpg: true,
                 onBatch: nil,
@@ -442,14 +522,11 @@ final class AppModel: ObservableObject {
             )
         }.value
 
+        guard !map.isEmpty else { return }
         var next = epgByChannel
         for (k, v) in map where !v.isEmpty { next[k] = v }
         epgByChannel = next
         epgLoadedCount = next.count
-        isLoadingEpg = false
-        if epgStatus?.hasPrefix("Filling") == true {
-            epgStatus = next.isEmpty ? nil : "Guide · \(next.count) channels"
-        }
     }
 
     func toggleFavorite(teamId: String) {
@@ -508,18 +585,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Compatibility: ordered groups from cached maps (O(groups), not O(channels) rebuild).
     var channelGroups: [(name: String, channels: [IptvChannel])] {
-        var order: [String] = []
-        var map: [String: [IptvChannel]] = [:]
-        for ch in channels {
-            let g = (ch.group?.isEmpty == false) ? ch.group! : "Other"
-            if map[g] == nil {
-                order.append(g)
-                map[g] = []
-            }
-            map[g]?.append(ch)
-        }
-        return order.map { (name: $0, channels: map[$0] ?? []) }
+        channelGroupNames.map { (name: $0, channels: channelsByGroup[$0] ?? []) }
+    }
+
+    func channels(inGroup name: String) -> [IptvChannel] {
+        channelsByGroup[name] ?? []
     }
 
 }

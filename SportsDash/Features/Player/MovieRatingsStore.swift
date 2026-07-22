@@ -68,7 +68,7 @@ final class MovieRatingsStore: ObservableObject {
 
     /// Prefetch now-playing titles for a guide category.
     func prefetch(channels: [IptvChannel], epgByChannel: [String: [EpgProgram]], categoryName: String?) {
-        for ch in channels.prefix(40) {
+        for ch in channels.prefix(16) {
             let programs = epgByChannel[ch.id] ?? []
             guard let now = programs.first(where: \.isNow) ?? programs.first else { continue }
             let group = ch.group ?? categoryName

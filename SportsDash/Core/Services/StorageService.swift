@@ -236,6 +236,22 @@ final class StorageService {
         return try? decoder.decode([String: [EpgProgram]].self, from: data)
     }
 
+    /// Background-friendly load (call from detached task).
+    nonisolated static func loadEpgCacheData(maxAge: TimeInterval = 12 * 3600) -> (map: [String: [EpgProgram]], savedAt: Date?)? {
+        let defaults = UserDefaults.standard
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("sportsdash_epg_cache.json")
+        guard let saved = defaults.object(forKey: "epg_cache_saved_at") as? Date,
+              Date().timeIntervalSince(saved) < maxAge,
+              let data = try? Data(contentsOf: url),
+              !data.isEmpty else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        guard let map = try? decoder.decode([String: [EpgProgram]].self, from: data) else { return nil }
+        return (map, saved)
+    }
+
     func saveEpgCache(_ map: [String: [EpgProgram]]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
@@ -253,5 +269,57 @@ final class StorageService {
 
     var epgCacheSavedAt: Date? {
         defaults.object(forKey: epgCacheDateKey) as? Date
+    }
+
+    // MARK: - Channel list disk cache (instant launch)
+
+    private var channelsCacheURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return dir.appendingPathComponent("sportsdash_channels_cache.json")
+    }
+
+    private let channelsCachePlaylistKey = "channels_cache_playlist_id"
+    private let channelsCacheDateKey = "channels_cache_saved_at"
+
+    func saveChannelsCache(_ channels: [IptvChannel], playlistId: String?) {
+        guard !channels.isEmpty else { return }
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(channels) else { return }
+        try? data.write(to: channelsCacheURL, options: .atomic)
+        defaults.set(playlistId, forKey: channelsCachePlaylistKey)
+        defaults.set(Date(), forKey: channelsCacheDateKey)
+    }
+
+    func loadChannelsCache(forPlaylistId playlistId: String?, maxAge: TimeInterval = 7 * 24 * 3600) -> [IptvChannel]? {
+        guard let saved = defaults.object(forKey: channelsCacheDateKey) as? Date,
+              Date().timeIntervalSince(saved) < maxAge else { return nil }
+        let cachedId = defaults.string(forKey: channelsCachePlaylistKey)
+        // Require same active playlist when known
+        if let playlistId, let cachedId, playlistId != cachedId { return nil }
+        guard let data = try? Data(contentsOf: channelsCacheURL), !data.isEmpty else { return nil }
+        return try? JSONDecoder().decode([IptvChannel].self, from: data)
+    }
+
+    nonisolated static func loadChannelsCacheData(
+        playlistId: String?,
+        maxAge: TimeInterval = 7 * 24 * 3600
+    ) -> [IptvChannel]? {
+        let defaults = UserDefaults.standard
+        guard let saved = defaults.object(forKey: "channels_cache_saved_at") as? Date,
+              Date().timeIntervalSince(saved) < maxAge else { return nil }
+        let cachedId = defaults.string(forKey: "channels_cache_playlist_id")
+        if let playlistId, let cachedId, playlistId != cachedId { return nil }
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("sportsdash_channels_cache.json")
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+        return try? JSONDecoder().decode([IptvChannel].self, from: data)
+    }
+
+    func clearChannelsCache() {
+        try? FileManager.default.removeItem(at: channelsCacheURL)
+        defaults.removeObject(forKey: channelsCachePlaylistKey)
+        defaults.removeObject(forKey: channelsCacheDateKey)
     }
 }

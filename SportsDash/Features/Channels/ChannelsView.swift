@@ -8,7 +8,7 @@ struct ChannelsView: View {
     @State private var playerRoute: PlayerRoute?
 
     private var groupNames: [String] {
-        appModel.channelGroups.map(\.name)
+        appModel.channelGroupNames
     }
 
     private var displayedChannels: [IptvChannel] {
@@ -20,8 +20,7 @@ struct ChannelsView: View {
             }
         }
         let group = selectedGroup.isEmpty ? groupNames.first : selectedGroup
-        return appModel.channelGroups.first(where: { $0.name == group })?.channels
-            ?? appModel.channels
+        return appModel.channels(inGroup: group ?? "")
     }
 
     private var columns: [GridItem] {
