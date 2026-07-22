@@ -80,7 +80,7 @@ struct MovieRatingLoader: View {
         let result = await MovieRatingsService.shared.rating(
             forTitle: title,
             year: nil,
-            isMovieHint: true
+            isMovieHint: hint
         )
         await MainActor.run {
             rating = result

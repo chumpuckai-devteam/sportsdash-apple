@@ -210,6 +210,12 @@ struct PlayerView: View {
                     ) {
                         popOutToFloatingPlayer()
                     }
+                    #if os(iOS)
+                    // System AirPlay / external display route picker
+                    AirPlayRoutePicker()
+                        .frame(width: 28, height: 28)
+                        .accessibilityLabel("AirPlay")
+                    #endif
                     utilityButton(systemName: "captions.bubble", tint: .white) {
                         playback.cycleSubtitleTrack()
                         scheduleChromeHide()

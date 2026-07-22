@@ -49,6 +49,7 @@ struct GeneralSettingsView: View {
                     } else {
                         KeychainStore.set(trimmed, account: MovieRatingsService.omdbKeyAccount)
                         omdbSaved = true
+                        omdbKey = "" // do not keep secret in view state after save
                         statusMessage = "OMDb key saved to Keychain."
                     }
                 } label: {
@@ -67,6 +68,7 @@ struct GeneralSettingsView: View {
                     } else {
                         KeychainStore.set(trimmed, account: MovieRatingsService.tmdbKeyAccount)
                         tmdbSaved = true
+                        tmdbKey = "" // do not keep secret in view state after save
                         statusMessage = "TMDB key saved to Keychain."
                     }
                 } label: {
