@@ -1,11 +1,23 @@
 import SwiftUI
 
-/// Video player settings — Auto / VLC / AVKit (Path A).
+/// Video player settings — mirrors UHF: primary engine, fallback, buffer, KSPlayer toggles.
 struct PlayerSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
     private var fallbackBinding: Binding<Bool> {
         PrefsBinding.field(appModel, get: \.fallbackPlayers) { $0.fallbackPlayers = $1 }
+    }
+
+    private var adaptiveBinding: Binding<Bool> {
+        PrefsBinding.field(appModel, get: \.adaptiveFrameRate) { $0.adaptiveFrameRate = $1 }
+    }
+
+    private var hardwareBinding: Binding<Bool> {
+        PrefsBinding.field(appModel, get: \.hardwareDecode) { $0.hardwareDecode = $1 }
+    }
+
+    private var asyncBinding: Binding<Bool> {
+        PrefsBinding.field(appModel, get: \.asynchronousDecompression) { $0.asynchronousDecompression = $1 }
     }
 
     private var aspectBinding: Binding<PlayerAspectMode> {
@@ -19,7 +31,7 @@ struct PlayerSettingsView: View {
                     Label("Fallback video players", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .tint(SportsColors.gold)
-                Text("If the primary engine fails, try the other one automatically (VLC ↔ AVKit).")
+                Text("If the primary engine fails, try the other one automatically.")
                     .font(.caption)
                     .foregroundStyle(SportsColors.muted)
             } header: {
@@ -56,9 +68,6 @@ struct PlayerSettingsView: View {
                 }
             } header: {
                 Text("Primary video player")
-            } footer: {
-                Text("Path A: VLC (libVLC, LGPL) handles hard IPTV/TS. AVKit handles clean HLS and system routes. KSPlayer/FFmpegKit removed.")
-                    .font(.caption2)
             }
 
             Section {
@@ -89,11 +98,31 @@ struct PlayerSettingsView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.vertical, 4)
-                Text("Network caching hint for VLC (ms = seconds × 1000). Higher values reduce stalls; lower values cut live delay.")
+                Text("How much media to buffer ahead. Higher values reduce stalls; lower values cut live delay.")
                     .font(.caption)
                     .foregroundStyle(SportsColors.muted)
             } header: {
                 Text("Buffer duration")
+            }
+
+            Section {
+                Toggle(isOn: adaptiveBinding) {
+                    Label("Adaptive frame rate", systemImage: "gauge.with.dots.needle.33percent")
+                }
+                .tint(SportsColors.gold)
+                Toggle(isOn: hardwareBinding) {
+                    Label("Hardware decode", systemImage: "cpu")
+                }
+                .tint(SportsColors.gold)
+                Toggle(isOn: asyncBinding) {
+                    Label("Asynchronous decompression", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .tint(SportsColors.gold)
+                Text("Hardware decode is recommended. Async decompression can help some streams but may hurt others.")
+                    .font(.caption)
+                    .foregroundStyle(SportsColors.muted)
+            } header: {
+                Text("KSPlayer (Metal)")
             }
 
             Section {

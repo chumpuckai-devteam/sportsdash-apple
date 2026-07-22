@@ -19,32 +19,27 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
-// MARK: - Primary video player (Path A: VLC + AVKit)
+// MARK: - Primary video player (UHF-style)
 
 enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
-    /// Auto: HLS → AVKit first; TS / unknown → VLC first. Fallback swaps on failure.
-    case auto
-    /// libVLC — best for messy IPTV / MPEG-TS
-    case vlc
-    /// Apple AVPlayer — clean HLS, system PiP / AirPlay
+    /// KSPlayer Metal / FFmpeg (KSMEPlayer)
+    case ksPlayer
+    /// Apple AVKit / AVPlayer
     case avKit
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .auto: return "Auto (VLC + AVKit)"
-        case .vlc: return "VLC (libVLC)"
+        case .ksPlayer: return "KSPlayer (Metal)"
         case .avKit: return "AVKit (Native)"
         }
     }
 
     var detail: String {
         switch self {
-        case .auto:
-            return "Picks AVKit for clean HLS and VLC for TS / hard IPTV. Falls back if one fails."
-        case .vlc:
-            return "libVLC — strongest for live IPTV and MPEG-TS. LGPL (see About)."
+        case .ksPlayer:
+            return "FFmpeg-backed player. Best for live IPTV and TS streams."
         case .avKit:
             return "Apple’s player. Fast for clean HLS; less reliable on messy panels."
         }
@@ -146,7 +141,7 @@ enum LaunchTab: String, CaseIterable, Identifiable, Codable, Sendable {
 struct PlayerPrefs: Codable, Sendable, Equatable {
     // Player
     var aspect: PlayerAspectMode = .auto
-    var primaryPlayer: PrimaryVideoPlayer = .auto
+    var primaryPlayer: PrimaryVideoPlayer = .ksPlayer
     var fallbackPlayers: Bool = true
     /// Preferred forward buffer (seconds), 1…15.
     var bufferSeconds: Double = 3
@@ -190,17 +185,8 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         cleanUpNames = try c.decodeIfPresent(Bool.self, forKey: .cleanUpNames) ?? true
         launchTab = try c.decodeIfPresent(LaunchTab.self, forKey: .launchTab) ?? .scores
 
-        if let raw = try c.decodeIfPresent(String.self, forKey: .primaryPlayer) {
-            switch raw {
-            case PrimaryVideoPlayer.auto.rawValue:
-                primaryPlayer = .auto
-            case PrimaryVideoPlayer.vlc.rawValue, "ksPlayer", "ffmpeg":
-                primaryPlayer = .vlc
-            case PrimaryVideoPlayer.avKit.rawValue, "avPlayer":
-                primaryPlayer = .avKit
-            default:
-                primaryPlayer = .auto
-            }
+        if let primary = try c.decodeIfPresent(PrimaryVideoPlayer.self, forKey: .primaryPlayer) {
+            primaryPlayer = primary
             fallbackPlayers = try c.decodeIfPresent(Bool.self, forKey: .fallbackPlayers) ?? true
         } else if let legacy = try c.decodeIfPresent(String.self, forKey: .engine) {
             // Migrate old PlayerEngine raw values
@@ -208,15 +194,15 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
             case "avPlayer":
                 primaryPlayer = .avKit
                 fallbackPlayers = false
-            case "ffmpeg", "ksPlayer":
-                primaryPlayer = .vlc
+            case "ffmpeg":
+                primaryPlayer = .ksPlayer
                 fallbackPlayers = false
             default: // auto
-                primaryPlayer = .auto
+                primaryPlayer = .ksPlayer
                 fallbackPlayers = true
             }
         } else {
-            primaryPlayer = .auto
+            primaryPlayer = .ksPlayer
             fallbackPlayers = true
         }
     }

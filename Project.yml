@@ -8,13 +8,12 @@ options:
   groupSortPosition: top
   developmentLanguage: en
 
-# Official VideoLAN VLCKit binaries via SPM (same MobileVLCKit/TVVLCKit as CocoaPods).
-# Avoids CocoaPods [CP] Embed rsync + Xcode User Script Sandbox failures.
-#   xcodegen generate && open SportsDash.xcodeproj
+# FFmpeg-backed player (same stack used by UHF and other IPTV apps).
+# GPL license — see KSPlayer README. Default engine prefers FFmpeg for messy live streams.
 packages:
-  VLCKitSPM:
-    url: https://github.com/tylerjonesio/vlckit-spm
-    from: "3.6.0"
+  KSPlayer:
+    url: https://github.com/kingslay/KSPlayer.git
+    branch: main
 
 settings:
   base:
@@ -24,11 +23,15 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_CFBundleDisplayName: SportsDash
+    # IPTV providers often use HTTP
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
+    # Background audio while locked / switching apps
     INFOPLIST_KEY_UIBackgroundModes: "audio"
+    # Personal Team (Samir Patel) — keeps signing after xcodegen regenerate
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: "2H57Y8GR9D"
-    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    # Xcode recommended project settings
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
     STRING_CATALOG_GENERATE_SYMBOLS: YES
     DEAD_CODE_STRIPPING: YES
 
@@ -41,8 +44,8 @@ targets:
         excludes:
           - "**/.DS_Store"
     dependencies:
-      - package: VLCKitSPM
-        product: VLCKitSPM
+      - package: KSPlayer
+        product: KSPlayer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
@@ -52,8 +55,8 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        # FFmpegKit binary modules
         OTHER_LDFLAGS: "$(inherited) -ObjC"
-        ENABLE_USER_SCRIPT_SANDBOXING: NO
     scheme:
       testTargets: []
 
@@ -65,8 +68,8 @@ targets:
         excludes:
           - "**/.DS_Store"
     dependencies:
-      - package: VLCKitSPM
-        product: VLCKitSPM
+      - package: KSPlayer
+        product: KSPlayer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos
@@ -74,6 +77,5 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
         OTHER_LDFLAGS: "$(inherited) -ObjC"
-        ENABLE_USER_SCRIPT_SANDBOXING: NO
     scheme:
       testTargets: []

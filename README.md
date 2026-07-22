@@ -4,15 +4,12 @@ Native **SwiftUI** app for **iOS** and **Apple TV (tvOS)**.
 
 ## Open / run
 
-VLC uses **official VideoLAN MobileVLCKit / TVVLCKit binaries** via SPM  
-([vlckit-spm](https://github.com/tylerjonesio/vlckit-spm) — same frameworks as CocoaPods, no pod rsync).
-
 ```bash
 cd sportsdash-apple
 git pull origin main
 
 # Quit Xcode first
-rm -rf Pods/ *.xcworkspace Podfile.lock   # remove old CocoaPods leftovers if present
+rm -rf Pods SportsDash.xcworkspace Podfile.lock
 rm -rf ~/Library/Developer/Xcode/DerivedData/SportsDash-*
 
 brew install xcodegen   # once
@@ -21,24 +18,28 @@ open SportsDash.xcodeproj
 ```
 
 In Xcode:
-1. Wait for **package resolve** (VLC binary is large — first download can take several minutes)
-2. If stuck: **File → Packages → Reset Package Caches**, then resolve again
-3. Scheme **SportsDash** → your iPhone → **Clean Build Folder** (⇧⌘K) → Run
+1. Wait for **KSPlayer** package resolve (large FFmpeg binaries — first time can take a while)
+2. **File → Packages → Resolve Package Versions** if needed
+3. Scheme **SportsDash** → your iPhone → Clean (⇧⌘K) → Run
 
-**Do not** open an old `SportsDash.xcworkspace` from CocoaPods — use **`.xcodeproj`** after `xcodegen generate`.
+## Video player (current)
 
-## Video engines (Path A)
-
-| Setting | Behavior |
-|---------|----------|
-| **Auto** | HLS → AVKit first; TS / hard IPTV → VLC first |
-| **VLC** | Official libVLC (MobileVLCKit) |
+| Setting | Engine |
+|---------|--------|
+| **KSPlayer (Metal)** default | FFmpeg via KSPlayer — best for live IPTV |
 | **AVKit** | Native AVPlayer |
+| Fallback | On by default |
 
-## Why not CocoaPods right now?
+> **Note:** Path A (official VLCKit) is **parked**. CocoaPods hit Xcode sandbox `rsync` failures; SPM wrappers failed module resolve on device builds. We restored the last **known-good KSPlayer** stack so you can dogfood. VLC will be re-spiked separately.
 
-Xcode’s User Script Sandbox was blocking CocoaPods’ `rsync` copy of `MobileVLCKit.framework` on this machine. SPM links the same VLC binaries without that script.
+KSPlayer public package is **GPL** — OK for TestFlight/dogfood; App Store may need their paid LGPL deal (see KSPlayer README).
 
-## License
+## Features
 
-Private app code. VLCKit: LGPL (VideoLAN) — see `docs/LGPL-NOTICE.md`.
+Scores, Xtream/M3U, Guide, floating player, movie ratings (OMDb/TMDB), ESPN start-time fix for Upcoming.
+
+## Docs
+
+- `docs/movie-ratings.md`
+- `docs/video-player-options.md` (VLC research — parked)
+- `docs/LGPL-NOTICE.md`

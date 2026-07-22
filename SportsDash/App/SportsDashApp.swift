@@ -1,3 +1,4 @@
+import KSPlayer
 import SwiftUI
 
 @main
@@ -7,6 +8,7 @@ struct SportsDashApp: App {
     init() {
         let prefs = StorageService.shared.playerPrefs()
         PlaybackController.applyGlobal(prefs)
+        KSOptions.isAutoPlay = true
     }
 
     var body: some Scene {
