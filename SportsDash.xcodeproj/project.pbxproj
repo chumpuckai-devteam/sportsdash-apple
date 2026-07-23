@@ -304,6 +304,7 @@
 			buildConfigurationList = BAED3FEF50FC1EBBBE9B8602 /* Build configuration list for PBXNativeTarget "SportsDashTV" */;
 			buildPhases = (
 				D7FC13642A472CB3DAFDE853 /* Sources */,
+				E0RESOURCE5DA5H101C0DE0002 /* Resources */,
 				315E7C8B2C90485304649FDA /* Frameworks */,
 			);
 			buildRules = (
@@ -323,6 +324,7 @@
 			buildConfigurationList = 7AA11601289486FCE98A1C44 /* Build configuration list for PBXNativeTarget "SportsDash" */;
 			buildPhases = (
 				CA4CB141A47E22FEFE6DF843 /* Sources */,
+				E0RESOURCE5DA5H101C0DE0001 /* Resources */,
 				117194AE3E04970C74737167 /* Frameworks */,
 			);
 			buildRules = (
@@ -378,6 +380,26 @@
 			);
 		};
 /* End PBXProject section */
+
+
+/* Begin PBXResourcesBuildPhase section */
+		E0RESOURCE5DA5H101C0DE0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0FFEE01A55E7001C0DE0002 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E0RESOURCE5DA5H101C0DE0002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0FFEE01A55E7001C0DE0003 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		CA4CB141A47E22FEFE6DF843 /* Sources */ = {
@@ -566,7 +588,7 @@
 		740EC8903F0723110A6DBE6E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2H57Y8GR9D;
@@ -652,7 +674,7 @@
 		773742B82DD0F331A2269B4D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2H57Y8GR9D;

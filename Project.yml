@@ -47,6 +47,9 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
+          - "**/*.xcassets"
+    resources:
+      - path: SportsDash/Assets.xcassets
     dependencies:
       - package: KSPlayer
         product: KSPlayer
@@ -72,6 +75,9 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
+          - "**/*.xcassets"
+    resources:
+      - path: SportsDash/Assets.xcassets
     dependencies:
       - package: KSPlayer
         product: KSPlayer
