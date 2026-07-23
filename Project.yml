@@ -46,12 +46,11 @@ targets:
     type: application
     platform: iOS
     sources:
+      # Include Assets.xcassets here — XcodeGen auto-adds .xcassets to Resources.
+      # Do NOT exclude **/*.xcassets or the AppIcon never appears in the navigator.
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
-          - "**/*.xcassets"
-    resources:
-      - path: SportsDash/Assets.xcassets
     dependencies:
       - package: KSPlayer
         product: KSPlayer
@@ -79,9 +78,6 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
-          - "**/*.xcassets"
-    resources:
-      - path: SportsDash/Assets.xcassets
     dependencies:
       - package: KSPlayer
         product: KSPlayer
@@ -90,6 +86,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos
         TARGETED_DEVICE_FAMILY: "3"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleIconName: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
         OTHER_LDFLAGS: "$(inherited) -ObjC"
