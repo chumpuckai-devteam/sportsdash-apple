@@ -24,6 +24,9 @@ settings:
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_CFBundleDisplayName: SportsDash
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    # Static system launch screen (before SwiftUI) — matches void black + logo
+    INFOPLIST_KEY_UILaunchScreen_UIColorName: LaunchBackground
+    INFOPLIST_KEY_UILaunchScreen_UIImageName: AppLogo
     # IPTV providers often use HTTP
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
     # Background audio while locked / switching apps
