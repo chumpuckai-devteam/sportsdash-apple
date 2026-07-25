@@ -677,9 +677,9 @@ private struct GuideTimelineGrid: View {
     let onPlay: (IptvChannel) -> Void
 
     @StateObject private var scrollSync = GuideScrollSync()
-    #if os(tvOS)
+    /// Always declared so rows can take `focusNamespace:` without mid-list `#if`
+    /// (Swift rejects `#if` between call arguments on iOS CI). Consumed only on tvOS.
     @Namespace private var guideFocusNS
-    #endif
 
     private var windowEnd: Date {
         Calendar.current.date(byAdding: .hour, value: GuideMetrics.hours, to: windowStart) ?? windowStart
@@ -699,7 +699,6 @@ private struct GuideTimelineGrid: View {
             ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        #if os(tvOS)
                         GuideTimelineRow(
                             row: row,
                             windowStart: windowStart,
@@ -711,18 +710,6 @@ private struct GuideTimelineGrid: View {
                             prefersDefault: index == 0,
                             focusNamespace: guideFocusNS
                         )
-                        #else
-                        GuideTimelineRow(
-                            row: row,
-                            windowStart: windowStart,
-                            windowEnd: windowEnd,
-                            now: now,
-                            cleanUpNames: cleanUpNames,
-                            scrollSync: scrollSync,
-                            onPlay: onPlay,
-                            prefersDefault: index == 0
-                        )
-                        #endif
                     }
                 }
                 #if os(tvOS)
@@ -786,9 +773,9 @@ private struct GuideTimelineRow: View {
     let onPlay: (IptvChannel) -> Void
     /// First visible row prefers default focus when the guide appears.
     var prefersDefault: Bool = false
-    #if os(tvOS)
+    /// Optional focus scope for tvOS default-focus (ignored on iOS). Always present so
+    /// callers never need mid-argument-list `#if os(tvOS)`.
     var focusNamespace: Namespace.ID? = nil
-    #endif
 
     var body: some View {
         HStack(spacing: 0) {
