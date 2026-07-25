@@ -50,24 +50,42 @@ enum SportsTVMetrics {
 }
 
 // MARK: - Glass / material helpers
+//
+// Liquid Glass symbols (`glassEffect`, `ButtonStyle.glass`) ship with the **iOS 26 SDK**
+// (Xcode 26+ / Swift 6.2+). `#available(iOS 26.0, *)` is runtime-only — the type checker
+// still needs the symbols in the active SDK. Gate glass branches at **compile time**
+// so Xcode 16.4 / iOS 18.5 SDK builds keep the material fallback path.
+// Docs: https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
 
 extension View {
+    /// Material + hairline control chrome when Liquid Glass SDK/OS is unavailable.
+    @ViewBuilder
+    fileprivate func sportsGlassMaterialFallback(in shape: some Shape) -> some View {
+        self
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
+    }
+
+    /// Navigation-layer glass: Liquid Glass on iOS 26+ (capable SDK), material fallback earlier.
+    /// Use on floating controls, filter chips, toolbars — not full content backgrounds.
     @ViewBuilder
     func sportsGlass(
         in shape: some Shape = RoundedRectangle(cornerRadius: SportsMetrics.cardRadius, style: .continuous)
     ) -> some View {
+        // Liquid Glass control layer is iOS-first; tvOS uses standard materials.
         #if os(iOS)
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             self.glassEffect(in: shape)
         } else {
-            self
-                .background(.ultraThinMaterial, in: shape)
-                .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
+            self.sportsGlassMaterialFallback(in: shape)
         }
         #else
-        self
-            .background(.ultraThinMaterial, in: shape)
-            .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
+        // Pre–iOS 26 SDK (e.g. Xcode 16.4): symbols absent — material only.
+        self.sportsGlassMaterialFallback(in: shape)
+        #endif
+        #else
+        self.sportsGlassMaterialFallback(in: shape)
         #endif
     }
 
@@ -112,14 +130,19 @@ extension View {
         self.background(SportsColors.voidBlack.ignoresSafeArea())
     }
 
+    /// Toolbar / menu control styling with glass when available.
     @ViewBuilder
     func sportsToolbarControl() -> some View {
         #if os(iOS)
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             self.buttonStyle(.glass)
         } else {
             self
         }
+        #else
+        self
+        #endif
         #else
         self
         #endif
