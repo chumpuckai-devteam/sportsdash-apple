@@ -649,7 +649,9 @@ final class GuideScrollSync: ObservableObject {
     private(set) var sharedOffsetX: CGFloat = 0
 
     func register(_ scrollView: UIScrollView, role: GuideScrollRole) {
+        #if os(iOS)
         scrollView.isPagingEnabled = false
+        #endif
         scrollView.decelerationRate = .normal
         switch role {
         case .header:
