@@ -211,37 +211,3 @@ struct SportsSectionHeader: View {
         .accessibilityAddTraits(.isHeader)
     }
 }
-
-/// Toolbar category `Menu` with modern chrome.
-struct SportsCategoryMenu: View {
-    let title: String
-    @Binding var selection: String
-    let options: [String]
-
-    var body: some View {
-        Menu {
-            Picker("Category", selection: $selection) {
-                ForEach(options, id: \.self) { name in
-                    Text(name).tag(name)
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.body.weight(.semibold))
-                Text(title.isEmpty ? "Category" : title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2.weight(.bold))
-            }
-            .foregroundStyle(SportsColors.gold)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .sportsGlass(in: Capsule(style: .continuous))
-        }
-        #if os(iOS)
-        .menuOrder(.fixed)
-        #endif
-    }
-}

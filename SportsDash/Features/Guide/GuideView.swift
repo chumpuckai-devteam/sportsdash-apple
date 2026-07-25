@@ -22,6 +22,7 @@ struct GuideView: View {
     @State private var nowTick = Date()
     @State private var sideWorkTask: Task<Void, Never>?
     @State private var ratingsTask: Task<Void, Never>?
+    @State private var showGuideSettings = false
 
     private var displayMode: GuideLayoutMode {
         appModel.playerPrefs.guideLayout
@@ -126,41 +127,27 @@ struct GuideView: View {
                 )
                 .environmentObject(appModel)
             }
+            .sheet(isPresented: $showGuideSettings) {
+                guideSettingsSheet
+            }
         }
     }
 
-    private var guideSettingsMenu: some View {
+    @ViewBuilder
+    private var guideSettingsControl: some View {
+        #if os(tvOS)
+        Button {
+            showGuideSettings = true
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(SportsColors.gold)
+        }
+        .buttonStyle(.card)
+        .accessibilityLabel("Guide settings")
+        #else
         Menu {
-            Button {
-                Task { await appModel.reloadEpg(force: true) }
-            } label: {
-                Label(
-                    appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
-                    systemImage: "arrow.clockwise"
-                )
-            }
-            .disabled(appModel.isLoadingEpg)
-
-            Divider()
-
-            Section("Layout") {
-                ForEach(GuideLayoutMode.allCases) { mode in
-                    Button {
-                        var p = appModel.playerPrefs
-                        p.guideLayout = mode
-                        appModel.setPlayerPrefs(p)
-                    } label: {
-                        if displayMode == mode {
-                            Label(mode.label, systemImage: "checkmark")
-                        } else {
-                            Label(
-                                mode.label,
-                                systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
-                            )
-                        }
-                    }
-                }
-            }
+            guideSettingsButtons
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.body.weight(.semibold))
@@ -168,10 +155,99 @@ struct GuideView: View {
                 .frame(width: 32, height: 32)
                 .sportsGlass(in: Circle())
         }
-        #if os(iOS)
         .menuOrder(.fixed)
-        #endif
         .accessibilityLabel("Guide settings")
+        #endif
+    }
+
+    @ViewBuilder
+    private var guideSettingsButtons: some View {
+        Button {
+            Task { await appModel.reloadEpg(force: true) }
+        } label: {
+            Label(
+                appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                systemImage: "arrow.clockwise"
+            )
+        }
+        .disabled(appModel.isLoadingEpg)
+
+        Divider()
+
+        Section("Layout") {
+            ForEach(GuideLayoutMode.allCases) { mode in
+                Button {
+                    var p = appModel.playerPrefs
+                    p.guideLayout = mode
+                    appModel.setPlayerPrefs(p)
+                } label: {
+                    if displayMode == mode {
+                        Label(mode.label, systemImage: "checkmark")
+                    } else {
+                        Label(
+                            mode.label,
+                            systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var guideSettingsSheet: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        Task { await appModel.reloadEpg(force: true) }
+                    } label: {
+                        Label(
+                            appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                            systemImage: "arrow.clockwise"
+                        )
+                    }
+                    .disabled(appModel.isLoadingEpg)
+                }
+
+                Section("Layout") {
+                    ForEach(GuideLayoutMode.allCases) { mode in
+                        Button {
+                            var p = appModel.playerPrefs
+                            p.guideLayout = mode
+                            appModel.setPlayerPrefs(p)
+                            showGuideSettings = false
+                        } label: {
+                            HStack {
+                                Label(
+                                    mode.label,
+                                    systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
+                                )
+                                Spacer()
+                                if displayMode == mode {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(SportsColors.gold)
+                                }
+                            }
+                        }
+                    }
+                } footer: {
+                    Text(displayMode == .list
+                         ? "Timeline grid: channel rows × time."
+                         : "Card grid: Now / Next per channel.")
+                }
+            }
+            .navigationTitle("Guide settings")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { showGuideSettings = false }
+                }
+            }
+        }
+    }
+
+    // legacy name used by toolbar
+    private var guideSettingsMenu: some View {
+        guideSettingsControl
     }
 
     @ViewBuilder
