@@ -80,7 +80,7 @@ struct PlayerSettingsView: View {
                     } label: {
                         Image(systemName: "minus")
                             .frame(width: 36, height: 36)
-                            .background(Color(.tertiarySystemFill), in: Circle())
+                            .background(SportsColors.border.opacity(0.55), in: Circle())
                     }
                     .buttonStyle(.plain)
 
@@ -96,7 +96,7 @@ struct PlayerSettingsView: View {
                     } label: {
                         Image(systemName: "plus")
                             .frame(width: 36, height: 36)
-                            .background(Color(.tertiarySystemFill), in: Circle())
+                            .background(SportsColors.border.opacity(0.55), in: Circle())
                     }
                     .buttonStyle(.plain)
                 }
