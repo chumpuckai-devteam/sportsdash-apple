@@ -209,7 +209,7 @@ struct GuideView: View {
                     .disabled(appModel.isLoadingEpg)
                 }
 
-                Section("Layout") {
+                Section {
                     ForEach(GuideLayoutMode.allCases) { mode in
                         Button {
                             var p = appModel.playerPrefs
@@ -230,10 +230,14 @@ struct GuideView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Layout")
                 } footer: {
-                    Text(displayMode == .list
-                         ? "Timeline grid: channel rows × time."
-                         : "Card grid: Now / Next per channel.")
+                    Text(
+                        displayMode == .list
+                            ? "Timeline grid: channel rows × time."
+                            : "Card grid: Now / Next per channel."
+                    )
                 }
             }
             .navigationTitle("Guide settings")
