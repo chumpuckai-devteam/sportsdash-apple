@@ -23,6 +23,7 @@ struct GuideView: View {
     @State private var sideWorkTask: Task<Void, Never>?
     @State private var ratingsTask: Task<Void, Never>?
     @State private var showGuideSettings = false
+    @State private var showCategoryPicker = false
 
     private var displayMode: GuideLayoutMode {
         appModel.playerPrefs.guideLayout
@@ -63,11 +64,19 @@ struct GuideView: View {
                         description: Text("Configure Xtream or M3U in Settings to show the guide.")
                     )
                 } else if activeChannels.isEmpty {
-                    ContentUnavailableView(
-                        "No channels in this category",
-                        systemImage: "tv",
-                        description: Text("Pick another category from the menu.")
-                    )
+                    VStack(spacing: 24) {
+                        ContentUnavailableView(
+                            "No channels in this category",
+                            systemImage: "tv",
+                            description: Text("Pick another category.")
+                        )
+                        #if os(tvOS)
+                        if !groupNames.isEmpty {
+                            Button("Choose category") { showCategoryPicker = true }
+                                .buttonStyle(.card)
+                        }
+                        #endif
+                    }
                 } else {
                     guideContent
                 }
@@ -78,11 +87,19 @@ struct GuideView: View {
             .toolbar {
                 ToolbarItem(placement: SportsToolbarPlacement.leading) {
                     if !groupNames.isEmpty {
+                        #if os(tvOS)
+                        // Toolbar only labels current group; real picker is in-content (focusable).
+                        Text(selectedGroup.isEmpty ? "Category" : selectedGroup)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(SportsColors.gold)
+                            .lineLimit(1)
+                        #else
                         SportsCategoryMenu(
                             title: selectedGroup,
                             selection: $selectedGroup,
                             options: groupNames
                         )
+                        #endif
                     }
                 }
                 ToolbarItem(placement: SportsToolbarPlacement.trailing) {
@@ -130,6 +147,15 @@ struct GuideView: View {
             .sheet(isPresented: $showGuideSettings) {
                 guideSettingsSheet
             }
+            #if os(tvOS)
+            .fullScreenCover(isPresented: $showCategoryPicker) {
+                SportsCategoryPickerScreen(
+                    selection: $selectedGroup,
+                    options: groupNames,
+                    onDone: { showCategoryPicker = false }
+                )
+            }
+            #endif
         }
     }
 
@@ -257,6 +283,43 @@ struct GuideView: View {
     @ViewBuilder
     private var guideContent: some View {
         VStack(spacing: 0) {
+            #if os(tvOS)
+            // Large in-content control — toolbar sheets don't take focus reliably.
+            if !groupNames.isEmpty {
+                Button {
+                    showCategoryPicker = true
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            .font(.title2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Category")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(SportsColors.muted)
+                            Text(selectedGroup.isEmpty ? "Select group" : selectedGroup)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(SportsColors.text)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Text("\(activeChannels.count)")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(SportsColors.muted)
+                        Image(systemName: "chevron.right")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(SportsColors.gold)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.card)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .focusSection()
+            }
+            #endif
+
             if appModel.isLoadingEpg {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small).tint(SportsColors.gold)
