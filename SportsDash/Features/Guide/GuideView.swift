@@ -729,18 +729,16 @@ private struct GuideTimelineRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
         #if os(tvOS)
-        label
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            // Not a Button — avoids UIKit/SwiftUI default focus material (white).
-            .focusable(true) {
-                onPlay(row.channel)
-            }
-            .focused($channelFocused)
-            .focusEffectDisabled(true)
-            .hoverEffectDisabled()
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-            .accessibilityHint("Plays channel")
+        Button {
+            onPlay(row.channel)
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        .focused($channelFocused)
+        .focusEffectDisabled(true)
+        .accessibilityLabel(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
+        .accessibilityHint("Plays channel")
         #else
         Button {
             onPlay(row.channel)
