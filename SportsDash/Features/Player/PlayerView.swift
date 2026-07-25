@@ -85,8 +85,10 @@ struct PlayerView: View {
             }
             .allowsHitTesting(showChrome || showScoresStrip)
         }
+        #if os(iOS)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
+        #endif
         .onAppear {
             playback.configure(prefs: appModel.playerPrefs)
             applyAspect()

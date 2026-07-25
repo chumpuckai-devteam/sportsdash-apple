@@ -369,7 +369,7 @@ private struct GuideCardRow: View {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color(.tertiarySystemFill))
+                            .fill(SportsColors.border.opacity(0.45))
                         Capsule()
                             .fill(SportsColors.live.opacity(0.85))
                             .frame(width: geo.size.width * progress)
