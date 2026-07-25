@@ -87,7 +87,9 @@ struct SportsCategoryPickerScreen: View {
                             }
                             .buttonStyle(.plain)
                             .listRowBackground(rowBackground(selected: name == selection))
+                            #if os(iOS)
                             .listRowSeparatorTint(SportsColors.border.opacity(0.5))
+                            #endif
                         }
                     } header: {
                         Text("\(options.count) groups")
