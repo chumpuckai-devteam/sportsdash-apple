@@ -14,9 +14,11 @@ struct SportsCategoryMenu: View {
         Button {
             onOpen?()
         } label: {
-            categoryLabel
+            SportsTVFocused { focused in
+                categoryLabel(focused: focused)
+            }
         }
-        .buttonStyle(.card)
+        .sportsTVFocusClean()
         #else
         Menu {
             Picker("Category", selection: $selection) {
@@ -25,13 +27,13 @@ struct SportsCategoryMenu: View {
                 }
             }
         } label: {
-            categoryLabel
+            categoryLabel(focused: false)
         }
         .menuOrder(.fixed)
         #endif
     }
 
-    private var categoryLabel: some View {
+    private func categoryLabel(focused: Bool) -> some View {
         HStack(spacing: 5) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.body.weight(.semibold))
@@ -41,10 +43,23 @@ struct SportsCategoryMenu: View {
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2.weight(.bold))
         }
-        .foregroundStyle(SportsColors.gold)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        #if os(iOS)
+        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        #if os(tvOS)
+        .frame(minHeight: SportsTVMetrics.minFocusSize)
+        .background {
+            Capsule(style: .continuous)
+                .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+        }
+        .overlay {
+            Capsule(style: .continuous)
+                .stroke(focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4), lineWidth: focused ? 2 : 1)
+        }
+        .clipShape(Capsule(style: .continuous))
+        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        #else
         .sportsGlass(in: Capsule(style: .continuous))
         #endif
     }
@@ -59,7 +74,6 @@ struct SportsCategoryPickerScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Solid base — fullScreenCover on tvOS can otherwise look translucent
                 SportsColors.voidBlack
                     .ignoresSafeArea()
 
@@ -70,24 +84,20 @@ struct SportsCategoryPickerScreen: View {
                                 selection = name
                                 onDone()
                             } label: {
-                                HStack(spacing: 20) {
-                                    Text(name)
-                                        .font(.body.weight(.semibold))
-                                        .foregroundStyle(SportsColors.text)
-                                        .multilineTextAlignment(.leading)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    if name == selection {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(SportsColors.gold)
-                                            .imageScale(.large)
-                                    }
+                                #if os(tvOS)
+                                SportsTVFocused { focused in
+                                    categoryRow(name: name, focused: focused)
                                 }
-                                .padding(.vertical, 12)
-                                .contentShape(Rectangle())
+                                #else
+                                categoryRow(name: name, focused: false)
+                                #endif
                             }
+                            #if os(tvOS)
+                            .sportsTVFocusClean()
+                            .listRowBackground(Color.clear)
+                            #else
                             .buttonStyle(.plain)
                             .listRowBackground(rowBackground(selected: name == selection))
-                            #if os(iOS)
                             .listRowSeparatorTint(SportsColors.border.opacity(0.5))
                             #endif
                         }
@@ -107,10 +117,49 @@ struct SportsCategoryPickerScreen: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", action: onDone)
+                        #if os(tvOS)
+                        .sportsTVFocusClean()
+                        #endif
                 }
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func categoryRow(name: String, focused: Bool) -> some View {
+        let selected = name == selection
+        return HStack(spacing: 20) {
+            Text(name)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if selected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                    .imageScale(.large)
+            }
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .frame(minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
+        .contentShape(Rectangle())
+        #if os(tvOS)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(focused ? SportsColors.gold : (selected ? SportsColors.panelElevated : SportsColors.panel))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    focused ? SportsColors.goldDim : (selected ? SportsColors.gold.opacity(0.45) : SportsColors.border.opacity(0.35)),
+                    lineWidth: focused || selected ? 2 : 1
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        #endif
     }
 
     private func rowBackground(selected: Bool) -> some View {

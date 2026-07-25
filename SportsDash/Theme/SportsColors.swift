@@ -34,50 +34,43 @@ enum SportsMetrics {
     static let gridGutter: CGFloat = 12
 }
 
+/// tvOS focus geometry (HIG ~66pt preferred control size; scale needs margin).
+/// https://developer.apple.com/design/human-interface-guidelines/focus-and-selection
+enum SportsTVMetrics {
+    static let minFocusSize: CGFloat = 66
+    static let channelRowHeight: CGFloat = 88
+    static let scoreRowMinHeight: CGFloat = 120
+    static let focusScale: CGFloat = 1.045
+    static let chipFocusScale: CGFloat = 1.06
+    static let scoreCardMaxWidth: CGFloat = 960
+    static let scoreHorizontalInset: CGFloat = 56
+    static let focusCorner: CGFloat = 18
+    static let channelCorner: CGFloat = 14
+    static let rowVerticalGutter: CGFloat = 10
+}
+
 // MARK: - Glass / material helpers
-//
-// Liquid Glass symbols (`glassEffect`, `ButtonStyle.glass`) ship with the **iOS 26 SDK**
-// (Xcode 26+ / Swift 6.2+). `#available(iOS 26.0, *)` is runtime-only — the type checker
-// still needs the symbols in the active SDK. Gate the glass branches at **compile time**
-// so Xcode 16.4 / iOS 18.5 SDK builds keep the material fallback path.
-// Docs: https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
 
 extension View {
-    /// Material + hairline control chrome when Liquid Glass SDK/OS is unavailable.
-    @ViewBuilder
-    fileprivate func sportsGlassMaterialFallback(in shape: some Shape) -> some View {
-        self
-            .background(.ultraThinMaterial, in: shape)
-            .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
-    }
-
-    /// Navigation-layer glass: Liquid Glass on iOS 26+ (capable SDK), material fallback earlier.
-    /// Use on floating controls, filter chips, toolbars — not full content backgrounds.
     @ViewBuilder
     func sportsGlass(
         in shape: some Shape = RoundedRectangle(cornerRadius: SportsMetrics.cardRadius, style: .continuous)
     ) -> some View {
-        // Liquid Glass control layer is iOS-first; tvOS uses standard materials.
         #if os(iOS)
-        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             self.glassEffect(in: shape)
         } else {
-            self.sportsGlassMaterialFallback(in: shape)
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
         }
         #else
-        // Pre–iOS 26 SDK (e.g. Xcode 16.4): symbols absent — material only.
-        self.sportsGlassMaterialFallback(in: shape)
-        #endif
-        #else
-        self.sportsGlassMaterialFallback(in: shape)
+        self
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
         #endif
     }
 
-    /// Content-layer card — **standard materials**, not Liquid Glass.
-    /// HIG: Liquid Glass is for floating chrome (tabs/toolbars); content uses materials
-    /// for separation without a heavy “boarder” look.
-    /// https://developer.apple.com/design/human-interface-guidelines/materials
     func sportsContentCard(
         radius: CGFloat = SportsMetrics.cardRadius,
         emphasized: Bool = false
@@ -88,7 +81,6 @@ extension View {
                 shape
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        // Slight brand lift so dark sports UI stays on-theme
                         shape.fill(
                             LinearGradient(
                                 colors: [
@@ -116,16 +108,13 @@ extension View {
             )
     }
 
-    /// Screen root background (void) — never glass-fill the whole canvas.
     func sportsScreenBackground() -> some View {
         self.background(SportsColors.voidBlack.ignoresSafeArea())
     }
 
-    /// Toolbar / menu control styling with glass when available.
     @ViewBuilder
     func sportsToolbarControl() -> some View {
         #if os(iOS)
-        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             self.buttonStyle(.glass)
         } else {
@@ -134,12 +123,11 @@ extension View {
         #else
         self
         #endif
-        #else
-        self
-        #endif
     }
 
-    /// tvOS: kill system white focus plume; keep only our gold chrome.
+    /// tvOS S-TV.1: kill system white lift/hover. Pair with `SportsTVFocused` label chrome.
+    /// Never mix with `.buttonStyle(.card)`.
+    /// https://developer.apple.com/documentation/swiftui/view/focuseffectdisabled(_:)
     @ViewBuilder
     func sportsTVFocusClean() -> some View {
         #if os(tvOS)
@@ -152,9 +140,27 @@ extension View {
     }
 }
 
+// MARK: - tvOS custom focus (canonical — S-TV.1)
+// One system: Button focusable+activatable; system hover disabled; gold from isFocused.
+// Focus ≠ selection (HIG).
+
+struct SportsTVFocused<Content: View>: View {
+    @Environment(\.isFocused) private var isFocused
+    @ViewBuilder var content: (_ focused: Bool) -> Content
+
+    var body: some View {
+        content(isFocused)
+    }
+}
+
+#if os(tvOS)
+enum SportsTVFocusMotion {
+    static let animation: Animation = .easeOut(duration: 0.14)
+}
+#endif
+
 // MARK: - Reusable chrome
 
-/// Capsule filter / status chip (Scores All·Live·…, etc.).
 struct SportsFilterChip: View {
     let title: String
     var count: Int? = nil
@@ -164,39 +170,12 @@ struct SportsFilterChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                if let count, count > 0 {
-                    Text("\(count)")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(selected ? SportsColors.voidBlack.opacity(0.75) : countTint)
-                }
-            }
-            .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            #if os(iOS)
-            .background {
-                if selected {
-                    Capsule(style: .continuous).fill(SportsColors.gold.gradient)
-                } else {
-                    Capsule(style: .continuous)
-                        .fill(.clear)
-                        .sportsGlass(in: Capsule(style: .continuous))
-                }
+            #if os(tvOS)
+            SportsTVFocused { focused in
+                chipLabel(focused: focused)
             }
             #else
-            // tvOS: let .card focus ring own the chrome; selected = gold fill
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background {
-                if selected {
-                    Capsule(style: .continuous).fill(SportsColors.gold)
-                } else {
-                    Capsule(style: .continuous).fill(SportsColors.panelElevated)
-                }
-            }
+            chipLabel(focused: false)
             #endif
         }
         #if os(tvOS)
@@ -206,9 +185,56 @@ struct SportsFilterChip: View {
         #endif
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
+
+    @ViewBuilder
+    private func chipLabel(focused: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            if let count, count > 0 {
+                Text("\(count)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(selected ? SportsColors.voidBlack.opacity(0.75) : countTint)
+            }
+        }
+        .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        #if os(iOS)
+        .background {
+            if selected {
+                Capsule(style: .continuous).fill(SportsColors.gold.gradient)
+            } else {
+                Capsule(style: .continuous)
+                    .fill(.clear)
+                    .sportsGlass(in: Capsule(style: .continuous))
+            }
+        }
+        #else
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minHeight: SportsTVMetrics.minFocusSize)
+        .background {
+            Capsule(style: .continuous)
+                .fill(selected ? SportsColors.gold : SportsColors.panelElevated)
+        }
+        .overlay {
+            Capsule(style: .continuous)
+                .stroke(
+                    focused
+                        ? (selected ? SportsColors.voidBlack.opacity(0.55) : SportsColors.gold)
+                        : Color.clear,
+                    lineWidth: focused ? 3 : 0
+                )
+        }
+        .clipShape(Capsule(style: .continuous))
+        .shadow(color: focused ? SportsColors.gold.opacity(0.35) : .clear, radius: 10, y: 0)
+        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        #endif
+    }
 }
 
-/// Small LIVE pill.
 struct SportsLiveBadge: View {
     var body: some View {
         Text("LIVE")
@@ -222,7 +248,6 @@ struct SportsLiveBadge: View {
     }
 }
 
-/// Gold CTA chip (WATCH).
 struct SportsWatchBadge: View {
     var title: String = "WATCH"
 
@@ -236,7 +261,6 @@ struct SportsWatchBadge: View {
     }
 }
 
-/// Section header used on Scores / lists.
 struct SportsSectionHeader: View {
     let title: String
     var subtitle: String? = nil

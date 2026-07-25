@@ -7,8 +7,8 @@ private enum GuideMetrics {
     static let hours = 12
     static let pxPerHour: CGFloat = 140
     #if os(tvOS)
-    static let channelColWidth: CGFloat = 200
-    static let rowHeight: CGFloat = 88
+    static let channelColWidth: CGFloat = 220
+    static let rowHeight: CGFloat = SportsTVMetrics.channelRowHeight
     #else
     static let channelColWidth: CGFloat = 120
     static let rowHeight: CGFloat = 78
@@ -92,7 +92,7 @@ struct GuideView: View {
                         #if os(tvOS)
                         if !groupNames.isEmpty {
                             Button("Choose category") { showCategoryPicker = true }
-                                .buttonStyle(.card)
+                                .sportsTVFocusClean()
                         }
                         #endif
                     }
@@ -185,11 +185,25 @@ struct GuideView: View {
         Button {
             showGuideSettings = true
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(SportsColors.gold)
+            SportsTVFocused { focused in
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                    .frame(width: SportsTVMetrics.minFocusSize, height: SportsTVMetrics.minFocusSize)
+                    .background {
+                        Circle().fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+                    }
+                    .overlay {
+                        Circle().stroke(
+                            focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
+                            lineWidth: focused ? 2 : 1
+                        )
+                    }
+                    .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                    .animation(SportsTVFocusMotion.animation, value: focused)
+            }
         }
-        .buttonStyle(.card)
+        .sportsTVFocusClean()
         .accessibilityLabel("Guide settings")
         #else
         Menu {
@@ -327,37 +341,56 @@ struct GuideView: View {
         VStack(spacing: 0) {
             #if os(tvOS)
             // Large in-content control — toolbar sheets don't take focus reliably.
+            // Custom gold focus (no .card white lift). focusSection separates from channel list.
             if !groupNames.isEmpty {
                 Button {
                     showCategoryPicker = true
                 } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                            .font(.title2)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Category")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(SportsColors.muted)
-                            Text(selectedGroup.isEmpty ? "Select group" : selectedGroup)
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(SportsColors.text)
-                                .lineLimit(1)
+                    SportsTVFocused { focused in
+                        HStack(spacing: 14) {
+                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Category")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
+                                Text(selectedGroup.isEmpty ? "Select group" : selectedGroup)
+                                    .font(.title3.weight(.bold))
+                                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Text("\(activeChannels.count)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
+                            Image(systemName: "chevron.right")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
                         }
-                        Spacer()
-                        Text("\(activeChannels.count)")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(SportsColors.muted)
-                        Image(systemName: "chevron.right")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(SportsColors.gold)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 18)
+                        .frame(maxWidth: .infinity, minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
+                        .background {
+                            RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous)
+                                .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous)
+                                .stroke(
+                                    focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
+                                    lineWidth: focused ? 2 : 1
+                                )
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous))
+                        .shadow(color: focused ? SportsColors.gold.opacity(0.28) : .clear, radius: 12, y: 0)
+                        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+                        .animation(SportsTVFocusMotion.animation, value: focused)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.card)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .sportsTVFocusClean()
+                .padding(.horizontal, 28)
+                .padding(.vertical, 14)
                 .focusSection()
             }
             #endif
@@ -512,19 +545,19 @@ private struct GuideCardRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button(action: onPlay) {
-                HStack {
-                    Text(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(SportsColors.text)
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "play.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(SportsColors.gold)
-                        .symbolRenderingMode(.hierarchical)
+                #if os(tvOS)
+                SportsTVFocused { focused in
+                    cardTitleRow(focused: focused)
                 }
+                #else
+                cardTitleRow(focused: false)
+                #endif
             }
+            #if os(tvOS)
+            .sportsTVFocusClean()
+            #else
             .buttonStyle(.plain)
+            #endif
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -593,6 +626,37 @@ private struct GuideCardRow: View {
         }
         .padding(.vertical, 2)
     }
+
+    private func cardTitleRow(focused: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return HStack {
+            Text(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                .lineLimit(1)
+            Spacer()
+            Image(systemName: "play.circle.fill")
+                .font(.title3)
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                .symbolRenderingMode(.hierarchical)
+        }
+        .padding(.horizontal, focused ? 12 : 0)
+        .padding(.vertical, focused ? 10 : 0)
+        #if os(tvOS)
+        .frame(minHeight: SportsTVMetrics.minFocusSize)
+        .background {
+            shape.fill(focused ? SportsColors.gold : Color.clear)
+        }
+        .overlay {
+            if focused {
+                shape.stroke(SportsColors.goldDim, lineWidth: 2)
+            }
+        }
+        .clipShape(shape)
+        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        #endif
+    }
 }
 
 // MARK: - Row model
@@ -613,6 +677,9 @@ private struct GuideTimelineGrid: View {
     let onPlay: (IptvChannel) -> Void
 
     @StateObject private var scrollSync = GuideScrollSync()
+    #if os(tvOS)
+    @Namespace private var guideFocusNS
+    #endif
 
     private var windowEnd: Date {
         Calendar.current.date(byAdding: .hour, value: GuideMetrics.hours, to: windowStart) ?? windowStart
@@ -631,7 +698,7 @@ private struct GuideTimelineGrid: View {
             // Lazy rows: only visible channels mount program views.
             ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 0) {
-                    ForEach(rows) { row in
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         GuideTimelineRow(
                             row: row,
                             windowStart: windowStart,
@@ -639,13 +706,24 @@ private struct GuideTimelineGrid: View {
                             now: now,
                             cleanUpNames: cleanUpNames,
                             scrollSync: scrollSync,
-                            onPlay: onPlay
+                            onPlay: onPlay,
+                            prefersDefault: index == 0
+                            #if os(tvOS)
+                            , focusNamespace: guideFocusNS
+                            #endif
                         )
                     }
                 }
+                #if os(tvOS)
+                .focusSection()
+                .padding(.leading, 8)
+                #endif
             }
         }
         .background(SportsColors.voidBlack)
+        #if os(tvOS)
+        .focusScope(guideFocusNS)
+        #endif
         // No auto jump / snap — user freely scrolls horizontally.
     }
 
@@ -695,8 +773,11 @@ private struct GuideTimelineRow: View {
     let cleanUpNames: Bool
     @ObservedObject var scrollSync: GuideScrollSync
     let onPlay: (IptvChannel) -> Void
-
-    @FocusState private var channelFocused: Bool
+    /// First visible row prefers default focus when the guide appears.
+    var prefersDefault: Bool = false
+    #if os(tvOS)
+    var focusNamespace: Namespace.ID? = nil
+    #endif
 
     var body: some View {
         HStack(spacing: 0) {
@@ -727,7 +808,11 @@ private struct GuideTimelineRow: View {
             .zIndex(0)
         }
         .frame(height: GuideMetrics.rowHeight)
+        #if os(tvOS)
+        .padding(.vertical, SportsTVMetrics.rowVerticalGutter)
+        #else
         .padding(.vertical, 4)
+        #endif
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SportsColors.border.opacity(0.35))
@@ -736,58 +821,65 @@ private struct GuideTimelineRow: View {
     }
 
     /// Channel label — gold fill when focused; no system white focus plume.
+    /// S-TV.1: `SportsTVFocused` + `sportsTVFocusClean()` only (no `@FocusState` / `.card`).
     @ViewBuilder
     private var channelNameCell: some View {
-        let label = HStack(spacing: 10) {
+        Button {
+            onPlay(row.channel)
+        } label: {
+            #if os(tvOS)
+            SportsTVFocused { focused in
+                channelLabel(focused: focused)
+            }
+            #else
+            channelLabel(focused: false)
+            #endif
+        }
+        #if os(tvOS)
+        .sportsTVFocusClean()
+        .modifier(GuideDefaultFocusModifier(enabled: prefersDefault, namespace: focusNamespace))
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .accessibilityLabel(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
+        .accessibilityHint("Plays channel")
+    }
+
+    @ViewBuilder
+    private func channelLabel(focused: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: SportsTVMetrics.channelCorner, style: .continuous)
+        HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(channelFocused ? SportsColors.voidBlack.opacity(0.22) : SportsColors.voidBlack)
-                .frame(width: 36, height: 36)
+                .fill(focused ? SportsColors.voidBlack.opacity(0.22) : SportsColors.voidBlack)
+                .frame(width: 40, height: 40)
                 .overlay {
                     Image(systemName: "tv.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.gold)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
                 }
 
             Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.text)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(channelFocused ? SportsColors.gold : SportsColors.panelElevated)
+            shape.fill(focused ? SportsColors.gold : SportsColors.panelElevated)
         }
         .overlay {
-            // Subtle gold ring only when focused — never white
-            if channelFocused {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(SportsColors.goldDim, lineWidth: 2)
+            if focused {
+                shape.stroke(SportsColors.goldDim, lineWidth: 2)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
+        .clipShape(shape)
+        .shadow(color: focused ? SportsColors.gold.opacity(0.32) : .clear, radius: 10, y: 0)
         #if os(tvOS)
-        Button {
-            onPlay(row.channel)
-        } label: {
-            label
-        }
-        .buttonStyle(.plain)
-        .focused($channelFocused)
-        .focusEffectDisabled(true)
-        .accessibilityLabel(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-        .accessibilityHint("Plays channel")
-        #else
-        Button {
-            onPlay(row.channel)
-        } label: {
-            label
-        }
-        .buttonStyle(.plain)
+        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
         #endif
     }
 
@@ -902,6 +994,23 @@ private struct GuideCategoryChip: View {
             .accessibilityLabel("Category \(label)")
     }
 }
+
+#if os(tvOS)
+/// Applies `prefersDefaultFocus` when a namespace is provided (Guide first channel).
+private struct GuideDefaultFocusModifier: ViewModifier {
+    let enabled: Bool
+    let namespace: Namespace.ID?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled, let namespace {
+            content.prefersDefaultFocus(true, in: namespace)
+        } else {
+            content
+        }
+    }
+}
+#endif
 
 // MARK: - Linked horizontal scroll (header ↔ many lazy body rows)
 

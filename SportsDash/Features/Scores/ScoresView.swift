@@ -143,41 +143,78 @@ struct ScoresView: View {
         return Button {
             toggleSport(section.sportKey)
         } label: {
-            HStack(spacing: 10) {
-                Text(section.emoji)
-                    .font(.title3)
-                Text(section.sportTitle)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(SportsColors.text)
-                Spacer(minLength: 8)
-                if liveCount > 0 {
-                    Text("\(liveCount) Live")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(SportsColors.live)
-                }
-                Text("\(gameCount)")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SportsColors.muted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(SportsColors.panel.opacity(0.9))
-                    .clipShape(Capsule())
-                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SportsColors.muted)
-                    .frame(width: 16)
+            #if os(tvOS)
+            SportsTVFocused { focused in
+                sportHeaderLabel(section, collapsed: collapsed, liveCount: liveCount, gameCount: gameCount, focused: focused)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
+            #else
+            sportHeaderLabel(section, collapsed: collapsed, liveCount: liveCount, gameCount: gameCount, focused: false)
+            #endif
         }
+        #if os(tvOS)
+        .sportsTVFocusClean()
+        #else
         .buttonStyle(.plain)
+        #endif
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel("\(section.sportTitle), \(gameCount) games")
         .accessibilityHint(collapsed ? "Expand sport" : "Collapse sport")
         #if os(tvOS)
         .focusSection()
         #endif
+    }
+
+    private func sportHeaderLabel(
+        _ section: SportScoreSection,
+        collapsed: Bool,
+        liveCount: Int,
+        gameCount: Int,
+        focused: Bool
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(section.emoji)
+                .font(.title3)
+            Text(section.sportTitle)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+            Spacer(minLength: 8)
+            if liveCount > 0 {
+                Text("\(liveCount) Live")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.75) : SportsColors.live)
+            }
+            Text("\(gameCount)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background((focused ? SportsColors.voidBlack.opacity(0.12) : SportsColors.panel.opacity(0.9)))
+                .clipShape(Capsule())
+            Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
+                .frame(width: 16)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        #if os(tvOS)
+        .frame(minHeight: SportsTVMetrics.minFocusSize)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(focused ? SportsColors.gold : Color.clear)
+        }
+        .overlay {
+            if focused {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(SportsColors.goldDim, lineWidth: 2)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset - 16)
+        #endif
+        .contentShape(Rectangle())
     }
 
     private func toggleSport(_ key: String) {
@@ -286,10 +323,11 @@ struct ScoresView: View {
                 }
             }
             #if os(tvOS)
-            // Inset + max width so focus scale doesn't clip at screen edges
-            .frame(maxWidth: 980)
+            // Inset + max width so focus scale doesn't clip at screen edges (HIG scale margin).
+            .frame(maxWidth: SportsTVMetrics.scoreCardMaxWidth)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 48)
+            .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
+            .focusSection()
             #else
             .sportsSoftSurface(radius: 22)
             .padding(.horizontal, 12)

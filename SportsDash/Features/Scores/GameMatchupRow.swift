@@ -165,6 +165,14 @@ struct GameMatchupRow: View {
     @ViewBuilder
     private var favoriteStar: some View {
         if let onFavorite {
+            #if os(tvOS)
+            // Indicator only — nested Button inside row Button traps focus on Apple TV.
+            Image(systemName: isFavorite ? "star.fill" : "star")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(isFavorite ? SportsColors.gold : SportsColors.muted.opacity(0.65))
+                .frame(width: 26, height: 44)
+                .accessibilityHidden(true)
+            #else
             Button(action: onFavorite) {
                 Image(systemName: isFavorite ? "star.fill" : "star")
                     .font(.body.weight(.semibold))
@@ -172,6 +180,7 @@ struct GameMatchupRow: View {
                     .frame(width: 26, height: 44)
             }
             .buttonStyle(.plain)
+            #endif
         } else {
             Color.clear.frame(width: 4, height: 44)
         }
@@ -201,48 +210,65 @@ struct GameMatchupRow: View {
 // MARK: - Focusable score row (tvOS-safe — no white .card plume)
 
 /// Wraps `GameMatchupRow` with custom gold focus; avoids system .card scale that clips at edges.
+/// Canonical S-TV.1: `@Environment(\.isFocused)` chrome + `sportsTVFocusClean()` — no hybrid lift.
 struct GameScoreFocusRow: View {
     let game: Game
     var isFavorite: Bool = false
     var onSelect: () -> Void
     var onFavorite: (() -> Void)?
 
-    @FocusState private var focused: Bool
-
     var body: some View {
         Button(action: onSelect) {
-            GameMatchupRow(
-                game: game,
-                isFavorite: isFavorite,
-                onFavorite: onFavorite
-            )
             #if os(tvOS)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .frame(minHeight: 118)
+            SportsTVFocused { focused in
+                scoreLabel(focused: focused)
+            }
+            #else
+            scoreLabel(focused: false)
             #endif
-            .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(focused ? SportsColors.panelElevated : SportsColors.panel.opacity(0.92))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(
-                        focused ? SportsColors.gold : SportsColors.border.opacity(0.35),
-                        lineWidth: focused ? 3 : 1
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: focused ? SportsColors.gold.opacity(0.28) : .clear, radius: 12, y: 0)
         }
         #if os(tvOS)
         .sportsTVFocusClean()
-        .focused($focused)
         #else
         .buttonStyle(.plain)
         #endif
         .compositingGroup()
         .accessibilityHint("Opens game details and streams")
+    }
+
+    @ViewBuilder
+    private func scoreLabel(focused: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous)
+        #if os(tvOS)
+        let favAction: (() -> Void)? = nil
+        #else
+        let favAction = onFavorite
+        #endif
+        GameMatchupRow(
+            game: game,
+            isFavorite: isFavorite,
+            onFavorite: favAction
+        )
+        #if os(tvOS)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 12)
+        .frame(minHeight: SportsTVMetrics.scoreRowMinHeight)
+        #endif
+        .background {
+            shape.fill(focused ? SportsColors.panelElevated : SportsColors.panel.opacity(0.92))
+        }
+        .overlay {
+            shape.stroke(
+                focused ? SportsColors.gold : SportsColors.border.opacity(0.35),
+                lineWidth: focused ? 3 : 1
+            )
+        }
+        .clipShape(shape)
+        .shadow(color: focused ? SportsColors.gold.opacity(0.30) : .clear, radius: 14, y: 0)
+        #if os(tvOS)
+        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        #endif
     }
 }
 
