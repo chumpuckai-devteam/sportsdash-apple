@@ -119,7 +119,11 @@ actor SportsAPI {
                     name: (team["displayName"] as? String) ?? (team["name"] as? String) ?? "Team",
                     abbreviation: (team["abbreviation"] as? String) ?? "TBD",
                     score: Int(c["score"] as? String ?? "") ?? (c["score"] as? Int),
-                    logoURL: team["logo"] as? String
+                    logoURL: team["logo"] as? String,
+                    colorHex: team["color"] as? String,
+                    alternateColorHex: team["alternateColor"] as? String,
+                    shortName: (team["shortDisplayName"] as? String)
+                        ?? (team["name"] as? String)
                 )
                 if (c["homeAway"] as? String) == "home" {
                     home = info

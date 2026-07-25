@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Game detail — sheet slides up with team-tint hero + stream list.
-/// Layout cues inspired by modern sports apps; SportsDash-specific actions (IPTV WATCH).
+/// Game detail — sheet slides up with LTR team-split hero + stream list.
 struct GameDetailSheet: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -24,8 +23,8 @@ struct GameDetailSheet: View {
                 VStack(spacing: 0) {
                     hero
                     streamSection
-                        .padding(.top, 8)
-                        .padding(.bottom, 28)
+                        .padding(.top, 12)
+                        .padding(.bottom, 32)
                 }
             }
             .background(SportsColors.voidBlack.ignoresSafeArea())
@@ -34,7 +33,7 @@ struct GameDetailSheet: View {
                 ToolbarItem(placement: .principal) {
                     Text(game.league.label)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(SportsColors.textSecondary)
+                        .foregroundStyle(SportsColors.text.opacity(0.9))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: {
@@ -59,16 +58,26 @@ struct GameDetailSheet: View {
         }
     }
 
-    // MARK: Hero
+    // MARK: Hero — LTR split (away left / home right)
 
     private var hero: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             if game.usesMatchupLayout {
-                HStack(alignment: .top, spacing: 8) {
-                    heroSide(team: game.away, score: game.away.displayScore)
-                    VStack(spacing: 8) {
+                // Scores row
+                HStack(alignment: .center, spacing: 12) {
+                    Text(game.away.displayScore)
+                        .font(.system(size: 56, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(SportsColors.text)
+                        .frame(maxWidth: .infinity)
+
+                    VStack(spacing: 6) {
                         if game.isLive {
-                            SportsLiveBadge()
+                            Text("LIVE")
+                                .font(.caption2.weight(.black))
+                                .foregroundStyle(SportsColors.live)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(SportsColors.live.opacity(0.18), in: Capsule())
                         }
                         Text(game.statusLine)
                             .font(.subheadline.weight(.bold))
@@ -77,13 +86,26 @@ struct GameDetailSheet: View {
                         if !game.broadcasts.isEmpty {
                             Text(game.broadcasts.prefix(2).joined(separator: " · "))
                                 .font(.caption2)
-                                .foregroundStyle(SportsColors.text.opacity(0.75))
+                                .foregroundStyle(SportsColors.text.opacity(0.78))
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                         }
                     }
-                    .frame(minWidth: 88)
-                    heroSide(team: game.home, score: game.home.displayScore)
+                    .frame(width: 100)
+
+                    Text(game.home.displayScore)
+                        .font(.system(size: 56, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(SportsColors.text)
+                        .frame(maxWidth: .infinity)
+                }
+
+                // Logos + names under scores
+                HStack(alignment: .top) {
+                    teamIdentity(game.away)
+                        .frame(maxWidth: .infinity)
+                    Color.clear.frame(width: 100)
+                    teamIdentity(game.home)
+                        .frame(maxWidth: .infinity)
                 }
             } else {
                 VStack(spacing: 8) {
@@ -95,35 +117,32 @@ struct GameDetailSheet: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(SportsColors.live)
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, 16)
             }
 
             if let venue = game.venue, !venue.isEmpty {
                 Text(venue)
                     .font(.caption)
-                    .foregroundStyle(SportsColors.text.opacity(0.7))
+                    .foregroundStyle(SportsColors.text.opacity(0.72))
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 28)
+        .padding(.top, 8)
+        .padding(.bottom, 32)
         .frame(maxWidth: .infinity)
         .background {
-            Group {
+            ZStack {
                 if game.usesMatchupLayout {
-                    TeamTheme.heroGradient(away: game.away, home: game.home)
+                    TeamTheme.splitLTR(away: game.away, home: game.home)
                 } else {
-                    LinearGradient(
-                        colors: [SportsColors.panelElevated, SportsColors.voidBlack],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                    SportsColors.panelElevated
                 }
-            }
-            .overlay {
-                // Soft vignette for text contrast (same idea as sports detail sheets)
+                // Readability wash (keeps white type crisp over team colors)
                 LinearGradient(
-                    colors: [.clear, Color.black.opacity(0.45)],
+                    colors: [
+                        Color.black.opacity(0.15),
+                        Color.black.opacity(0.42),
+                    ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -132,24 +151,22 @@ struct GameDetailSheet: View {
         }
     }
 
-    private func heroSide(team: TeamInfo, score: String) -> some View {
-        VStack(spacing: 10) {
-            Text(score)
-                .font(.system(size: 48, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(SportsColors.text)
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            TeamMarkView(team: team, size: 52)
-            Text(team.name)
+    private func teamIdentity(_ team: TeamInfo) -> some View {
+        VStack(spacing: 8) {
+            TeamMarkView(team: team, size: 56)
+            Text(team.rowLabel)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(SportsColors.text)
+                .lineLimit(1)
+            Text(team.name)
+                .font(.caption2)
+                .foregroundStyle(SportsColors.text.opacity(0.75))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity)
     }
 
-    // MARK: Streams
+    // MARK: Streams — same soft card language as the channel chooser
 
     private var streamSection: some View {
         VStack(alignment: .leading, spacing: 12) {

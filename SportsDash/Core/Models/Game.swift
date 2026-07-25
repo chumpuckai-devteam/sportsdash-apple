@@ -10,10 +10,26 @@ struct TeamInfo: Identifiable, Hashable, Codable, Sendable {
     var abbreviation: String
     var score: Int?
     var logoURL: String?
+    /// ESPN primary hex without `#` (e.g. `BA0021`), when available.
+    var colorHex: String?
+    /// ESPN alternate hex, when available.
+    var alternateColorHex: String?
+    /// Short label for score rows (e.g. "Angels", "Giants").
+    var shortName: String?
 
     var displayScore: String {
         if let score { return "\(score)" }
         return "—"
+    }
+
+    /// Compact name under logo — prefers shortName, else last word of full name, else abbrev.
+    var rowLabel: String {
+        if let shortName, !shortName.isEmpty { return shortName }
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts.last!)
+        }
+        return abbreviation
     }
 }
 
@@ -65,10 +81,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         return "LIVE"
     }
 
-    /// Local start time for upcoming games. Includes weekday/date when not today.
-    /// Falls back to ESPN `shortDetail` when `startTime` is missing/invalid.
     private static func formatStartTime(_ start: Date, statusDetail: String?) -> String {
-        // Invalid / unparsed dates were previously Date() (now). Treat distantPast as missing.
         if start > Date.distantPast.addingTimeInterval(60) {
             let cal = Calendar.current
             let f = DateFormatter()
