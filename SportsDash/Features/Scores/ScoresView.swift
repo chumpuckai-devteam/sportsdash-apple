@@ -120,6 +120,25 @@ struct ScoresView: View {
     }
 
     private var filterBar: some View {
+        #if os(tvOS)
+        // No horizontal ScrollView — plain chips inside ScrollView often can't take focus on tvOS.
+        HStack(spacing: 16) {
+            ForEach(DashboardFilter.allCases) { f in
+                let liveCount = appModel.games.filter(\.isLive).count
+                SportsFilterChip(
+                    title: f.label,
+                    count: f == .live ? liveCount : nil,
+                    selected: appModel.dashboardFilter == f
+                ) {
+                    appModel.dashboardFilter = f
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 32)
+        .padding(.vertical, 12)
+        .focusSection()
+        #else
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(DashboardFilter.allCases) { f in
@@ -138,6 +157,7 @@ struct ScoresView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
+        #endif
     }
 
     /// Borderless grouped list — soft surface, hairline dividers only (no per-card boxes).
@@ -185,7 +205,11 @@ struct ScoresView: View {
                             }
                         )
                     }
+                    #if os(tvOS)
+                    .buttonStyle(.card)
+                    #else
                     .buttonStyle(.plain)
+                    #endif
 
                     if index < games.count - 1 {
                         Divider()

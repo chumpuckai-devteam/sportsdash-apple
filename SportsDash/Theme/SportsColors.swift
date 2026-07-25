@@ -145,6 +145,7 @@ struct SportsFilterChip: View {
             .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
+            #if os(iOS)
             .background {
                 if selected {
                     Capsule(style: .continuous).fill(SportsColors.gold.gradient)
@@ -154,8 +155,24 @@ struct SportsFilterChip: View {
                         .sportsGlass(in: Capsule(style: .continuous))
                 }
             }
+            #else
+            // tvOS: let .card focus ring own the chrome; selected = gold fill
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background {
+                if selected {
+                    Capsule(style: .continuous).fill(SportsColors.gold)
+                } else {
+                    Capsule(style: .continuous).fill(SportsColors.panelElevated)
+                }
+            }
+            #endif
         }
+        #if os(tvOS)
+        .buttonStyle(.card)
+        #else
         .buttonStyle(.plain)
+        #endif
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
