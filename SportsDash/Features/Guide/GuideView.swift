@@ -6,8 +6,13 @@ private enum GuideMetrics {
     /// 12h window keeps horizontal content lighter on device memory.
     static let hours = 12
     static let pxPerHour: CGFloat = 140
+    #if os(tvOS)
+    static let channelColWidth: CGFloat = 200
+    static let rowHeight: CGFloat = 88
+    #else
     static let channelColWidth: CGFloat = 120
     static let rowHeight: CGFloat = 78
+    #endif
     static let timeHeaderHeight: CGFloat = 36
 
     static var timelineWidth: CGFloat { CGFloat(hours) * pxPerHour }
@@ -649,37 +654,54 @@ private struct GuideTimelineRow: View {
     @ObservedObject var scrollSync: GuideScrollSync
     let onPlay: (IptvChannel) -> Void
 
+    @FocusState private var channelFocused: Bool
+
     var body: some View {
         HStack(spacing: 0) {
             Button {
                 onPlay(row.channel)
             } label: {
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(SportsColors.voidBlack)
-                        .frame(width: 32, height: 32)
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(channelFocused ? SportsColors.voidBlack.opacity(0.25) : SportsColors.voidBlack)
+                        .frame(width: 36, height: 36)
                         .overlay {
-                            Image(systemName: "tv")
-                                .font(.system(size: 13))
-                                .foregroundStyle(SportsColors.muted)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(SportsColors.border, lineWidth: 1)
+                            Image(systemName: "tv.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.gold)
                         }
 
                     Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(SportsColors.text)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.text)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 12)
                 .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
-                .background(SportsColors.panel)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(channelFocused ? SportsColors.gold : SportsColors.panelElevated)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            channelFocused ? SportsColors.gold : SportsColors.border.opacity(0.6),
+                            lineWidth: channelFocused ? 0 : 1
+                        )
+                }
             }
+            #if os(tvOS)
+            // Custom high-contrast focus fill (default glass ring sat behind the label).
             .buttonStyle(.plain)
+            .focused($channelFocused)
+            .focusEffectDisabled()
+            #else
+            .buttonStyle(.plain)
+            #endif
+            // Keep focus chrome above the scrolling program strip
+            .zIndex(2)
 
             GuideLinkedScrollView(
                 axis: .horizontal,
@@ -702,8 +724,11 @@ private struct GuideTimelineRow: View {
                 .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.rowHeight, alignment: .topLeading)
                 .background(SportsColors.voidBlack)
             }
+            .zIndex(0)
         }
         .frame(height: GuideMetrics.rowHeight)
+        // Extra horizontal padding so tvOS focus scale/shadow isn't clipped
+        .padding(.vertical, 4)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SportsColors.border.opacity(0.35))
