@@ -12,7 +12,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
+        run: |
+          # Liquid Glass (`glassEffect` / `.buttonStyle(.glass)`) needs the iOS 26 SDK.
+          # macos-15 images ship Xcode 26.x alongside default 16.4 (/Applications/Xcode.app).
+          # Prefer newest installed 26.x so CI typechecks the glass path; SportsColors also
+          # keeps a compiler(>=6.2) gate so older Xcode still builds the material fallback.
+          XCODE_APP=""
+          for candidate in \
+            /Applications/Xcode_26.3.app \
+            /Applications/Xcode_26.2.app \
+            /Applications/Xcode_26.1.1.app \
+            /Applications/Xcode_26.1.app \
+            /Applications/Xcode_26.0.1.app \
+            /Applications/Xcode_26.0.app \
+            /Applications/Xcode_26.app
+          do
+            if [ -d "$candidate" ]; then
+              XCODE_APP="$candidate"
+              break
+            fi
+          done
+          if [ -z "$XCODE_APP" ]; then
+            echo "No Xcode 26+ found; using default Xcode (material-only compile path)"
+            XCODE_APP=/Applications/Xcode.app
+          fi
+          sudo xcode-select -s "$XCODE_APP"
+          echo "Using $(xcode-select -p)"
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
       - name: Generate project
         run: |
           brew install xcodegen

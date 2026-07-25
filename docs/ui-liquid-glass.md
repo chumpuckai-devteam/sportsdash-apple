@@ -46,7 +46,12 @@ SportsDash game cards use `sportsContentCard`: material fill + hairline edge + s
 | `Features/Player/LiveScoresStrip.swift` | Opaque content cards (`sportsContentCard`); no glass wash |
 
 ## Fallback
-On OS &lt; 26, glass calls use `.ultraThinMaterial` + hairline border. Compile with a current Xcode that knows `glassEffect` (iOS 26 SDK); runtime availability gates execution.
+On OS &lt; 26, glass calls use `.ultraThinMaterial` + hairline border via `sportsGlassMaterialFallback`.
+
+**Compile vs runtime**
+- Runtime: `#available(iOS 26.0, *)` chooses glass vs material when the binary was built with an iOS 26+ SDK.
+- Compile: `glassEffect` / `.buttonStyle(.glass)` are wrapped in `#if compiler(>=6.2)` (Xcode 26+ / Swift 6.2+) so **Xcode 16.4 / iOS 18.5 SDK still typechecks** — older toolchains only see the material path.
+- CI (`.github/workflows/ios.yml`) selects Xcode 26.x on `macos-15` when present so main builds exercise the glass symbols.
 
 ## Do not
 - Apply glass to guide timeline cells or the video surface  
