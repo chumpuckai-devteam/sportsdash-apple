@@ -42,21 +42,25 @@ struct FloatingPlayerView: View {
     var body: some View {
         GeometryReader { geo in
             if let state {
-                let card = playerCard(state: state, in: geo.size)
-                    .position(
-                        x: settledOrigin.x + dragOffset.width + currentSize(state).width / 2,
-                        y: settledOrigin.y + dragOffset.height + currentSize(state).height / 2
-                    )
-                #if os(iOS)
-                card.gesture(dragGesture(in: geo.size, state: state))
-                #else
-                // tvOS: fixed corner pop-out (no DragGesture)
-                card
-                #endif
+                positionedCard(state: state, in: geo.size)
             }
         }
         .ignoresSafeArea()
         .allowsHitTesting(appModel.floatingPlayer != nil)
+    }
+
+    @ViewBuilder
+    private func positionedCard(state: FloatingPlayerState, in bounds: CGSize) -> some View {
+        let card = playerCard(state: state, in: bounds)
+            .position(
+                x: settledOrigin.x + dragOffset.width + currentSize(state).width / 2,
+                y: settledOrigin.y + dragOffset.height + currentSize(state).height / 2
+            )
+        #if os(iOS)
+        card.gesture(dragGesture(in: bounds, state: state))
+        #else
+        card
+        #endif
     }
 
     private func currentSize(_ state: FloatingPlayerState) -> CGSize {
