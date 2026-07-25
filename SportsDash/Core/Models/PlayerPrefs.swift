@@ -147,6 +147,11 @@ enum LaunchTab: String, CaseIterable, Identifiable, Codable, Sendable {
             self = .scores
         }
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
 }
 
 // MARK: - Combined prefs (persisted)
