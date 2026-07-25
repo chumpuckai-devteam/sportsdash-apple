@@ -58,28 +58,45 @@ extension View {
         #endif
     }
 
-    /// Content-layer card: opaque elevated panel (not Liquid Glass — HIG content layer).
+    /// Content-layer card — **standard materials**, not Liquid Glass.
+    /// HIG: Liquid Glass is for floating chrome (tabs/toolbars); content uses materials
+    /// for separation without a heavy “boarder” look.
+    /// https://developer.apple.com/design/human-interface-guidelines/materials
     func sportsContentCard(
         radius: CGFloat = SportsMetrics.cardRadius,
         emphasized: Bool = false
     ) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self
-            .background(
-                LinearGradient(
-                    colors: emphasized
-                        ? [SportsColors.panelElevated.opacity(0.98), SportsColors.panel]
-                        : [SportsColors.panelElevated, SportsColors.panel],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: shape
-            )
-            .overlay(
+            .background {
+                shape
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        // Slight brand lift so dark sports UI stays on-theme
+                        shape.fill(
+                            LinearGradient(
+                                colors: [
+                                    SportsColors.panelElevated.opacity(emphasized ? 0.35 : 0.22),
+                                    SportsColors.panel.opacity(emphasized ? 0.28 : 0.18),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    }
+            }
+            .overlay {
                 shape.stroke(
-                    emphasized ? SportsColors.live.opacity(0.45) : SportsColors.border.opacity(0.85),
-                    lineWidth: emphasized ? 1.25 : 1
+                    emphasized
+                        ? SportsColors.live.opacity(0.28)
+                        : Color.white.opacity(0.08),
+                    lineWidth: emphasized ? 1 : 0.5
                 )
+            }
+            .shadow(
+                color: Color.black.opacity(0.28),
+                radius: emphasized ? 14 : 10,
+                y: 6
             )
     }
 

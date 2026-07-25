@@ -9,11 +9,21 @@ Liquid Glass is for **controls and navigation** floating above content — not f
 | Token / API | Use |
 |-------------|-----|
 | `sportsGlass(in:)` | Chips, menu labels, circular toolbar controls |
-| `sportsContentCard` | Game cards, channel tiles (opaque) |
+| `sportsContentCard` | Game cards, channel tiles — **standard material** (not Liquid Glass) |
 | `sportsScreenBackground()` | Void canvas |
 | `Tab { }` (iOS 18+) | System tab bar → Liquid Glass on iOS 26 |
 | `.buttonStyle(.glass)` | When available via `sportsToolbarControl()` |
 | Native `Menu` | Categories, guide layout |
+
+### Content cards vs Liquid Glass
+
+Apple HIG ([Materials](https://developer.apple.com/design/human-interface-guidelines/materials)):
+
+- **Liquid Glass** = functional layer for **controls/navigation** floating above content (tab bar, toolbars).  
+- **Don’t** put Liquid Glass on content cards — hierarchy gets muddy and contrast suffers.  
+- **Do** use **standard materials** (e.g. `.ultraThinMaterial`) inside the content layer for separation.
+
+SportsDash game cards use `sportsContentCard`: material fill + hairline edge + soft shadow. LIVE cards get a light mint stroke only — no thick box border.
 
 ## Apple docs
 - https://developer.apple.com/documentation/technologyoverviews/liquid-glass  
