@@ -3,6 +3,8 @@ import SwiftUI
 struct ScoresView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var selectedGame: Game?
+    /// Collapsed sport section keys (`soccer`, `baseball`, …) — same idea as `LiveScoresStrip`.
+    @State private var collapsedSports: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -70,9 +72,9 @@ struct ScoresView: View {
                 || appModel.dashboardFilter == .live
                 || appModel.dashboardFilter == .upcoming
                 || appModel.dashboardFilter == .favorites)
-        let shelves: [LeagueShelf] = appModel.dashboardFilter == .favorites
+        let sections: [SportScoreSection] = appModel.dashboardFilter == .favorites
             ? []
-            : ScoreboardGrouping.leagueShelves(from: appModel.filteredGames)
+            : ScoreboardGrouping.sportSections(from: appModel.filteredGames)
 
         return VStack(spacing: 0) {
             filterBar
@@ -94,7 +96,7 @@ struct ScoresView: View {
                         )
                     }
 
-                    if shelves.isEmpty && !showFaves {
+                    if sections.isEmpty && !showFaves {
                         ContentUnavailableView(
                             emptyTitle,
                             systemImage: "sportscourt",
@@ -102,21 +104,8 @@ struct ScoresView: View {
                         )
                         .frame(maxWidth: .infinity, minHeight: 280)
                     } else {
-                        ForEach(shelves) { section in
-                            if section.showSportHeader {
-                                Text(section.sportTitle)
-                                    .font(.title2.weight(.bold))
-                                    .foregroundStyle(SportsColors.text)
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 4)
-                                    .accessibilityAddTraits(.isHeader)
-                            }
-                            leagueBlock(
-                                title: section.title,
-                                systemImage: nil,
-                                goldTitle: false,
-                                games: section.games
-                            )
+                        ForEach(sections) { section in
+                            sportSectionBlock(section)
                         }
                     }
                 }
@@ -127,15 +116,98 @@ struct ScoresView: View {
         }
     }
 
+    // MARK: - Sport → league hierarchy (collapsible sports)
+
+    @ViewBuilder
+    private func sportSectionBlock(_ section: SportScoreSection) -> some View {
+        let collapsed = collapsedSports.contains(section.sportKey)
+        VStack(alignment: .leading, spacing: 14) {
+            sportHeader(section, collapsed: collapsed)
+            if !collapsed {
+                ForEach(section.leagues) { shelf in
+                    leagueBlock(
+                        title: shelf.title,
+                        systemImage: nil,
+                        goldTitle: false,
+                        games: shelf.games
+                    )
+                }
+            }
+        }
+    }
+
+    private func sportHeader(_ section: SportScoreSection, collapsed: Bool) -> some View {
+        let gameCount = section.leagues.reduce(0) { $0 + $1.games.count }
+        let liveCount = section.leagues.reduce(0) { $0 + $1.games.filter(\.isLive).count }
+
+        return Button {
+            toggleSport(section.sportKey)
+        } label: {
+            HStack(spacing: 10) {
+                Text(section.emoji)
+                    .font(.title3)
+                Text(section.sportTitle)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(SportsColors.text)
+                Spacer(minLength: 8)
+                if liveCount > 0 {
+                    Text("\(liveCount) Live")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SportsColors.live)
+                }
+                Text("\(gameCount)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SportsColors.muted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(SportsColors.panel.opacity(0.9))
+                    .clipShape(Capsule())
+                Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SportsColors.muted)
+                    .frame(width: 16)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel("\(section.sportTitle), \(gameCount) games")
+        .accessibilityHint(collapsed ? "Expand sport" : "Collapse sport")
+        #if os(tvOS)
+        .focusSection()
+        #endif
+    }
+
+    private func toggleSport(_ key: String) {
+        #if os(iOS)
+        withAnimation(.snappy(duration: 0.22)) {
+            if collapsedSports.contains(key) {
+                collapsedSports.remove(key)
+            } else {
+                collapsedSports.insert(key)
+            }
+        }
+        #else
+        if collapsedSports.contains(key) {
+            collapsedSports.remove(key)
+        } else {
+            collapsedSports.insert(key)
+        }
+        #endif
+    }
+
     private var filterBar: some View {
         #if os(tvOS)
         // No horizontal ScrollView — plain chips inside ScrollView often can't take focus on tvOS.
         HStack(spacing: 16) {
             ForEach(DashboardFilter.allCases) { f in
                 let liveCount = appModel.games.filter(\.isLive).count
+                let upcomingCount = appModel.games.filter(\.isUpcoming).count
                 SportsFilterChip(
                     title: f.label,
-                    count: f == .live ? liveCount : nil,
+                    count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
                     selected: appModel.dashboardFilter == f
                 ) {
                     appModel.dashboardFilter = f
@@ -151,9 +223,10 @@ struct ScoresView: View {
             HStack(spacing: 8) {
                 ForEach(DashboardFilter.allCases) { f in
                     let liveCount = appModel.games.filter(\.isLive).count
+                    let upcomingCount = appModel.games.filter(\.isUpcoming).count
                     SportsFilterChip(
                         title: f.label,
-                        count: f == .live ? liveCount : nil,
+                        count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
                         selected: appModel.dashboardFilter == f
                     ) {
                         withAnimation(.snappy(duration: 0.2)) {
@@ -235,11 +308,24 @@ struct ScoresView: View {
 
     private var emptySubtitle: String {
         switch appModel.dashboardFilter {
-        case .favorites: return "Star a team on a matchup to build My teams."
-        default: return "Pull to refresh or try another filter."
+        case .favorites:
+            return "Star a team on a matchup to build My teams."
+        case .upcoming:
+            let leagues = appModel.selectedLeagues.isEmpty
+                ? SportLeague.defaults
+                : appModel.selectedLeagues
+            let labels = leagues.prefix(4).map(\.label).joined(separator: ", ")
+            let more = leagues.count > 4 ? " +\(leagues.count - 4) more" : ""
+            return "No scheduled games in the next few days for \(labels)\(more). Pull to refresh or adjust leagues in Settings."
+        case .live:
+            return "Nothing in progress right now. Check Upcoming or pull to refresh."
+        case .all:
+            return "Pull to refresh or enable more leagues in Settings."
         }
     }
 }
+
+// MARK: - Grouping models
 
 struct LeagueShelf: Identifiable {
     var id: String { key }
@@ -249,6 +335,15 @@ struct LeagueShelf: Identifiable {
     var sportTitle: String
     var showSportHeader: Bool
     var games: [Game]
+}
+
+/// Sport bucket used by Scores dashboard collapse (and shared strip grouping).
+struct SportScoreSection: Identifiable {
+    var id: String { sportKey }
+    let sportKey: String
+    let sportTitle: String
+    let emoji: String
+    var leagues: [LeagueShelf]
 }
 
 enum ScoreboardGrouping {
@@ -284,5 +379,27 @@ enum ScoreboardGrouping {
             )
         }
         return shelves
+    }
+
+    /// Collapse consecutive league shelves into sport → league sections.
+    static func sportSections(from games: [Game]) -> [SportScoreSection] {
+        let shelves = leagueShelves(from: games)
+        var sections: [SportScoreSection] = []
+        var current: SportScoreSection?
+        for shelf in shelves {
+            if current?.sportKey != shelf.sportKey {
+                if let current { sections.append(current) }
+                current = SportScoreSection(
+                    sportKey: shelf.sportKey,
+                    sportTitle: shelf.sportTitle,
+                    emoji: shelf.games.first?.league.emoji ?? "🏟️",
+                    leagues: [shelf]
+                )
+            } else {
+                current?.leagues.append(shelf)
+            }
+        }
+        if let current { sections.append(current) }
+        return sections
     }
 }

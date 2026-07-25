@@ -4,8 +4,12 @@ import Foundation
 actor SportsAPI {
     private let session: URLSession
     private let base = "https://site.api.espn.com/apis/site/v2/sports"
-    /// Cap parallel ESPN requests so first paint isn't starved.
+    /// Cap parallel ESPN league requests so first paint isn't starved.
     private let maxConcurrent = 5
+    /// Extra calendar days (America/New_York) beyond ESPN's default board.
+    /// Default boards often drop to finals-only after the slate ends; dated
+    /// fetches restore scheduled games (e.g. MLB tonight / tomorrow).
+    private let upcomingDayHorizon = 3
 
     init(session: URLSession? = nil) {
         if let session {
@@ -24,33 +28,89 @@ actor SportsAPI {
     }
 
     /// Fetches scoreboards; optional progressive callback for partial UI updates.
+    ///
+    /// Strategy:
+    /// 1. Default ESPN board per league (fast first paint — live + current slate).
+    /// 2. Dated boards for today…+horizon (US/Eastern) merged in — fills Upcoming
+    ///    when the default slate is already all finals (classic MLB evening hole).
     func fetchScoreboards(
         leagues: [SportLeague],
         onPartial: (@Sendable ([Game]) -> Void)? = nil
     ) async -> [Game] {
-        var all: [Game] = []
-        var index = 0
+        var byId: [String: Game] = [:]
         let list = leagues
 
-        while index < list.count {
-            let end = min(index + maxConcurrent, list.count)
-            let slice = Array(list[index..<end])
-            await withTaskGroup(of: [Game].self) { group in
+        // Pass 1 — default boards only.
+        await fetchLeagues(list, urlsForLeague: { league in
+            self.defaultScoreboardURL(for: league).map { [$0] } ?? []
+        }, into: &byId, onPartial: onPartial)
+
+        // Pass 2 — dated supplements (skip URLs already fetched as default).
+        await fetchLeagues(list, urlsForLeague: { league in
+            self.datedScoreboardURLs(for: league)
+        }, into: &byId, onPartial: onPartial)
+
+        return Array(byId.values).sorted(by: Self.sortGames)
+    }
+
+    private func fetchLeagues(
+        _ leagues: [SportLeague],
+        urlsForLeague: (SportLeague) -> [URL],
+        into byId: inout [String: Game],
+        onPartial: (@Sendable ([Game]) -> Void)?
+    ) async {
+        var index = 0
+        while index < leagues.count {
+            let end = min(index + maxConcurrent, leagues.count)
+            let slice = Array(leagues[index..<end])
+            let batches: [[Game]] = await withTaskGroup(of: [Game].self, returning: [[Game]].self) { group in
                 for league in slice {
+                    let urls = urlsForLeague(league)
                     group.addTask {
-                        (try? await self.fetchScoreboard(league: league)) ?? []
+                        await self.fetchAndMerge(urls: urls, league: league)
                     }
                 }
+                var out: [[Game]] = []
                 for await batch in group {
-                    all.append(contentsOf: batch)
+                    out.append(batch)
+                }
+                return out
+            }
+            for batch in batches {
+                for game in batch {
+                    if let existing = byId[game.id] {
+                        byId[game.id] = Self.prefer(existing, game)
+                    } else {
+                        byId[game.id] = game
+                    }
                 }
             }
-            // Progressive update after each batch
-            let snapshot = all.sorted(by: Self.sortGames)
+            let snapshot = Array(byId.values).sorted(by: Self.sortGames)
             onPartial?(snapshot)
             index = end
         }
-        return all.sorted(by: Self.sortGames)
+    }
+
+    private func fetchAndMerge(urls: [URL], league: SportLeague) async -> [Game] {
+        guard !urls.isEmpty else { return [] }
+        var local: [String: Game] = [:]
+        await withTaskGroup(of: [Game].self) { group in
+            for url in urls {
+                group.addTask {
+                    (try? await self.fetchScoreboardURL(url, league: league)) ?? []
+                }
+            }
+            for await batch in group {
+                for game in batch {
+                    if let existing = local[game.id] {
+                        local[game.id] = Self.prefer(existing, game)
+                    } else {
+                        local[game.id] = game
+                    }
+                }
+            }
+        }
+        return Array(local.values)
     }
 
     nonisolated private static func sortGames(_ a: Game, _ b: Game) -> Bool {
@@ -59,13 +119,59 @@ actor SportsAPI {
     }
 
     func fetchScoreboard(league: SportLeague) async throws -> [Game] {
-        let urlString = "\(base)/\(league.sportPath)/\(league.leaguePath)/scoreboard"
-        guard let url = URL(string: urlString) else { return [] }
+        var urls: [URL] = []
+        if let d = defaultScoreboardURL(for: league) { urls.append(d) }
+        urls.append(contentsOf: datedScoreboardURLs(for: league))
+        return await fetchAndMerge(urls: urls, league: league)
+    }
+
+    private func defaultScoreboardURL(for league: SportLeague) -> URL? {
+        URL(string: "\(base)/\(league.sportPath)/\(league.leaguePath)/scoreboard")
+    }
+
+    /// Per-day boards for today…+horizon on the US/Eastern game calendar.
+    private func datedScoreboardURLs(for league: SportLeague) -> [URL] {
+        guard let root = defaultScoreboardURL(for: league)?.absoluteString else { return [] }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? TimeZone(secondsFromGMT: 0)!
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyyMMdd"
+
+        var urls: [URL] = []
+        for offset in 0...upcomingDayHorizon {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: now) else { continue }
+            let stamp = formatter.string(from: day)
+            if let u = URL(string: "\(root)?dates=\(stamp)") {
+                urls.append(u)
+            }
+        }
+        return urls
+    }
+
+    private func fetchScoreboardURL(_ url: URL, league: SportLeague) async throws -> [Game] {
         let (data, response) = try await session.data(from: url)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             return []
         }
         return try parseScoreboard(data: data, league: league)
+    }
+
+    /// When the same event appears on default + dated boards, keep the fresher status.
+    nonisolated private static func prefer(_ a: Game, _ b: Game) -> Game {
+        statusRank(a.status) <= statusRank(b.status) ? a : b
+    }
+
+    nonisolated private static func statusRank(_ s: GameStatus) -> Int {
+        switch s {
+        case .live: return 0
+        case .upcoming: return 1
+        case .postponed: return 2
+        case .final_: return 3
+        case .unknown: return 4
+        }
     }
 
     private func parseScoreboard(data: Data, league: SportLeague) throws -> [Game] {
@@ -93,7 +199,9 @@ actor SportsAPI {
             let detail = type["detail"] as? String
 
             let status: GameStatus
-            if completed || name == "STATUS_FINAL" {
+            if name.contains("POSTPONED") || name.contains("CANCELED") || name.contains("CANCELLED") {
+                status = .postponed
+            } else if completed || name == "STATUS_FINAL" {
                 status = .final_
             } else if state == "in" || name.contains("IN_PROGRESS") {
                 status = .live

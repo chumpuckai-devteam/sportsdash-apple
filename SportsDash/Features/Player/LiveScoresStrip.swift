@@ -30,29 +30,9 @@ struct LiveScoresStrip: View {
         return Array(live.prefix(40))
     }
 
-    /// Same sport → league shelves as the scores dashboard, live-only.
-    private var shelves: [LeagueShelf] {
-        ScoreboardGrouping.leagueShelves(from: liveOrdered)
-    }
-
-    private var sportSections: [StripSportSection] {
-        var sections: [StripSportSection] = []
-        var current: StripSportSection?
-        for shelf in shelves {
-            if current?.sportKey != shelf.sportKey {
-                if let current { sections.append(current) }
-                current = StripSportSection(
-                    sportKey: shelf.sportKey,
-                    sportTitle: shelf.sportTitle,
-                    emoji: shelf.games.first?.league.emoji ?? "🏟️",
-                    leagues: [shelf]
-                )
-            } else {
-                current?.leagues.append(shelf)
-            }
-        }
-        if let current { sections.append(current) }
-        return sections
+    /// Same sport → league sections as the scores dashboard, live-only.
+    private var sportSections: [SportScoreSection] {
+        ScoreboardGrouping.sportSections(from: liveOrdered)
     }
 
     var body: some View {
@@ -99,7 +79,7 @@ struct LiveScoresStrip: View {
 
     // MARK: - Hierarchy chips
 
-    private func sportChip(_ section: StripSportSection) -> some View {
+    private func sportChip(_ section: SportScoreSection) -> some View {
         let collapsed = collapsedSports.contains(section.sportKey)
         let count = section.leagues.reduce(0) { $0 + $1.games.count }
         return Button {
@@ -295,12 +275,4 @@ struct LiveScoresStrip: View {
     }
 }
 
-// MARK: - Strip model
 
-private struct StripSportSection: Identifiable {
-    var id: String { sportKey }
-    let sportKey: String
-    let sportTitle: String
-    let emoji: String
-    var leagues: [LeagueShelf]
-}
