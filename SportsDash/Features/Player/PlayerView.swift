@@ -435,12 +435,10 @@ struct PlayerView: View {
                     .listRowBackground(SportsColors.panelElevated)
                 }
             }
-            .scrollContentBackground(.hidden)
+            .sportsHideScrollBackground()
             .background(SportsColors.panel)
             .navigationTitle("Streams")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .sportsNavTitleMode(large: false)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
@@ -450,7 +448,9 @@ struct PlayerView: View {
                 }
             }
         }
+        #if os(iOS)
         .presentationDetents([.medium, .large])
+        #endif
     }
 
     private func switchTo(channel ch: IptvChannel, game g: Game?, matches: [ChannelMatch]) {

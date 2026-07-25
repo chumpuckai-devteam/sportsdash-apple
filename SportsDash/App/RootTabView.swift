@@ -56,7 +56,7 @@ struct RootTabView: View {
                     .transition(.opacity)
             }
         }
-        .fullScreenCover(item: $appModel.fullScreenPlayer) { route in
+        .sportsPlayerCover(item: $appModel.fullScreenPlayer) { route in
             PlayerView(
                 channel: route.channel,
                 game: route.game,

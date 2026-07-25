@@ -73,11 +73,9 @@ struct GuideView: View {
             }
             .background(SportsColors.voidBlack)
             .navigationTitle("Guide")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .sportsNavTitleMode(large: false)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: SportsToolbarPlacement.leading) {
                     if !groupNames.isEmpty {
                         SportsCategoryMenu(
                             title: selectedGroup,
@@ -86,7 +84,7 @@ struct GuideView: View {
                         )
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: SportsToolbarPlacement.trailing) {
                     guideSettingsMenu
                 }
             }
@@ -120,7 +118,7 @@ struct GuideView: View {
                 // Progress bars only need minute-level refresh (was 30s full guide redraw).
                 nowTick = date
             }
-            .fullScreenCover(item: $playerRoute) { route in
+            .sportsPlayerCover(item: $playerRoute) { route in
                 PlayerView(
                     channel: route.channel,
                     game: route.game,
@@ -243,8 +241,8 @@ struct GuideView: View {
                     .textCase(nil)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
+        .sportsInsetGroupedList()
+        .sportsHideScrollBackground()
     }
 
     private func prefetchRatings() {

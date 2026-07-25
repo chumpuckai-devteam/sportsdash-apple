@@ -137,13 +137,11 @@ struct SettingsView: View {
                     Text("About")
                 }
             }
-            .scrollContentBackground(.hidden)
+            .sportsHideScrollBackground()
             .sportsScreenBackground()
             .navigationTitle("Settings")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            .listStyle(.insetGrouped)
-            #endif
+            .sportsNavTitleMode(large: true)
+            .sportsInsetGroupedList()
         }
     }
 

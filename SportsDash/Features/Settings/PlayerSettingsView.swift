@@ -141,12 +141,10 @@ struct PlayerSettingsView: View {
                 Text("Display")
             }
         }
-        .scrollContentBackground(.hidden)
+        .sportsHideScrollBackground()
         .background(SportsColors.voidBlack)
         .navigationTitle("Video player")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sportsNavTitleMode(large: false)
         .onChange(of: appModel.playerPrefs) { _, newPrefs in
             PlaybackController.applyGlobal(newPrefs)
         }

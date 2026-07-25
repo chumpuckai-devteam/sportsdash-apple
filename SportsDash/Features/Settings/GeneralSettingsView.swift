@@ -174,12 +174,10 @@ struct GeneralSettingsView: View {
                 Text("Preferred live stream format")
             }
         }
-        .scrollContentBackground(.hidden)
+        .sportsHideScrollBackground()
         .background(SportsColors.voidBlack)
         .navigationTitle("General")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sportsNavTitleMode(large: false)
         .onAppear { refreshKeyStatus() }
     }
 

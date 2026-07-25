@@ -19,12 +19,10 @@ struct ScoresSettingsView: View {
                 Text("Fewer leagues loads faster. Pull to refresh after changes.")
             }
         }
-        .scrollContentBackground(.hidden)
+        .sportsHideScrollBackground()
         .background(SportsColors.voidBlack)
         .navigationTitle("Scores & leagues")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sportsNavTitleMode(large: false)
     }
 
     private func leagueBinding(_ league: SportLeague) -> Binding<Bool> {

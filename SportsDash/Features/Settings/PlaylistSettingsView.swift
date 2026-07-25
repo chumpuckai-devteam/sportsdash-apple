@@ -131,12 +131,10 @@ struct PlaylistSettingsView: View {
                 Text("Reload")
             }
         }
-        .scrollContentBackground(.hidden)
+        .sportsHideScrollBackground()
         .background(SportsColors.voidBlack)
         .navigationTitle("Playlists")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sportsNavTitleMode(large: false)
         .sheet(isPresented: $showEditor) {
             PlaylistEditorSheet(
                 playlistId: editingPlaylistId,
@@ -262,12 +260,10 @@ private struct PlaylistEditorSheet: View {
                         .foregroundStyle(SportsColors.danger)
                 }
             }
-            .scrollContentBackground(.hidden)
+            .sportsHideScrollBackground()
             .background(SportsColors.voidBlack)
             .navigationTitle(playlistId == nil ? "Add playlist" : "Edit playlist")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .sportsNavTitleMode(large: false)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

@@ -43,9 +43,9 @@ extension View {
     func sportsGlass(
         in shape: some Shape = RoundedRectangle(cornerRadius: SportsMetrics.cardRadius, style: .continuous)
     ) -> some View {
-        #if os(iOS) || os(tvOS)
-        if #available(iOS 26.0, tvOS 26.0, *) {
-            // Liquid Glass control layer — https://developer.apple.com/documentation/swiftui/view/glasseffect(_:in:)
+        // Liquid Glass control layer is iOS-first; tvOS uses standard materials.
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
             self.glassEffect(in: shape)
         } else {
             self
@@ -55,6 +55,7 @@ extension View {
         #else
         self
             .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.stroke(SportsColors.border.opacity(0.55), lineWidth: 0.5))
         #endif
     }
 

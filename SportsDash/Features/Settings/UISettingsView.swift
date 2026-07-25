@@ -92,11 +92,9 @@ struct UISettingsView: View {
                 Text("EPG layout")
             }
         }
-        .scrollContentBackground(.hidden)
+        .sportsHideScrollBackground()
         .background(SportsColors.voidBlack)
         .navigationTitle("User interface")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sportsNavTitleMode(large: false)
     }
 }

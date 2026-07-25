@@ -28,14 +28,14 @@ struct GameDetailSheet: View {
                 }
             }
             .background(SportsColors.voidBlack.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
+            .sportsNavTitleMode(large: false)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(game.league.label)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(SportsColors.text.opacity(0.9))
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: SportsToolbarPlacement.trailing) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(.body.weight(.semibold))
@@ -45,9 +45,9 @@ struct GameDetailSheet: View {
                     }
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .sportsHiddenNavBarBackground()
             .task { await runMatch() }
-            .fullScreenCover(item: $playerRoute) { route in
+            .sportsPlayerCover(item: $playerRoute) { route in
                 PlayerView(
                     channel: route.channel,
                     game: route.game,

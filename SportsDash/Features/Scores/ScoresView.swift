@@ -10,7 +10,7 @@ struct ScoresView: View {
                 .sportsScreenBackground()
                 .navigationTitle("Scores")
                 #if os(iOS)
-                .navigationBarTitleDisplayMode(.large)
+                .sportsNavTitleMode(large: true)
                 #endif
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
@@ -30,15 +30,7 @@ struct ScoresView: View {
                 .sheet(item: $selectedGame) { game in
                     GameDetailSheet(game: game)
                         .environmentObject(appModel)
-                        .presentationDetents([.large, .medium])
-                        .presentationDragIndicator(.visible)
-                        #if os(iOS)
-                        .presentationCornerRadius(28)
-                        #endif
-                        .presentationBackground {
-                            // Deep base so material cards pop (inspired by sports detail sheets)
-                            SportsColors.voidBlack
-                        }
+                        .sportsSheetChrome()
                 }
         }
     }
@@ -58,9 +50,7 @@ struct ScoresView: View {
                 )
                 .frame(maxWidth: .infinity, minHeight: 400)
             }
-            #if os(iOS)
-            .refreshable { await appModel.refreshScores() }
-            #endif
+            .sportsRefreshable { await appModel.refreshScores() }
         } else {
             scoresContent
         }
@@ -125,9 +115,7 @@ struct ScoresView: View {
                 .padding(.vertical, 12)
                 .padding(.bottom, 28)
             }
-            #if os(iOS)
-            .refreshable { await appModel.refreshScores() }
-            #endif
+            .sportsRefreshable { await appModel.refreshScores() }
         }
     }
 
