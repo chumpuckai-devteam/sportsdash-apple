@@ -14,7 +14,8 @@ struct FloatingPlayerState: Equatable {
     var size: FloatingPlayerSize
 }
 
-/// UHF-style in-app pop-out player over tabs. Double-tap toggles compact ↔ expanded.
+/// UHF-style in-app pop-out player over tabs.
+/// Drag-to-reposition is iOS-only (DragGesture is unavailable on tvOS).
 struct FloatingPlayerView: View {
     @EnvironmentObject private var appModel: AppModel
     @ObservedObject var playback: PlaybackController
@@ -41,12 +42,17 @@ struct FloatingPlayerView: View {
     var body: some View {
         GeometryReader { geo in
             if let state {
-                playerCard(state: state, in: geo.size)
+                let card = playerCard(state: state, in: geo.size)
                     .position(
                         x: settledOrigin.x + dragOffset.width + currentSize(state).width / 2,
                         y: settledOrigin.y + dragOffset.height + currentSize(state).height / 2
                     )
-                    .gesture(dragGesture(in: geo.size, state: state))
+                #if os(iOS)
+                card.gesture(dragGesture(in: geo.size, state: state))
+                #else
+                // tvOS: fixed corner pop-out (no DragGesture)
+                card
+                #endif
             }
         }
         .ignoresSafeArea()
@@ -70,12 +76,10 @@ struct FloatingPlayerView: View {
                 ProgressView().tint(SportsColors.gold)
             }
 
-            // Controls overlay
             if showControls || state.size == .expanded {
                 controlsOverlay(state: state)
             }
 
-            // LIVE badge always visible on compact when playing
             if state.size == .compact, playback.isPlaying {
                 VStack {
                     Spacer()
@@ -107,8 +111,12 @@ struct FloatingPlayerView: View {
             if showControls { scheduleHideControls() }
         }
         .onAppear {
-            // Start near top-leading like UHF.
+            #if os(tvOS)
+            // Park in a safe corner on the big screen
+            settledOrigin = CGPoint(x: bounds.width - currentSize(state).width - 48, y: 80)
+            #else
             settledOrigin = CGPoint(x: 12, y: 56)
+            #endif
             showControls = true
             scheduleHideControls()
         }
@@ -116,7 +124,6 @@ struct FloatingPlayerView: View {
 
     private func controlsOverlay(state: FloatingPlayerState) -> some View {
         ZStack {
-            // Dim for expanded readability
             if state.size == .expanded {
                 Color.black.opacity(0.25)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -152,7 +159,6 @@ struct FloatingPlayerView: View {
                 Spacer()
 
                 if state.size == .expanded {
-                    // Transport row (UHF-style)
                     HStack(spacing: 28) {
                         Button {
                             playback.jumpToLive()
@@ -189,7 +195,6 @@ struct FloatingPlayerView: View {
                     }
                     .padding(.bottom, 8)
 
-                    // Live progress bar (decorative edge indicator)
                     VStack(spacing: 6) {
                         GeometryReader { g in
                             ZStack(alignment: .leading) {
@@ -221,7 +226,6 @@ struct FloatingPlayerView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
                 } else {
-                    // Compact: play + close already in corners; small transport
                     HStack {
                         Spacer()
                         Button {
@@ -245,14 +249,14 @@ struct FloatingPlayerView: View {
         var next = state
         next.size = state.size == .compact ? .expanded : .compact
         appModel.floatingPlayer = next
-        // Keep on-screen after resize
         dragOffset = .zero
         showControls = true
         scheduleHideControls()
     }
 
+    #if os(iOS)
     private func dragGesture(in bounds: CGSize, state: FloatingPlayerState) -> some Gesture {
-        DragGesture()
+        DragGesture(minimumDistance: 8)
             .onChanged { value in
                 dragOffset = value.translation
             }
@@ -262,7 +266,6 @@ struct FloatingPlayerView: View {
                     x: settledOrigin.x + value.translation.width,
                     y: settledOrigin.y + value.translation.height
                 )
-                // Clamp inside screen (leave margin for Dynamic Island / home indicator).
                 let margin: CGFloat = 8
                 origin.x = min(max(margin, origin.x), bounds.width - size.width - margin)
                 origin.y = min(max(margin + 40, origin.y), bounds.height - size.height - margin - 50)
@@ -270,6 +273,7 @@ struct FloatingPlayerView: View {
                 dragOffset = .zero
             }
     }
+    #endif
 
     private func scheduleHideControls() {
         hideControlsTask?.cancel()
@@ -277,7 +281,6 @@ struct FloatingPlayerView: View {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             if !Task.isCancelled {
                 await MainActor.run {
-                    // Keep expanded controls a bit longer; still auto-hide.
                     showControls = false
                 }
             }
