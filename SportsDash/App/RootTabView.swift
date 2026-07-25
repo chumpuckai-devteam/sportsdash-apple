@@ -1,12 +1,11 @@
 import SwiftUI
 
 enum AppTab: Hashable {
-    case scores, channels, guide, settings
+    case scores, guide, settings
 
     init(launch: LaunchTab) {
         switch launch {
         case .scores: self = .scores
-        case .channels: self = .channels
         case .guide: self = .guide
         case .settings: self = .settings
         }
@@ -15,7 +14,6 @@ enum AppTab: Hashable {
     var title: String {
         switch self {
         case .scores: return "Scores"
-        case .channels: return "Channels"
         case .guide: return "Guide"
         case .settings: return "Settings"
         }
@@ -24,7 +22,6 @@ enum AppTab: Hashable {
     var systemImage: String {
         switch self {
         case .scores: return "sportscourt.fill"
-        case .channels: return "tv.fill"
         case .guide: return "rectangle.grid.1x2.fill"
         case .settings: return "gearshape.fill"
         }
@@ -88,7 +85,8 @@ struct RootTabView: View {
         }
     }
 
-    /// iOS 18+ `Tab` API gets the Liquid Glass tab bar; older path keeps Label tabs.
+    /// Three-tab shell: Scores · Guide · Settings.
+    /// Guide owns channel browsing (list + grid); separate Channels tab removed as redundant.
     @ViewBuilder
     private var mainTabs: some View {
         #if os(iOS)
@@ -96,9 +94,6 @@ struct RootTabView: View {
             TabView(selection: $tab) {
                 Tab(AppTab.scores.title, systemImage: AppTab.scores.systemImage, value: AppTab.scores) {
                     ScoresView()
-                }
-                Tab(AppTab.channels.title, systemImage: AppTab.channels.systemImage, value: AppTab.channels) {
-                    ChannelsView()
                 }
                 Tab(AppTab.guide.title, systemImage: AppTab.guide.systemImage, value: AppTab.guide) {
                     GuideView()
@@ -120,10 +115,6 @@ struct RootTabView: View {
             ScoresView()
                 .tabItem { Label(AppTab.scores.title, systemImage: AppTab.scores.systemImage) }
                 .tag(AppTab.scores)
-
-            ChannelsView()
-                .tabItem { Label(AppTab.channels.title, systemImage: AppTab.channels.systemImage) }
-                .tag(AppTab.channels)
 
             GuideView()
                 .tabItem { Label(AppTab.guide.title, systemImage: AppTab.guide.systemImage) }

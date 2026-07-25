@@ -120,17 +120,31 @@ enum PlaylistRefreshInterval: Int, CaseIterable, Identifiable, Codable, Sendable
 
 // MARK: - Launch tab
 
+/// Root tabs the user can open on launch.
+/// Note: standalone Channels tab was removed — Guide list/grid is the browse surface.
 enum LaunchTab: String, CaseIterable, Identifiable, Codable, Sendable {
-    case scores, channels, guide, settings
+    case scores, guide, settings
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .scores: return "Scores"
-        case .channels: return "Channels"
         case .guide: return "Guide"
         case .settings: return "Settings"
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "guide": self = .guide
+        case "settings": self = .settings
+        case "channels":
+            // Legacy pref → Guide (Channels tab removed)
+            self = .guide
+        default:
+            self = .scores
         }
     }
 }

@@ -18,7 +18,6 @@
 		D4E5F60718293A4B5C6D7E8F /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B2C3D4E5F60718293A4B5C6D /* KSPlayer */; };
 		E5F60718293A4B5C6D7E8F90 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = C3D4E5F60718293A4B5C6D7E /* KSPlayer */; };
 		04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
-		05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
 		16B0D1704242DBBB9DF61E57 /* UISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2635CCB93A485DFB19FD12C9 /* UISettingsView.swift */; };
 		1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
 		1F21546D2EEECFE4C0609857 /* PlaybackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8E8CB70B9909B421B80422 /* PlaybackController.swift */; };
@@ -71,7 +70,6 @@
 		DF15E6090BCA8022DB582613 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */; };
 		E3731096DEF391C521AA4BE3 /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D76664BD312DAE597A0E9E /* Game.swift */; };
 		E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
-		E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */; };
 		ED5C4D115EB738D9C198EA9C /* PlayerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1766E4AC3A474D23ACC17F82 /* PlayerSettingsView.swift */; };
 		F04604922EF810D75410544B /* PlayerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1766E4AC3A474D23ACC17F82 /* PlayerSettingsView.swift */; };
 		F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */; };
@@ -107,7 +105,6 @@
 		B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoresView.swift; sourceTree = "<group>"; };
 		B1791D581BB20BDC321A2721 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
 		B569ACAE698A8B65B91595BC /* PlayerPrefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPrefs.swift; sourceTree = "<group>"; };
-		B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsView.swift; sourceTree = "<group>"; };
 		B6FB6F7FF70E5B5A97C03E36 /* GuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideView.swift; sourceTree = "<group>"; };
 		C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		CACFA98F2DC29322F942EC8B /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
@@ -211,7 +208,6 @@
 		A3B9E3E4E938BC5BE2FE7BC5 /* Features */ = {
 			isa = PBXGroup;
 			children = (
-				C3877294771771BD7675E6EA /* Channels */,
 				55C497F876DE779BFAAA89DD /* Guide */,
 				D196590FC9848A9ECAEA3D7A /* Player */,
 				A654A1E1DC50B4A4D6FEFC5A /* Scores */,
@@ -250,10 +246,8 @@
 			path = SportsDash;
 			sourceTree = "<group>";
 		};
-		C3877294771771BD7675E6EA /* Channels */ = {
 			isa = PBXGroup;
 			children = (
-				B5B09EE3D0A32543CC7A2513 /* ChannelsView.swift */,
 			);
 			path = Channels;
 			sourceTree = "<group>";
@@ -407,7 +401,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */,
-				05CC54E63D8C15926D4CBADF /* ChannelsView.swift in Sources */,
 				32761960E9FED5FC0E6B05A3 /* EpgProgram.swift in Sources */,
 				DB6463BD97C03A2EFD1710BC /* EpgService.swift in Sources */,
 				04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */,
@@ -448,7 +441,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				7B6153EEDD6FC35C0442BE8D /* AppModel.swift in Sources */,
-				E90762E6BC4C811403C581B9 /* ChannelsView.swift in Sources */,
 				DE706435C9488D505489ABE8 /* EpgProgram.swift in Sources */,
 				F8C0D58D45A7685372A3AD43 /* EpgService.swift in Sources */,
 				1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */,

@@ -73,7 +73,7 @@ struct UISettingsView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(mode.label).foregroundStyle(SportsColors.text)
-                                Text(mode == .list ? "Channel × time guide" : "Card-style Now / Next")
+                                Text(mode == .list ? "Timeline · channel × time" : "Grid · Now / Next cards (browse & play)")
                                     .font(.caption)
                                     .foregroundStyle(SportsColors.muted)
                             }
