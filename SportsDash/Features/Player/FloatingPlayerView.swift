@@ -128,8 +128,9 @@ struct FloatingPlayerView: View {
 
     private func controlsOverlay(state: FloatingPlayerState) -> some View {
         ZStack {
+            // Soft dim only on expanded — never full-screen Liquid Glass over video.
             if state.size == .expanded {
-                Color.black.opacity(0.25)
+                Color.black.opacity(0.22)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .allowsHitTesting(false)
             }
@@ -143,8 +144,11 @@ struct FloatingPlayerView: View {
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.white)
                             .frame(width: 32, height: 32)
-                            .background(.black.opacity(0.45), in: Circle())
+                            .contentShape(Circle())
+                            .sportsGlass(in: Circle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close player")
 
                     Spacer()
 
@@ -155,8 +159,11 @@ struct FloatingPlayerView: View {
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.white)
                             .frame(width: 32, height: 32)
-                            .background(.black.opacity(0.45), in: Circle())
+                            .contentShape(Circle())
+                            .sportsGlass(in: Circle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Expand to fullscreen")
                 }
                 .padding(8)
 
@@ -172,8 +179,11 @@ struct FloatingPlayerView: View {
                                 .font(.title3.weight(.semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 48, height: 48)
-                                .background(.white.opacity(0.15), in: Circle())
+                                .contentShape(Circle())
+                                .sportsGlass(in: Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Jump back")
 
                         Button {
                             playback.togglePlayPause()
@@ -183,8 +193,11 @@ struct FloatingPlayerView: View {
                                 .font(.title2.weight(.bold))
                                 .foregroundStyle(.white)
                                 .frame(width: 56, height: 56)
-                                .background(.white.opacity(0.2), in: Circle())
+                                .contentShape(Circle())
+                                .sportsGlass(in: Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(playback.isPlaying ? "Stop" : "Play")
 
                         Button {
                             playback.jumpToLive()
@@ -194,8 +207,11 @@ struct FloatingPlayerView: View {
                                 .font(.title3.weight(.semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 48, height: 48)
-                                .background(.white.opacity(0.15), in: Circle())
+                                .contentShape(Circle())
+                                .sportsGlass(in: Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Jump forward")
                     }
                     .padding(.bottom, 8)
 
@@ -216,15 +232,18 @@ struct FloatingPlayerView: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(SportsColors.danger, in: Capsule())
+                                .background(SportsColors.danger, in: Capsule(style: .continuous))
                             Spacer()
                             Text(ChannelNameCleanup.displayName(
                                 state.channel.name,
                                 enabled: appModel.playerPrefs.cleanUpNames
                             ))
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.85))
+                            .foregroundStyle(.white.opacity(0.9))
                             .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .sportsGlass(in: Capsule(style: .continuous))
                         }
                     }
                     .padding(.horizontal, 12)
@@ -239,8 +258,11 @@ struct FloatingPlayerView: View {
                                 .font(.caption.weight(.bold))
                                 .foregroundStyle(.white)
                                 .frame(width: 28, height: 28)
-                                .background(.black.opacity(0.45), in: Circle())
+                                .contentShape(Circle())
+                                .sportsGlass(in: Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
                         .padding(8)
                     }
                 }

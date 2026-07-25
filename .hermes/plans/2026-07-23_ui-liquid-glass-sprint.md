@@ -18,7 +18,7 @@
 - PRD + `docs/ui-liquid-glass.md`  
 
 ## Follow-ups (kanban)
-1. Player chrome: glass floating controls (pause/PiP/close) without covering video with full-screen glass  
+1. ~~Player chrome: glass floating controls (pause/PiP/close) without covering video with full-screen glass~~ shipped S-UI.5  
 2. Guide card rows: content-card styling pass (still opaque)  
 3. Sheet presentations: consistent detents + material  
 4. QA dogfood checklist on device (iOS 26 glass vs material fallback)  

@@ -68,9 +68,10 @@ struct LiveScoresStrip: View {
             .frame(height: 120)
         }
         .padding(.bottom, 8)
+        // Scrim only — never glass-fill the strip over video.
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55), .black.opacity(0.92)],
+                colors: [.clear, .black.opacity(0.5), .black.opacity(0.9)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -102,12 +103,12 @@ struct LiveScoresStrip: View {
                 }
             }
             .frame(width: 72, height: 104)
-            .background(SportsColors.voidBlack.opacity(0.8))
+            // Content-layer opaque panel — not Liquid Glass.
+            .background(SportsColors.voidBlack.opacity(0.92), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(SportsColors.gold.opacity(collapsed ? 0.25 : 0.55), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(section.sportTitle), \(count) live")
@@ -135,12 +136,11 @@ struct LiveScoresStrip: View {
             }
             .padding(.horizontal, 8)
             .frame(width: 78, height: 104)
-            .background(SportsColors.panel.opacity(0.9))
+            .background(SportsColors.panel.opacity(0.95), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(SportsColors.border.opacity(collapsed ? 0.35 : 0.7), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(league.title), \(league.games.count) live")
@@ -213,12 +213,8 @@ struct LiveScoresStrip: View {
             }
             .padding(10)
             .frame(width: 158, height: 104, alignment: .topLeading)
-            .background(SportsColors.panelElevated.opacity(0.95))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isCurrent ? SportsColors.live : SportsColors.border, lineWidth: isCurrent ? 1.8 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            // Opaque content card (material + brand lift) — never Liquid Glass.
+            .sportsContentCard(radius: 12, emphasized: isCurrent)
         }
         .buttonStyle(.plain)
     }

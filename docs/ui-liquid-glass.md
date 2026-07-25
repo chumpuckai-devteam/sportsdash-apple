@@ -41,6 +41,9 @@ SportsDash game cards use `sportsContentCard`: material fill + hairline edge + s
 | `Features/Channels/ChannelsView.swift` | Category menu + tiles |
 | `Features/Guide/GuideView.swift` | Category + settings menus |
 | `Features/Settings/SettingsView.swift` | Grouped list + About logo |
+| `Features/Player/PlayerView.swift` | Fullscreen floating control chrome (`sportsGlass` buttons/capsules); gradient scrims only over video |
+| `Features/Player/FloatingPlayerView.swift` | Mini-player transport / close / expand glass controls |
+| `Features/Player/LiveScoresStrip.swift` | Opaque content cards (`sportsContentCard`); no glass wash |
 
 ## Fallback
 On OS &lt; 26, glass calls use `.ultraThinMaterial` + hairline border. Compile with a current Xcode that knows `glassEffect` (iOS 26 SDK); runtime availability gates execution.

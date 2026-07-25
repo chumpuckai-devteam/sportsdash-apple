@@ -133,10 +133,11 @@ struct PlayerView: View {
                 Text(banner)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(SportsColors.gold)
-                    .padding(10)
-                    .background(.black.opacity(0.75))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .sportsGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .padding(.top, 72)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -157,6 +158,8 @@ struct PlayerView: View {
     }
 
     // MARK: - Chrome (controls top, info mid-bottom, ticker absolute bottom)
+    // Liquid Glass on floating controls only — never glass-fill the video surface.
+    // https://developer.apple.com/design/human-interface-guidelines/materials
 
     private var topChrome: some View {
         VStack(spacing: 10) {
@@ -170,7 +173,7 @@ struct PlayerView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .sportsGlass(in: Capsule(style: .continuous))
 
                 chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
                     playback.toggleMute()
@@ -197,8 +200,11 @@ struct PlayerView: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .contentShape(Circle())
+                        .sportsGlass(in: Circle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
 
                 HStack(spacing: 6) {
                     utilityButton(systemName: "dot.radiowaves.left.and.right", tint: SportsColors.live) {
@@ -237,7 +243,7 @@ struct PlayerView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
+                .sportsGlass(in: Capsule(style: .continuous))
 
                 Spacer(minLength: 0)
             }
@@ -245,8 +251,9 @@ struct PlayerView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 20)
+        // Soft scrim for legibility only — not Liquid Glass over the video.
         .background(
-            LinearGradient(colors: [.black.opacity(0.85), .clear], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.black.opacity(0.72), .clear], startPoint: .top, endPoint: .bottom)
         )
     }
 
@@ -305,9 +312,10 @@ struct PlayerView: View {
         .padding(.top, 20)
         .padding(.bottom, showScoresStrip ? 10 : 28)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Content-layer scrim (opaque gradient) — not glass over video/info.
         .background(
             LinearGradient(
-                colors: [.clear, .black.opacity(0.55), .black.opacity(0.9)],
+                colors: [.clear, .black.opacity(0.45), .black.opacity(0.88)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -324,17 +332,20 @@ struct PlayerView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(color, in: Capsule())
+            .background(color, in: Capsule(style: .continuous))
     }
 
+    /// Circular floating control — Liquid Glass on iOS 26+, material fallback earlier.
     private func chromeIconButton(systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
-                .background(.ultraThinMaterial, in: Circle())
+                .contentShape(Circle())
+                .sportsGlass(in: Circle())
         }
+        .buttonStyle(.plain)
     }
 
     private func utilityButton(systemName: String, tint: Color, action: @escaping () -> Void) -> some View {
@@ -343,7 +354,9 @@ struct PlayerView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(tint)
                 .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Errors / streams
