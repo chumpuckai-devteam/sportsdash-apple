@@ -49,3 +49,17 @@ On OS &lt; 26, glass calls use `.ultraThinMaterial` + hairline border. Compile w
 - Apply glass to guide timeline cells or the video surface  
 - Stack multiple glass layers on top of each other  
 - Drop `Assets.xcassets` from XcodeGen sources again  
+
+## Scores dashboard (Apple Sports–inspired, not a clone)
+
+Reference UX cues only — no Apple Sports assets/trademarks:
+
+| Cue | SportsDash approach |
+|-----|---------------------|
+| Vertical league list | Grouped soft surface + hairline dividers (no bordered cards) |
+| Big scores / team marks | `GameMatchupRow` + `TeamMarkView` (logo or monogram) |
+| Detail sheet bottom-up | System `.sheet` + large detent |
+| Team color wash on detail | `TeamTheme.heroGradient` from stable hash of team id (not scraped brand kits) |
+| IPTV identity | Gold **WATCH** on matched streams |
+
+HIG still applies: Liquid Glass on chrome; content uses materials/soft surfaces.

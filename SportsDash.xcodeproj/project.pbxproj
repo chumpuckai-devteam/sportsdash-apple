@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E1GAMEROW01A55E7001C0DE02 /* GameMatchupRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1GAMEROW01A55E7001C0DE01 /* GameMatchupRow.swift */; };
+		E1GAMEROW01A55E7001C0DE03 /* GameMatchupRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1GAMEROW01A55E7001C0DE01 /* GameMatchupRow.swift */; };
 		D0SPLASH01A55E7001C0DE02 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0SPLASH01A55E7001C0DE01 /* SplashView.swift */; };
 		D0SPLASH01A55E7001C0DE03 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0SPLASH01A55E7001C0DE01 /* SplashView.swift */; };
 		C0FFEE01A55E7001C0DE0002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0FFEE01A55E7001C0DE0001 /* Assets.xcassets */; };
@@ -116,6 +118,7 @@
 		B1C2D3E4F5061728394A5B01 /* MovieRatingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieRatingsStore.swift; sourceTree = "<group>"; };
 		C0FFEE01A55E7001C0DE0001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D0SPLASH01A55E7001C0DE01 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
+		E1GAMEROW01A55E7001C0DE01 /* GameMatchupRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMatchupRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -220,6 +223,7 @@
 			isa = PBXGroup;
 			children = (
 				46644F4CFC505A9A0C711D84 /* GameCardView.swift */,
+				E1GAMEROW01A55E7001C0DE01 /* GameMatchupRow.swift */,
 				E24C42B15674881585E8FF1D /* GameDetailSheet.swift */,
 				B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */,
 			);
@@ -405,7 +409,9 @@
 				DB6463BD97C03A2EFD1710BC /* EpgService.swift in Sources */,
 				04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */,
 				E3731096DEF391C521AA4BE3 /* Game.swift in Sources */,
-				A49D776B0F83CF3F2DEBD2D7 /* GameCardView.swift in Sources */,
+				E1GAMEROW01A55E7001C0DE02 /* GameCardView.swift in Sources */,
+				E1GAMEROW01A55E7001C0DE02 /* GameMatchupRow.swift in Sources */,
+				PLACEHOLDER
 				9D9B700CAE82A22395D44A10 /* GameDetailSheet.swift in Sources */,
 				ADC2F1D4BAA6CDD131BEA0B8 /* GeneralSettingsView.swift in Sources */,
 				5E6A09606708B6DF1400A479 /* GuideView.swift in Sources */,
@@ -446,6 +452,7 @@
 				1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */,
 				3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */,
 				2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */,
+				E1GAMEROW01A55E7001C0DE03 /* GameMatchupRow.swift in Sources */,
 				B6CB6ED9D1811F26026C0BAC /* GameDetailSheet.swift in Sources */,
 				9D5B6A2B85120E8B8197D13A /* GeneralSettingsView.swift in Sources */,
 				BF4FA82CEE4A6BE44C4CA694 /* GuideView.swift in Sources */,

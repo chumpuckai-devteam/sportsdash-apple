@@ -32,7 +32,13 @@ struct ScoresView: View {
                         .environmentObject(appModel)
                         .presentationDetents([.large, .medium])
                         .presentationDragIndicator(.visible)
-                        .presentationBackground(.ultraThinMaterial)
+                        #if os(iOS)
+                        .presentationCornerRadius(28)
+                        #endif
+                        .presentationBackground {
+                            // Deep base so material cards pop (inspired by sports detail sheets)
+                            SportsColors.voidBlack
+                        }
                 }
         }
     }
@@ -73,19 +79,20 @@ struct ScoresView: View {
         return VStack(spacing: 0) {
             filterBar
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: 22) {
                     if let updated = appModel.lastUpdated {
                         Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(SportsColors.muted)
-                            .padding(.horizontal)
+                            .padding(.horizontal, 16)
                     }
 
                     if showFaves {
-                        shelfSection(
-                            title: "Faves",
-                            games: appModel.favoriteGames,
-                            goldTitle: true
+                        leagueBlock(
+                            title: "My teams",
+                            systemImage: "star.fill",
+                            goldTitle: true,
+                            games: appModel.favoriteGames
                         )
                     }
 
@@ -99,29 +106,31 @@ struct ScoresView: View {
                     } else {
                         ForEach(shelves) { section in
                             if section.showSportHeader {
-                                sportHeader(section.sportTitle)
+                                Text(section.sportTitle)
+                                    .font(.title2.weight(.bold))
+                                    .foregroundStyle(SportsColors.text)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 4)
+                                    .accessibilityAddTraits(.isHeader)
                             }
-                            shelfSection(
+                            leagueBlock(
                                 title: section.title,
-                                games: section.games,
-                                goldTitle: false
+                                systemImage: nil,
+                                goldTitle: false,
+                                games: section.games
                             )
                         }
                     }
                 }
                 .padding(.vertical, 12)
-                .padding(.bottom, 24)
+                .padding(.bottom, 28)
             }
             #if os(iOS)
-            // Must be on the ScrollView itself — not NavigationStack/ZStack — for pull-to-refresh
-            .refreshable {
-                await appModel.refreshScores()
-            }
+            .refreshable { await appModel.refreshScores() }
             #endif
         }
     }
 
-    /// Apple-style filter chips with glass unselected state.
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -141,33 +150,22 @@ struct ScoresView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background {
-            Rectangle()
-                .fill(.clear)
-                .background(.bar)
-                .opacity(0.001) // let system nav material show through when scrolling
-        }
     }
 
-    private func sportHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.title3.weight(.bold))
-            .foregroundStyle(SportsColors.text)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 4)
-            .accessibilityAddTraits(.isHeader)
-    }
-
-    private func shelfSection(
+    /// Borderless grouped list — soft surface, hairline dividers only (no per-card boxes).
+    private func leagueBlock(
         title: String,
-        games: [Game],
-        goldTitle: Bool
+        systemImage: String?,
+        goldTitle: Bool,
+        games: [Game]
     ) -> some View {
         let live = games.filter(\.isLive).count
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .foregroundStyle(SportsColors.gold)
+                }
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(goldTitle ? SportsColors.gold : SportsColors.textSecondary)
@@ -179,14 +177,16 @@ struct ScoresView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.bottom, 8)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SportsMetrics.gridGutter) {
-                    ForEach(games) { game in
-                        GameCardView(
+            VStack(spacing: 0) {
+                ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
+                    Button {
+                        selectedGame = game
+                    } label: {
+                        GameMatchupRow(
                             game: game,
                             isFavorite: appModel.isFavorite(game),
-                            onTap: { selectedGame = game },
                             onFavorite: {
                                 if !game.home.id.isEmpty {
                                     appModel.toggleFavorite(teamId: game.home.id)
@@ -197,13 +197,17 @@ struct ScoresView: View {
                             }
                         )
                     }
+                    .buttonStyle(.plain)
+
+                    if index < games.count - 1 {
+                        Divider()
+                            .background(Color.white.opacity(0.08))
+                            .padding(.leading, 16)
+                    }
                 }
-                .padding(.horizontal)
-                .scrollTargetLayout()
             }
-            #if os(iOS)
-            .scrollTargetBehavior(.viewAligned)
-            #endif
+            .sportsSoftSurface(radius: 22)
+            .padding(.horizontal, 12)
         }
     }
 
@@ -218,7 +222,7 @@ struct ScoresView: View {
 
     private var emptySubtitle: String {
         switch appModel.dashboardFilter {
-        case .favorites: return "Star teams on a matchup card to build your Faves row."
+        case .favorites: return "Star a team on a matchup to build My teams."
         default: return "Pull to refresh or try another filter."
         }
     }
