@@ -1,8 +1,8 @@
 # tvOS focus & selection pass (later)
 
-**Status:** backlog / blocked — research captured 2026-07-25  
-**Board:** sportsdash · story for mobile-engineer  
-**Not shipping now** — Samir asked for research + kanban only after imperfect gold/white focus dogfood.
+**Status:** implemented on main `47148be` — **device dogfood review required**  
+**Board:** sportsdash · `t_0c034e64` mobile-engineer  
+**Pattern:** full custom `SportsTVFocused` + `sportsTVFocusClean()` (no `.card` / no `@FocusState` hybrid).
 
 ## Problem (dogfood)
 
