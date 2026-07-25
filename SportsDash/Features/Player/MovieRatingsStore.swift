@@ -72,8 +72,9 @@ final class MovieRatingsStore: ObservableObject {
             let programs = epgByChannel[ch.id] ?? []
             guard let now = programs.first(where: \.isNow) ?? programs.first else { continue }
             let group = ch.group ?? categoryName
-            // Movie category folders: always try now-playing titles.
-            let force = (group ?? "").localizedCaseInsensitiveContains("movie")
+            // P0 XMLTV movie category + movie channel folders force lookup.
+            let force = XmltvCategory.saysMovie(now.categories)
+                || (group ?? "").localizedCaseInsensitiveContains("movie")
                 || (group ?? "").localizedCaseInsensitiveContains("cinema")
                 || (ch.name).localizedCaseInsensitiveContains("cinema")
                 || (ch.name).localizedCaseInsensitiveContains("movie")

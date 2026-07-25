@@ -98,6 +98,39 @@ enum MovieTitleParser {
     }
 }
 
+/// Structured movie-flag inputs (P0 = XMLTV categories; channel/title are fallbacks).
+struct MovieFlagSignals: Sendable, Hashable {
+    var cleanTitle: String
+    var year: Int?
+    /// XMLTV `<category>` contains movie/film/cinema (highest-confidence P0 flag).
+    var categorySaysMovie: Bool
+    /// XMLTV category is sports/news/series/etc. without a movie token.
+    var categorySaysNonMovie: Bool
+    var channelSaysMovie: Bool
+    var channelSaysSportsOrNews: Bool
+    var titleHasYear: Bool
+    var titlePrefixedMovie: Bool
+    var softEntertainmentChannel: Bool
+    var multiWordTitle: Bool
+
+    /// Final gate for ratings lookup / Guide movie filter.
+    var isMovieCandidate: Bool {
+        guard cleanTitle.count >= 2 else { return false }
+        if channelSaysSportsOrNews { return false }
+        // P0 hard yes — category wins even on soft entertainment channels.
+        if categorySaysMovie { return true }
+        // Explicit non-movie category blocks weak heuristics (series/news/sport).
+        if categorySaysNonMovie { return false }
+        if channelSaysMovie { return true }
+        if titlePrefixedMovie { return true }
+        if titleHasYear || year != nil { return true }
+        if softEntertainmentChannel && cleanTitle.count >= 4 { return true }
+        // Last-resort IPTV heuristic: only when no category metadata at all.
+        if multiWordTitle { return true }
+        return false
+    }
+}
+
 enum MovieDetection {
     private static let sportsHints = [
         "sport", "espn", "nfl", "nba", "mlb", "nhl", "soccer", "football", "tennis",
@@ -113,13 +146,59 @@ enum MovieDetection {
         "24/7 movie", "hollywood 24", "hollywoodbox", "vod",
     ]
     private static let softGroups = [
-        "entertainment", "premium", "hollywood", "vod", "hollywood", "hollywood box", "hollywood network",
+        "entertainment", "premium", "hollywood", "vod",
     ]
     private static let skipTitles = [
         "no information", "no info", "no program", "to be announced", "tba", "tbd",
         "program data", "unknown", "n/a", "off air", "off-air", "sign off", "test card",
         "paid programming", "infomercial",
     ]
+
+    /// Build structured signals (tests + debugging) then gate with `isMovieCandidate`.
+    static func signals(
+        title: String,
+        categories: [String] = [],
+        channelGroup: String? = nil,
+        channelName: String? = nil
+    ) -> MovieFlagSignals {
+        let (cleanTitle, year) = MovieTitleParser.parse(title)
+        let t = cleanTitle.lowercased()
+        let group = (channelGroup ?? "").lowercased()
+        let ch = (channelName ?? "").lowercased()
+        let bag = group + " " + ch
+
+        let skip = skipTitles.contains(where: { t == $0 || t.hasPrefix($0) })
+        let categoryMovie = XmltvCategory.saysMovie(categories)
+        let categoryNonMovie = !categoryMovie && XmltvCategory.saysNonMovie(categories)
+        let sportsOrNews =
+            sportsHints.contains(where: { bag.contains($0) })
+            || newsHints.contains(where: { bag.contains($0) })
+            || sportsHints.contains(where: { t.contains($0) })
+        let channelMovie = movieChannelHints.contains(where: { group.contains($0) || ch.contains($0) })
+        let soft = softGroups.contains(where: { group.contains($0) || ch.contains($0) })
+        let words = cleanTitle.split(separator: " ")
+        // Only use multi-word heuristic when categories are absent (real IPTV often omits them).
+        let multiWord = categories.isEmpty && words.count >= 2 && cleanTitle.count >= 8 && !skip
+        let titleYear =
+            year != nil
+            || title.range(of: #"\(\d{4}\)"#, options: .regularExpression) != nil
+        let prefixed =
+            t.hasPrefix("movie:") || t.hasPrefix("film:")
+            || title.lowercased().hasPrefix("movie:") || title.lowercased().hasPrefix("film:")
+
+        return MovieFlagSignals(
+            cleanTitle: skip ? "" : cleanTitle,
+            year: year,
+            categorySaysMovie: categoryMovie,
+            categorySaysNonMovie: categoryNonMovie || skip,
+            channelSaysMovie: channelMovie,
+            channelSaysSportsOrNews: sportsOrNews,
+            titleHasYear: titleYear,
+            titlePrefixedMovie: prefixed,
+            softEntertainmentChannel: soft,
+            multiWordTitle: multiWord
+        )
+    }
 
     /// Whether this EPG program should be treated as a movie candidate for ratings lookup.
     static func isMovieCandidate(
@@ -128,43 +207,11 @@ enum MovieDetection {
         channelGroup: String? = nil,
         channelName: String? = nil
     ) -> Bool {
-        let (cleanTitle, year) = MovieTitleParser.parse(title)
-        guard cleanTitle.count >= 2 else { return false }
-        let t = cleanTitle.lowercased()
-        if skipTitles.contains(where: { t == $0 || t.hasPrefix($0) }) { return false }
-
-        let catBlob = categories.joined(separator: " ").lowercased()
-        let group = (channelGroup ?? "").lowercased()
-        let ch = (channelName ?? "").lowercased()
-        let bag = catBlob + " " + group + " " + ch
-
-        if sportsHints.contains(where: { bag.contains($0) }) { return false }
-        if newsHints.contains(where: { bag.contains($0) }) { return false }
-        if catBlob.contains("sport") || catBlob.contains("news") || catBlob.contains("weather") {
-            return false
-        }
-        if sportsHints.contains(where: { t.contains($0) }) { return false }
-
-        if catBlob.contains("movie") || catBlob.contains("film") || catBlob.contains("cinema") {
-            return true
-        }
-        if movieChannelHints.contains(where: { group.contains($0) || ch.contains($0) }) {
-            return true
-        }
-        if t.hasPrefix("movie:") || t.hasPrefix("film:") { return true }
-        if year != nil { return true }
-        if title.range(of: #"\(\d{4}\)"#, options: .regularExpression) != nil { return true }
-
-        if softGroups.contains(where: { group.contains($0) || ch.contains($0) }) {
-            return cleanTitle.count >= 4
-        }
-
-        // Multi-word titles on non-sports channels (common IPTV film listings without year).
-        let words = cleanTitle.split(separator: " ")
-        if words.count >= 2 && cleanTitle.count >= 8 {
-            return true
-        }
-
-        return false
+        signals(
+            title: title,
+            categories: categories,
+            channelGroup: channelGroup,
+            channelName: channelName
+        ).isMovieCandidate
     }
 }

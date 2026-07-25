@@ -234,15 +234,8 @@ actor EpgService {
                 }
             }
             guard !programs.isEmpty else { continue }
-            result[ch.id] = Array(programs.prefix(limit)).map {
-                EpgProgram(
-                    channelKey: ch.id,
-                    title: $0.title,
-                    start: $0.start,
-                    end: $0.end,
-                    description: $0.description
-                )
-            }
+            // Preserve XMLTV categories/description — dropping them killed P0 movie flags + Guide chips.
+            result[ch.id] = Array(programs.prefix(limit)).map { $0.remapped(toChannelKey: ch.id) }
         }
         return result
     }

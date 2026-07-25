@@ -29,6 +29,8 @@ struct GuideView: View {
     @State private var ratingsTask: Task<Void, Never>?
     @State private var showGuideSettings = false
     @State private var showCategoryPicker = false
+    /// Guide-only filter: now-playing looks like a movie (XMLTV categories + signals).
+    @State private var moviesOnly = false
 
     private var displayMode: GuideLayoutMode {
         appModel.playerPrefs.guideLayout
@@ -48,15 +50,27 @@ struct GuideView: View {
     private var cleanNames: Bool { appModel.playerPrefs.cleanUpNames }
 
     private var guideRows: [GuideChannelRowData] {
-        // Cap first paint for huge categories; List still scrolls all if we map all —
-        // keep full list but avoid heavy program copy work by referencing EPG map.
+        // Reference EPG map; LazyVStack/List only mount visible rows.
         let chans = activeChannels
-        return chans.map { ch in
-            GuideChannelRowData(
-                channel: ch,
-                programs: appModel.epgByChannel[ch.id] ?? []
-            )
+        var rows: [GuideChannelRowData] = []
+        rows.reserveCapacity(chans.count)
+        for ch in chans {
+            let programs = appModel.epgByChannel[ch.id] ?? []
+            if moviesOnly {
+                let now = programs.first(where: \.isNow) ?? programs.first
+                let isMovie = now.map { prog in
+                    MovieDetection.isMovieCandidate(
+                        title: prog.title,
+                        categories: prog.categories,
+                        channelGroup: ch.group ?? selectedGroup,
+                        channelName: ch.name
+                    )
+                } ?? false
+                if !isMovie { continue }
+            }
+            rows.append(GuideChannelRowData(channel: ch, programs: programs))
         }
+        return rows
     }
 
     var body: some View {
@@ -224,6 +238,17 @@ struct GuideView: View {
                 }
             }
         }
+
+        Divider()
+
+        Button {
+            moviesOnly.toggle()
+        } label: {
+            Label(
+                moviesOnly ? "Movies now · On" : "Movies now",
+                systemImage: moviesOnly ? "film.fill" : "film"
+            )
+        }
     }
 
     private var guideSettingsSheet: some View {
@@ -270,6 +295,17 @@ struct GuideView: View {
                             ? "Timeline grid: channel rows × time."
                             : "Card grid: Now / Next per channel."
                     )
+                }
+
+                Section {
+                    Toggle(isOn: $moviesOnly) {
+                        Label("Movies now", systemImage: "film")
+                    }
+                    .tint(SportsColors.gold)
+                } header: {
+                    Text("Filter")
+                } footer: {
+                    Text("Uses XMLTV categories when present, plus channel/title movie signals.")
                 }
             }
             .navigationTitle("Guide settings")
@@ -464,6 +500,8 @@ private struct GuideCardRow: View {
     }
 
     private var forceMovieRatings: Bool {
+        // Channel folder force + P0 XMLTV category movie flag on now-playing.
+        if let now, XmltvCategory.saysMovie(now.categories) { return true }
         let g = groupForRatings.lowercased()
         let n = channel.name.lowercased()
         return g.contains("movie") || g.contains("cinema") || g.contains("film")
@@ -503,6 +541,10 @@ private struct GuideCardRow: View {
                     .font(.subheadline)
                     .foregroundStyle(SportsColors.textSecondary)
                     .lineLimit(2)
+
+                if let now, let cat = now.categoryChipLabel {
+                    GuideCategoryChip(label: cat, emphasized: XmltvCategory.saysMovie(now.categories))
+                }
 
                 if let now {
                     MovieRatingLoader(
@@ -777,10 +819,19 @@ private struct GuideTimelineRow: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(SportsColors.text)
                 .lineLimit(1)
-            Text(shortTimeRange(program))
-                .font(.system(size: 10))
-                .foregroundStyle(SportsColors.muted)
-                .lineLimit(1)
+            HStack(spacing: 4) {
+                Text(shortTimeRange(program))
+                    .font(.system(size: 10))
+                    .foregroundStyle(SportsColors.muted)
+                    .lineLimit(1)
+                if width > 96, let cat = program.categoryChipLabel {
+                    GuideCategoryChip(
+                        label: cat,
+                        emphasized: XmltvCategory.saysMovie(program.categories),
+                        compact: true
+                    )
+                }
+            }
             if airing {
                 MovieRatingLoader(
                     title: program.title,
@@ -788,7 +839,8 @@ private struct GuideTimelineRow: View {
                     channelGroup: row.channel.group,
                     channelName: row.channel.name,
                     compact: true,
-                    forceMovie: (row.channel.group ?? "").localizedCaseInsensitiveContains("movie")
+                    forceMovie: XmltvCategory.saysMovie(program.categories)
+                        || (row.channel.group ?? "").localizedCaseInsensitiveContains("movie")
                         || row.channel.name.localizedCaseInsensitiveContains("cinema")
                 )
             }
@@ -813,9 +865,41 @@ private struct GuideTimelineRow: View {
     }
 
     private func shortTimeRange(_ p: EpgProgram) -> String {
+        let f = Self.shortTimeFormatter
+        return "\(f.string(from: p.start)) – \(f.string(from: p.end))"
+    }
+
+    private static let shortTimeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "h:mm a"
-        return "\(f.string(from: p.start)) – \(f.string(from: p.end))"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+}
+
+// MARK: - XMLTV category chip
+
+private struct GuideCategoryChip: View {
+    let label: String
+    var emphasized: Bool = false
+    var compact: Bool = false
+
+    var body: some View {
+        Text(label.uppercased())
+            .font(.system(size: compact ? 8 : 9, weight: .bold))
+            .tracking(0.4)
+            .foregroundStyle(emphasized ? SportsColors.voidBlack : SportsColors.gold)
+            .padding(.horizontal, compact ? 5 : 7)
+            .padding(.vertical, compact ? 2 : 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(emphasized ? SportsColors.gold : SportsColors.gold.opacity(0.16))
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(SportsColors.gold.opacity(emphasized ? 0 : 0.45), lineWidth: 0.5)
+            }
+            .accessibilityLabel("Category \(label)")
     }
 }
 
