@@ -119,6 +119,18 @@ extension View {
         self
         #endif
     }
+
+    /// tvOS: kill system white focus plume; keep only our gold chrome.
+    @ViewBuilder
+    func sportsTVFocusClean() -> some View {
+        #if os(tvOS)
+        self
+            .buttonStyle(.plain)
+            .focusEffectDisabled(true)
+        #else
+        self
+        #endif
+    }
 }
 
 // MARK: - Reusable chrome
@@ -169,7 +181,7 @@ struct SportsFilterChip: View {
             #endif
         }
         #if os(tvOS)
-        .buttonStyle(.card)
+        .sportsTVFocusClean()
         #else
         .buttonStyle(.plain)
         #endif

@@ -20,7 +20,15 @@ struct ScoresView: View {
                             if appModel.isLoadingScores {
                                 ProgressView().controlSize(.small).tint(SportsColors.gold)
                             } else {
+                                #if os(tvOS)
+                                // Icon only — Label truncates badly in the TV toolbar ("R…sh")
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(SportsColors.gold)
+                                    .accessibilityLabel("Refresh")
+                                #else
                                 Label("Refresh", systemImage: "arrow.clockwise")
+                                #endif
                             }
                         }
                         .disabled(appModel.isLoadingScores)
@@ -187,39 +195,32 @@ struct ScoresView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
 
-            VStack(spacing: 0) {
-                ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
-                    Button {
-                        selectedGame = game
-                    } label: {
-                        GameMatchupRow(
-                            game: game,
-                            isFavorite: appModel.isFavorite(game),
-                            onFavorite: {
-                                if !game.home.id.isEmpty {
-                                    appModel.toggleFavorite(teamId: game.home.id)
-                                }
-                                if !game.away.id.isEmpty {
-                                    appModel.toggleFavorite(teamId: game.away.id)
-                                }
+            VStack(spacing: 12) {
+                ForEach(games) { game in
+                    GameScoreFocusRow(
+                        game: game,
+                        isFavorite: appModel.isFavorite(game),
+                        onSelect: { selectedGame = game },
+                        onFavorite: {
+                            if !game.home.id.isEmpty {
+                                appModel.toggleFavorite(teamId: game.home.id)
                             }
-                        )
-                    }
-                    #if os(tvOS)
-                    .buttonStyle(.card)
-                    #else
-                    .buttonStyle(.plain)
-                    #endif
-
-                    if index < games.count - 1 {
-                        Divider()
-                            .background(Color.white.opacity(0.08))
-                            .padding(.leading, 16)
-                    }
+                            if !game.away.id.isEmpty {
+                                appModel.toggleFavorite(teamId: game.away.id)
+                            }
+                        }
+                    )
                 }
             }
+            #if os(tvOS)
+            // Inset + max width so focus scale doesn't clip at screen edges
+            .frame(maxWidth: 980)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 48)
+            #else
             .sportsSoftSurface(radius: 22)
             .padding(.horizontal, 12)
+            #endif
         }
     }
 

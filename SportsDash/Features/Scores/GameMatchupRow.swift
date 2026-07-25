@@ -198,6 +198,54 @@ struct GameMatchupRow: View {
     }
 }
 
+// MARK: - Focusable score row (tvOS-safe — no white .card plume)
+
+/// Wraps `GameMatchupRow` with custom gold focus; avoids system .card scale that clips at edges.
+struct GameScoreFocusRow: View {
+    let game: Game
+    var isFavorite: Bool = false
+    var onSelect: () -> Void
+    var onFavorite: (() -> Void)?
+
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Button(action: onSelect) {
+            GameMatchupRow(
+                game: game,
+                isFavorite: isFavorite,
+                onFavorite: onFavorite
+            )
+            #if os(tvOS)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .frame(minHeight: 118)
+            #endif
+            .background {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(focused ? SportsColors.panelElevated : SportsColors.panel.opacity(0.92))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(
+                        focused ? SportsColors.gold : SportsColors.border.opacity(0.35),
+                        lineWidth: focused ? 3 : 1
+                    )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: focused ? SportsColors.gold.opacity(0.28) : .clear, radius: 12, y: 0)
+        }
+        #if os(tvOS)
+        .sportsTVFocusClean()
+        .focused($focused)
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .compositingGroup()
+        .accessibilityHint("Opens game details and streams")
+    }
+}
+
 // MARK: - Soft surface (channel-picker style card)
 
 extension View {

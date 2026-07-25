@@ -684,24 +684,19 @@ private struct GuideTimelineRow: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(channelFocused ? SportsColors.gold : SportsColors.panelElevated)
                 }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            channelFocused ? SportsColors.gold : SportsColors.border.opacity(0.6),
-                            lineWidth: channelFocused ? 0 : 1
-                        )
-                }
+                // Clip so system focus can't paint white outside the gold pill
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             #if os(tvOS)
-            // Custom high-contrast focus fill (default glass ring sat behind the label).
-            .buttonStyle(.plain)
+            .sportsTVFocusClean()
             .focused($channelFocused)
-            .focusEffectDisabled()
             #else
             .buttonStyle(.plain)
             #endif
             // Keep focus chrome above the scrolling program strip
             .zIndex(2)
+            .compositingGroup()
+            .shadow(color: channelFocused ? SportsColors.gold.opacity(0.35) : .clear, radius: 10, y: 0)
 
             GuideLinkedScrollView(
                 axis: .horizontal,
