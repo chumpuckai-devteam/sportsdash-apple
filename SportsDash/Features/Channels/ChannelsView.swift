@@ -27,7 +27,7 @@ struct ChannelsView: View {
         #if os(tvOS)
         [GridItem(.adaptive(minimum: 280), spacing: 16)]
         #else
-        [GridItem(.adaptive(minimum: 160), spacing: 12)]
+        [GridItem(.adaptive(minimum: 160), spacing: SportsMetrics.gridGutter)]
         #endif
     }
 
@@ -51,22 +51,35 @@ struct ChannelsView: View {
                     channelGrid
                 }
             }
-            .background(SportsColors.voidBlack)
+            .sportsScreenBackground()
             .navigationTitle("Channels")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search channels")
+            .searchable(
+                text: $query,
+                placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "Search channels"
+            )
             #endif
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if query.isEmpty, !groupNames.isEmpty {
-                        groupMenu
+                        SportsCategoryMenu(
+                            title: selectedGroup,
+                            selection: $selectedGroup,
+                            options: groupNames
+                        )
                     }
                 }
             }
             .task {
                 if selectedGroup.isEmpty {
                     selectedGroup = groupNames.first ?? ""
+                }
+            }
+            .onChange(of: appModel.channelGroupNames) { _, names in
+                if selectedGroup.isEmpty || !names.contains(selectedGroup) {
+                    selectedGroup = names.first ?? ""
                 }
             }
             .fullScreenCover(item: $playerRoute) { route in
@@ -80,28 +93,9 @@ struct ChannelsView: View {
         }
     }
 
-    private var groupMenu: some View {
-        Menu {
-            Picker("Category", selection: $selectedGroup) {
-                ForEach(groupNames, id: \.self) { name in
-                    Text(name).tag(name)
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(selectedGroup.isEmpty ? "Category" : selectedGroup)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(SportsColors.gold)
-        }
-    }
-
     private var channelGrid: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: SportsMetrics.gridGutter) {
                 ForEach(displayedChannels) { ch in
                     ChannelCard(
                         channel: ch,
@@ -113,6 +107,7 @@ struct ChannelsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .padding(.bottom, 28)
         }
     }
 }
@@ -125,7 +120,6 @@ private struct ChannelCard: View {
     var body: some View {
         Button(action: onPlay) {
             VStack(alignment: .leading, spacing: 10) {
-                // Glyph tile (no remote logos — keeps grid fast & native)
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(
@@ -140,13 +134,13 @@ private struct ChannelCard: View {
                         )
                     Image(systemName: "tv.fill")
                         .font(.title2)
-                        .foregroundStyle(SportsColors.gold.opacity(0.85))
+                        .foregroundStyle(SportsColors.gold.opacity(0.9))
                         .symbolRenderingMode(.hierarchical)
                 }
                 .aspectRatio(16 / 10, contentMode: .fit)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(SportsColors.border.opacity(0.6), lineWidth: 1)
+                        .stroke(SportsColors.border.opacity(0.55), lineWidth: 1)
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -164,13 +158,10 @@ private struct ChannelCard: View {
                 }
             }
             .padding(10)
-            .background(SportsColors.panel.opacity(0.9))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(SportsColors.border.opacity(0.5), lineWidth: 1)
-            )
+            .sportsContentCard(radius: 16)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(ChannelNameCleanup.displayName(channel.name, enabled: cleanUpNames))
+        .accessibilityHint("Plays channel")
     }
 }

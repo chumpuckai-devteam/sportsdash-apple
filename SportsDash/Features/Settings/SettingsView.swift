@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// Root settings hub — UHF-style sections (Playlist + Advanced pages).
+/// Root settings hub — grouped list with modern section chrome.
 struct SettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Playlists") {
+                Section {
                     NavigationLink {
                         PlaylistSettingsView()
                     } label: {
@@ -69,9 +69,11 @@ struct SettingsView: View {
                             .foregroundStyle(SportsColors.muted)
                             .listRowBackground(SportsColors.panel)
                     }
+                } header: {
+                    Text("Playlists")
                 }
 
-                Section("Advanced") {
+                Section {
                     NavigationLink {
                         GeneralSettingsView()
                     } label: {
@@ -99,14 +101,27 @@ struct SettingsView: View {
                         settingsRow(icon: "sportscourt", tint: SportsColors.gold, title: "Scores & leagues")
                     }
                     .listRowBackground(SportsColors.panel)
+                } header: {
+                    Text("Advanced")
                 }
 
-                Section("About") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("SportsDash").font(.headline).foregroundStyle(SportsColors.text)
-                        Text("Native SwiftUI sports IPTV for iOS & Apple TV.")
-                            .font(.caption)
-                            .foregroundStyle(SportsColors.muted)
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) {
+                            Image("AppLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 44, height: 44)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("SportsDash")
+                                    .font(.headline)
+                                    .foregroundStyle(SportsColors.text)
+                                Text("Native SwiftUI · iOS & Apple TV")
+                                    .font(.caption)
+                                    .foregroundStyle(SportsColors.muted)
+                            }
+                        }
                         Text("Playback: KSPlayer (FFmpeg) + optional AVKit. Movie scores via OMDb/TMDB when you add keys in General.")
                             .font(.caption2)
                             .foregroundStyle(SportsColors.muted)
@@ -118,13 +133,16 @@ struct SettingsView: View {
                         LabeledContent("Live games", value: "\(appModel.games.filter(\.isLive).count)")
                     }
                     .listRowBackground(SportsColors.panel)
+                } header: {
+                    Text("About")
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(SportsColors.voidBlack)
+            .sportsScreenBackground()
             .navigationTitle("Settings")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            .listStyle(.insetGrouped)
             #endif
         }
     }

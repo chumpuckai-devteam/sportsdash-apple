@@ -7,7 +7,7 @@ struct ScoresView: View {
     var body: some View {
         NavigationStack {
             scoresRoot
-                .background(SportsColors.voidBlack)
+                .sportsScreenBackground()
                 .navigationTitle("Scores")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.large)
@@ -18,20 +18,21 @@ struct ScoresView: View {
                             Task { await appModel.refreshScores() }
                         } label: {
                             if appModel.isLoadingScores {
-                                ProgressView().tint(SportsColors.gold)
+                                ProgressView().controlSize(.small).tint(SportsColors.gold)
                             } else {
-                                Image(systemName: "arrow.clockwise")
+                                Label("Refresh", systemImage: "arrow.clockwise")
                             }
                         }
                         .disabled(appModel.isLoadingScores)
+                        .sportsToolbarControl()
                     }
                 }
                 .sheet(item: $selectedGame) { game in
                     GameDetailSheet(game: game)
                         .environmentObject(appModel)
-                        // Large first so streams are visible without scrolling the header away
                         .presentationDetents([.large, .medium])
                         .presentationDragIndicator(.visible)
+                        .presentationBackground(.ultraThinMaterial)
                 }
         }
     }
@@ -75,7 +76,7 @@ struct ScoresView: View {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if let updated = appModel.lastUpdated {
                         Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                            .font(.caption)
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(SportsColors.muted)
                             .padding(.horizontal)
                     }
@@ -109,6 +110,7 @@ struct ScoresView: View {
                     }
                 }
                 .padding(.vertical, 12)
+                .padding(.bottom, 24)
             }
             #if os(iOS)
             // Must be on the ScrollView itself — not NavigationStack/ZStack — for pull-to-refresh
@@ -119,41 +121,34 @@ struct ScoresView: View {
         }
     }
 
-    /// Apple-style filter chips (like Sports / Fitness segmented filters).
+    /// Apple-style filter chips with glass unselected state.
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(DashboardFilter.allCases) { f in
-                    let selected = appModel.dashboardFilter == f
                     let liveCount = appModel.games.filter(\.isLive).count
-                    Button {
-                        appModel.dashboardFilter = f
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(f.label)
-                                .font(.subheadline.weight(.semibold))
-                            if f == .live, liveCount > 0 {
-                                Text("\(liveCount)")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(selected ? SportsColors.voidBlack.opacity(0.7) : SportsColors.live)
-                            }
+                    SportsFilterChip(
+                        title: f.label,
+                        count: f == .live ? liveCount : nil,
+                        selected: appModel.dashboardFilter == f
+                    ) {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            appModel.dashboardFilter = f
                         }
-                        .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(selected ? SportsColors.gold : Color(.secondarySystemFill))
-                        .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(SportsColors.voidBlack)
+        .background {
+            Rectangle()
+                .fill(.clear)
+                .background(.bar)
+                .opacity(0.001) // let system nav material show through when scrolling
+        }
     }
 
-    /// Sport section — native list-section style (title only, no rule line).
     private func sportHeader(_ title: String) -> some View {
         Text(title)
             .font(.title3.weight(.bold))
@@ -165,7 +160,6 @@ struct ScoresView: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// League sub-row under a sport (e.g. MLB, World Cup).
     private func shelfSection(
         title: String,
         games: [Game],
@@ -187,7 +181,7 @@ struct ScoresView: View {
             .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: SportsMetrics.gridGutter) {
                     ForEach(games) { game in
                         GameCardView(
                             game: game,
@@ -205,7 +199,11 @@ struct ScoresView: View {
                     }
                 }
                 .padding(.horizontal)
+                .scrollTargetLayout()
             }
+            #if os(iOS)
+            .scrollTargetBehavior(.viewAligned)
+            #endif
         }
     }
 
@@ -228,24 +226,17 @@ struct ScoresView: View {
 
 struct LeagueShelf: Identifiable {
     var id: String { key }
-    /// League key (e.g. mlb, worldcup).
     var key: String
-    /// League display name (sub-row).
     var title: String
-    /// Sport path for grouping (soccer, baseball, …).
     var sportKey: String
-    /// Sport section title (Soccer, Baseball, …).
     var sportTitle: String
-    /// First league under a sport gets the section header.
     var showSportHeader: Bool
     var games: [Game]
 }
 
 enum ScoreboardGrouping {
-    /// Preferred league order within sports (sport sections follow first league appearance).
     static let leagueOrder: [SportLeague] = SportLeague.allCases
 
-    /// Sport sections with league sub-rows: Soccer → World Cup, UCL, EPL, …
     static func leagueShelves(from games: [Game]) -> [LeagueShelf] {
         var buckets: [SportLeague: [Game]] = [:]
         for g in games {

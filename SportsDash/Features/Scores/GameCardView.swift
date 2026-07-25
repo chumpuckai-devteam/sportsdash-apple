@@ -9,26 +9,24 @@ struct GameCardView: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
+                HStack(spacing: 8) {
                     if game.isLive {
-                        Text("LIVE")
-                            .font(.caption2.weight(.black))
-                            .foregroundStyle(SportsColors.live)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(SportsColors.live.opacity(0.15))
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                        SportsLiveBadge()
                     }
                     Text(game.statusLine)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(game.isLive ? SportsColors.live : SportsColors.textSecondary)
-                    Spacer()
+                    Spacer(minLength: 4)
                     if game.usesMatchupLayout, let onFavorite {
                         Button(action: onFavorite) {
                             Image(systemName: isFavorite ? "star.fill" : "star")
+                                .font(.body.weight(.semibold))
                                 .foregroundStyle(isFavorite ? SportsColors.gold : SportsColors.muted)
+                                .frame(width: 32, height: 32)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
                     }
                 }
 
@@ -44,40 +42,22 @@ struct GameCardView: View {
 
                 Spacer(minLength: 0)
 
-                HStack {
+                HStack(spacing: 8) {
                     Text(game.broadcasts.prefix(2).joined(separator: " · "))
                         .font(.caption2)
                         .foregroundStyle(SportsColors.muted)
                         .lineLimit(1)
-                    Spacer()
-                    Text("WATCH")
-                        .font(.caption.weight(.black))
-                        .foregroundStyle(SportsColors.voidBlack)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(SportsColors.gold)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Spacer(minLength: 4)
+                    SportsWatchBadge()
                 }
             }
-            .padding(12)
-            .frame(width: 280, height: 160, alignment: .topLeading)
-            .background(
-                LinearGradient(
-                    colors: [SportsColors.panelElevated, SportsColors.panel],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(
-                        game.isLive ? SportsColors.live.opacity(0.4) : SportsColors.border,
-                        lineWidth: 1
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(SportsMetrics.cardPadding)
+            .frame(width: 288, height: 164, alignment: .topLeading)
+            .sportsContentCard(emphasized: game.isLive)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens game details and streams")
     }
 
     private func teamRow(_ team: TeamInfo) -> some View {

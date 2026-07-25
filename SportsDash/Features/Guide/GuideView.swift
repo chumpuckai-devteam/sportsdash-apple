@@ -79,7 +79,11 @@ struct GuideView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !groupNames.isEmpty {
-                        groupMenu
+                        SportsCategoryMenu(
+                            title: selectedGroup,
+                            selection: $selectedGroup,
+                            options: groupNames
+                        )
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -127,26 +131,6 @@ struct GuideView: View {
         }
     }
 
-    private var groupMenu: some View {
-        Menu {
-            Picker("Category", selection: $selectedGroup) {
-                ForEach(groupNames, id: \.self) { name in
-                    Text(name).tag(name)
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(selectedGroup.isEmpty ? "Category" : selectedGroup)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(SportsColors.gold)
-        }
-    }
-
-    /// Guide-only settings: refresh + list/grid layout.
     private var guideSettingsMenu: some View {
         Menu {
             Button {
@@ -180,12 +164,15 @@ struct GuideView: View {
                 }
             }
         } label: {
-            if appModel.isLoadingEpg {
-                ProgressView()
-            } else {
-                Image(systemName: "ellipsis.circle")
-            }
+            Image(systemName: "ellipsis.circle")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(SportsColors.gold)
+                .frame(width: 32, height: 32)
+                .sportsGlass(in: Circle())
         }
+        #if os(iOS)
+        .menuOrder(.fixed)
+        #endif
         .accessibilityLabel("Guide settings")
     }
 

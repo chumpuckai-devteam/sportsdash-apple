@@ -11,6 +11,24 @@ enum AppTab: Hashable {
         case .settings: self = .settings
         }
     }
+
+    var title: String {
+        switch self {
+        case .scores: return "Scores"
+        case .channels: return "Channels"
+        case .guide: return "Guide"
+        case .settings: return "Settings"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .scores: return "sportscourt.fill"
+        case .channels: return "tv.fill"
+        case .guide: return "rectangle.grid.1x2.fill"
+        case .settings: return "gearshape.fill"
+        }
+    }
 }
 
 struct RootTabView: View {
@@ -23,25 +41,10 @@ struct RootTabView: View {
 
     var body: some View {
         ZStack {
-            TabView(selection: $tab) {
-                ScoresView()
-                    .tabItem { Label("Scores", systemImage: "sportscourt.fill") }
-                    .tag(AppTab.scores)
-
-                ChannelsView()
-                    .tabItem { Label("Channels", systemImage: "tv") }
-                    .tag(AppTab.channels)
-
-                GuideView()
-                    .tabItem { Label("Guide", systemImage: "square.grid.2x2") }
-                    .tag(AppTab.guide)
-
-                SettingsView()
-                    .tabItem { Label("Settings", systemImage: "gearshape") }
-                    .tag(AppTab.settings)
-            }
-            .tint(SportsColors.gold)
-            .opacity(showSplash ? 0.001 : 1) // keep alive under splash so tabs warm up
+            mainTabs
+                .tint(SportsColors.gold)
+                // Keep tabs mounted under splash so they warm up.
+                .opacity(showSplash ? 0.001 : 1)
 
             // UHF-style pop-out player above tabs
             if appModel.floatingPlayer != nil, !showSplash {
@@ -82,6 +85,53 @@ struct RootTabView: View {
             withAnimation(.easeInOut(duration: 0.28)) {
                 showSplash = false
             }
+        }
+    }
+
+    /// iOS 18+ `Tab` API gets the Liquid Glass tab bar; older path keeps Label tabs.
+    @ViewBuilder
+    private var mainTabs: some View {
+        #if os(iOS)
+        if #available(iOS 18.0, *) {
+            TabView(selection: $tab) {
+                Tab(AppTab.scores.title, systemImage: AppTab.scores.systemImage, value: AppTab.scores) {
+                    ScoresView()
+                }
+                Tab(AppTab.channels.title, systemImage: AppTab.channels.systemImage, value: AppTab.channels) {
+                    ChannelsView()
+                }
+                Tab(AppTab.guide.title, systemImage: AppTab.guide.systemImage, value: AppTab.guide) {
+                    GuideView()
+                }
+                Tab(AppTab.settings.title, systemImage: AppTab.settings.systemImage, value: AppTab.settings) {
+                    SettingsView()
+                }
+            }
+        } else {
+            legacyTabView
+        }
+        #else
+        legacyTabView
+        #endif
+    }
+
+    private var legacyTabView: some View {
+        TabView(selection: $tab) {
+            ScoresView()
+                .tabItem { Label(AppTab.scores.title, systemImage: AppTab.scores.systemImage) }
+                .tag(AppTab.scores)
+
+            ChannelsView()
+                .tabItem { Label(AppTab.channels.title, systemImage: AppTab.channels.systemImage) }
+                .tag(AppTab.channels)
+
+            GuideView()
+                .tabItem { Label(AppTab.guide.title, systemImage: AppTab.guide.systemImage) }
+                .tag(AppTab.guide)
+
+            SettingsView()
+                .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.systemImage) }
+                .tag(AppTab.settings)
         }
     }
 }
