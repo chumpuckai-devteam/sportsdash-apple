@@ -658,45 +658,8 @@ private struct GuideTimelineRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Button {
-                onPlay(row.channel)
-            } label: {
-                HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(channelFocused ? SportsColors.voidBlack.opacity(0.25) : SportsColors.voidBlack)
-                        .frame(width: 36, height: 36)
-                        .overlay {
-                            Image(systemName: "tv.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.gold)
-                        }
-
-                    Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.text)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 12)
-                .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(channelFocused ? SportsColors.gold : SportsColors.panelElevated)
-                }
-                // Clip so system focus can't paint white outside the gold pill
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            #if os(tvOS)
-            .sportsTVFocusClean()
-            .focused($channelFocused)
-            #else
-            .buttonStyle(.plain)
-            #endif
-            // Keep focus chrome above the scrolling program strip
-            .zIndex(2)
-            .compositingGroup()
-            .shadow(color: channelFocused ? SportsColors.gold.opacity(0.35) : .clear, radius: 10, y: 0)
+            channelNameCell
+                .zIndex(2)
 
             GuideLinkedScrollView(
                 axis: .horizontal,
@@ -722,13 +685,70 @@ private struct GuideTimelineRow: View {
             .zIndex(0)
         }
         .frame(height: GuideMetrics.rowHeight)
-        // Extra horizontal padding so tvOS focus scale/shadow isn't clipped
         .padding(.vertical, 4)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SportsColors.border.opacity(0.35))
                 .frame(height: 0.5)
         }
+    }
+
+    /// Channel label — gold fill when focused; no system white focus plume.
+    @ViewBuilder
+    private var channelNameCell: some View {
+        let label = HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(channelFocused ? SportsColors.voidBlack.opacity(0.22) : SportsColors.voidBlack)
+                .frame(width: 36, height: 36)
+                .overlay {
+                    Image(systemName: "tv.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.gold)
+                }
+
+            Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(channelFocused ? SportsColors.voidBlack : SportsColors.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(channelFocused ? SportsColors.gold : SportsColors.panelElevated)
+        }
+        .overlay {
+            // Subtle gold ring only when focused — never white
+            if channelFocused {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(SportsColors.goldDim, lineWidth: 2)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+        #if os(tvOS)
+        label
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            // Not a Button — avoids UIKit/SwiftUI default focus material (white).
+            .focusable(true) {
+                onPlay(row.channel)
+            }
+            .focused($channelFocused)
+            .focusEffectDisabled(true)
+            .hoverEffectDisabled()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
+            .accessibilityHint("Plays channel")
+        #else
+        Button {
+            onPlay(row.channel)
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        #endif
     }
 
     private var visiblePrograms: [EpgProgram] {
