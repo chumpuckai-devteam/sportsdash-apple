@@ -154,6 +154,7 @@ struct GuideView: View {
                     options: groupNames,
                     onDone: { showCategoryPicker = false }
                 )
+                .background(SportsColors.voidBlack.ignoresSafeArea())
             }
             #endif
         }

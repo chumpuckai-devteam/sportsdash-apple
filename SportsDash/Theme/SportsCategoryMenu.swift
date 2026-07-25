@@ -2,8 +2,7 @@ import SwiftUI
 
 /// Toolbar / chrome category picker.
 /// - iOS: native `Menu` + `Picker`
-/// - tvOS: caller should prefer `SportsCategoryPickerLink` / full-screen list
-///   (toolbar Menu + sheet are unreliable under Siri Remote focus).
+/// - tvOS: caller opens `SportsCategoryPickerScreen` (focus-friendly)
 struct SportsCategoryMenu: View {
     let title: String
     @Binding var selection: String
@@ -51,7 +50,7 @@ struct SportsCategoryMenu: View {
     }
 }
 
-/// Full-screen category list — reliable on tvOS focus engine.
+/// Full-screen category list — opaque on tvOS so Guide never shows through.
 struct SportsCategoryPickerScreen: View {
     @Binding var selection: String
     let options: [String]
@@ -59,32 +58,48 @@ struct SportsCategoryPickerScreen: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    ForEach(options, id: \.self) { name in
-                        Button {
-                            selection = name
-                            onDone()
-                        } label: {
-                            HStack(spacing: 16) {
-                                Text(name)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(SportsColors.text)
-                                    .multilineTextAlignment(.leading)
-                                Spacer()
-                                if name == selection {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(SportsColors.gold)
-                                        .imageScale(.large)
+            ZStack {
+                // Solid base — fullScreenCover on tvOS can otherwise look translucent
+                SportsColors.voidBlack
+                    .ignoresSafeArea()
+
+                List {
+                    Section {
+                        ForEach(options, id: \.self) { name in
+                            Button {
+                                selection = name
+                                onDone()
+                            } label: {
+                                HStack(spacing: 20) {
+                                    Text(name)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(SportsColors.text)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    if name == selection {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(SportsColors.gold)
+                                            .imageScale(.large)
+                                    }
                                 }
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
                             }
-                            .padding(.vertical, 10)
+                            .buttonStyle(.plain)
+                            .listRowBackground(rowBackground(selected: name == selection))
+                            .listRowSeparatorTint(SportsColors.border.opacity(0.5))
                         }
-                        .buttonStyle(.plain)
+                    } header: {
+                        Text("\(options.count) groups")
+                            .foregroundStyle(SportsColors.muted)
                     }
-                } header: {
-                    Text("\(options.count) groups")
                 }
+                #if os(iOS)
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                #else
+                .listStyle(.plain)
+                #endif
             }
             .navigationTitle("Category")
             .toolbar {
@@ -93,5 +108,19 @@ struct SportsCategoryPickerScreen: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
+    }
+
+    private func rowBackground(selected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(selected ? SportsColors.panelElevated : SportsColors.panel)
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        selected ? SportsColors.gold.opacity(0.45) : SportsColors.border.opacity(0.35),
+                        lineWidth: selected ? 1.5 : 1
+                    )
+            }
+            .padding(.vertical, 3)
     }
 }
