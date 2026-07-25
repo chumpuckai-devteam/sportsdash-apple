@@ -1,9 +1,9 @@
 # QA Report — Liquid Glass device dogfood (M5 / Sprint UI)
 
-**Task:** `t_6be96648` (child of `t_dfff529d`, `t_8385cedb`)  
+**Task:** `t_588d5db1` (follow-up after Guide CI; prior `t_6be96648` / parent AC `t_dfff529d`)  
 **Date:** 2026-07-25  
 **Tester:** Toad (qa-engineer)  
-**Surface:** `sportsdash-apple` @ `main` `01b4df0`  
+**Surface:** `sportsdash-apple` @ `main` `8bda9db`  
 **Environment:** Linux agent (`ecda6c91d85d`) — **no Xcode / no iOS Simulator / no physical device**
 
 ---
@@ -14,12 +14,13 @@
 |------|--------|
 | Device iOS 26+ Liquid Glass path | **NOT RUN** (no device) |
 | Device pre-iOS 26 material fallback | **NOT RUN** (no device) |
-| Static hierarchy re-audit (post compile-gate restore) | **PASS (static)** |
-| Main CI / shippable binary | **FAIL** (GuideView syntax) |
+| Static hierarchy re-audit | **PASS (static)** @ `8bda9db` |
+| Main CI / shippable iOS binary | **PASS** — Guide fix + iOS build green |
 | Screenshots / OS versions | **N/A** |
 | Release-ready M5 dogfood | **NO-GO** |
 
-**Release gate: NO-GO.** Compile-gate for glass is restored on `01b4df0`, but `main` still does not produce a green iOS binary (Guide timeline `#if` argument), and this host cannot exercise real glass/material surfaces.
+**Release gate: NO-GO for device AC.**  
+Compile + Guide blockers from the prior attempt are **cleared**. This host still cannot exercise real glass/material surfaces, so M5 device sign-off remains open for Samir / a Mac agent.
 
 ---
 
@@ -27,38 +28,29 @@
 
 | Ref | Note |
 |-----|------|
-| `388fd79` | Glass compile-gate + CI Xcode 26 select — **CI green** ([run 30162186510](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162186510)) |
-| `47148be` | tvOS S-TV.1 focus pass — **clobbered** glass `#if compiler(>=6.2)` gate in `SportsColors.swift` |
-| `cd67bf6` | docs only — **CI red** GuideView `#if os(tvOS)` inside `GuideTimelineRow(` args ([run 30162253474](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162253474)) |
-| `01b4df0` **HEAD under test** | `fix(ui): restore Liquid Glass compile gate after tvOS focus merge` — gate present again; CI in flight / expected red until GuideView fixed |
+| `388fd79` | Glass compile-gate + CI Xcode 26 select — green ([run 30162186510](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162186510)) |
+| `01b4df0` | Gate restored after tvOS clobber — **red** GuideView mid-arg `#if` ([run 30162418958](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162418958)) |
+| `6934ecf` | Guide mid-arg `#if` first fix — **green** ([run 30162564826](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162564826)) |
+| `8bda9db` **HEAD under test** | optional `focusNamespace` always on `GuideTimelineRow` — **iOS build success** ([run 30162616780](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162616780)) |
 
-CI log (cd67bf6, Xcode 26.3 / iPhoneSimulator 26.2 SDK):
-
-```
-GuideView.swift:711:29: error: expected ')' in expression list
-#if os(tvOS)
-GuideView.swift:712:29: error: expected expression
-, focusNamespace: guideFocusNS
-```
-
-Root cause: Swift does not allow `#if` between call arguments. tvOS focus wiring broke **iOS** compile even though the flag is tvOS-only.
+Parent handoff `t_5cc721cf`: GuideTimelineRow takes `focusNamespace: Namespace.ID? = nil` always; grid always passes `guideFocusNS`; tvOS-only consumption via `GuideDefaultFocusModifier`.
 
 ---
 
 ## PRD Sprint UI AC — device dogfood matrix
 
-| AC | Static (code) | Device iOS 26+ | Device iOS 17/18 |
-|----|---------------|----------------|------------------|
+| AC | Static (code @ `8bda9db`) | Device iOS 26+ | Device iOS 17/18 |
+|----|---------------------------|----------------|------------------|
 | Tab bar modern `Tab` API → system Liquid Glass on 26 | PASS — `RootTabView.mainTabs` `Tab { }` under iOS 18+ | **NOT RUN** | **NOT RUN** (legacy `tabItem` pre-18) |
 | Filter chips / category menus glass or material; content opaque | PASS — chips `sportsGlass`; menus `sportsGlass`; scores groups `sportsSoftSurface`; live strip `sportsContentCard` | **NOT RUN** | **NOT RUN** |
 | Game cards / channel tiles readable; LIVE/WATCH clear | PASS (static badges + panels) — contrast unverified | **NOT RUN** | **NOT RUN** |
 | Settings inset grouped + AppLogo About | PASS — `.sportsInsetGroupedList()` + `Image("AppLogo")` | **NOT RUN** | **NOT RUN** |
-| No full-screen glass over video or guide | PASS — player: black + `KSPlayerSurface` + control `sportsGlass` + gradient scrims; guide rows panel/void, glass only on settings circle | **NOT RUN** | **NOT RUN** |
-| Builds iOS 17 path without hard glass dependency | PASS path in source (`#if compiler(>=6.2)` + material fallback) | **blocked by GuideView CI fail on main** | same |
+| No full-screen glass over video or guide | PASS — player: black + surface + control `sportsGlass` + gradient scrims; guide rows panel/void; glass only settings circle | **NOT RUN** | **NOT RUN** |
+| Builds iOS 17 path without hard glass dependency | PASS — `#if compiler(>=6.2)` + material fallback; **CI green** | **NOT RUN** (binary exists in CI artifacts only) | same |
 
 ---
 
-## Implementation map (reconfirmed @ `01b4df0`)
+## Implementation map (reconfirmed @ `8bda9db`)
 
 ### Control layer — `sportsGlass` / toolbar glass
 
@@ -77,7 +69,7 @@ Root cause: Swift does not allow `#if` between call arguments. tvOS focus wiring
 |---------|------|
 | `sportsScreenBackground()` | Void canvas (Scores, Settings) |
 | `sportsSoftSurface` | Scores league groups / detail panels |
-| `sportsContentCard` | **LiveScoresStrip** tiles (call site present) |
+| `sportsContentCard` | LiveScoresStrip tiles (call site present) |
 | Player scrims | `LinearGradient` only — not full-bleed glass |
 | Guide timeline | `SportsColors.panel` / void — not glass cells |
 
@@ -103,34 +95,27 @@ self.sportsGlassMaterialFallback(in: shape)
 
 ## Blocking issues for M5 device sign-off
 
-### B1 — No device/simulator on QA host (this task)
+### B1 — No device/simulator on QA host (this task) — **OPEN**
 
 **Severity:** Critical (process)  
 **Category:** Capability  
-Cannot capture OS version, screenshots, or PASS/FAIL for glass vs material appearance. Device checklist remains mandatory for Samir / Mac agent after green build.
+Cannot capture OS version, screenshots, or PASS/FAIL for glass vs material appearance. Device checklist remains mandatory for Samir / Mac agent on green SHA `8bda9db` (or later main).
 
-### B2 — Main iOS build broken: GuideView argument `#if`
+### B2 — Main iOS build broken: GuideView argument `#if` — **CLOSED**
 
-**Severity:** Critical (build)  
-**Category:** Functional / Build  
-**File:** `SportsDash/Features/Guide/GuideView.swift` ~702–714  
+**Fixed:** `6934ecf` / `8bda9db`  
+**CI:** [run 30162616780](https://github.com/chumpuckai-devteam/sportsdash-apple/actions/runs/30162616780) success  
+**Verification:** `GuideTimelineRow` declares `focusNamespace: Namespace.ID? = nil`; call site passes `guideFocusNS` with no mid-list `#if`.
 
-**Expected:** iOS target compiles on CI (Xcode 26.3 path).  
-**Actual:** `#if os(tvOS)` injected mid-argument-list → parse errors on iOS.  
+### B3 — tvOS focus merge clobbered glass compile gate — **CLOSED** earlier
 
-**Fix direction (mobile-engineer):** split call sites or pass optional `focusNamespace: Namespace.ID? = nil` without mid-list `#if`; keep tvOS focus behavior.
-
-### B3 — Regression class: tvOS focus merge clobbered glass compile gate
-
-**Severity:** High (process)  
-**Fixed on:** `01b4df0`  
-**Lesson:** `SportsColors.swift` is shared chrome — tvOS edits must preserve `compiler(>=6.2)` glass branches.
+**Fixed on:** `01b4df0` (and retained through HEAD)
 
 ---
 
 ## Device checklist (still required — Samir / Mac)
 
-Run Debug install **after** B2 is green. Record **OS version + build SHA + screenshots**.
+Run Debug install on **`8bda9db` or newer green main**. Record **OS version + build SHA + screenshots**.
 
 ### A. iOS 26+ (Liquid Glass)
 
@@ -160,25 +145,24 @@ Scores chips · one league group · Guide · Player over live frame · Settings 
 
 **Did**
 
-- Re-audited hierarchy after parent compile fix + gate restore.  
-- Verified CI history: only `388fd79` green in recent glass window; HEAD blocked by GuideView.  
-- Confirmed glass call sites remain control-layer; content uses material/panel.  
-- Documented residual device checklist.
+- Confirmed parent Guide CI fix on `main` @ `8bda9db` with live Actions success.  
+- Re-audited static glass hierarchy (controls vs content) — still PASS intent.  
+- Confirmed Linux host still has zero iOS surface capability.  
+- Updated this report for post-green state.
 
 **Did not**
 
 - Run Simulator or device.  
-- Capture screenshots.  
-- Mark M5 / Sprint UI AC done.  
-- Implement GuideView fix (out of scope — mobile-engineer).
+- Capture screenshots or OS versions.  
+- Mark M5 / Sprint UI device AC done.  
+- Invent PASS for appearance ACs.
 
 ---
 
 ## Follow-ups
 
-1. **mobile-engineer:** Fix `GuideView` mid-argument `#if` so iOS CI is green again.  
-2. **Samir / Mac QA:** Execute device checklist A/B on green SHA; comment PASS/FAIL on `t_dfff529d` / this card.  
-3. Optional: keep `SportsColors` glass gate in review checklist when touching tvOS focus.
+1. **Samir / Mac QA:** Execute device checklist A/B on green SHA `8bda9db+`; comment PASS/FAIL + screenshots on `t_dfff529d` / `t_588d5db1`.  
+2. Optional: keep `SportsColors` glass gate in review checklist when touching tvOS focus.
 
 ---
 
@@ -186,5 +170,5 @@ Scores chips · one league group · Guide · Player over live frame · Settings 
 
 Device dogfood **cannot pass** from Linux QA host.  
 Static glass hierarchy still matches HIG intent.  
-`main` @ `01b4df0` has glass compile-gate restored but **iOS build still red** on GuideView tvOS `#if` syntax.  
-**NO-GO** for M5 release dogfood until green binary + real device/sim evidence.
+`main` @ `8bda9db` **iOS CI green** — Guide mid-arg `#if` closed.  
+**NO-GO** for M5 release dogfood until real device/sim evidence (screenshots + OS versions + per-AC PASS/FAIL).
