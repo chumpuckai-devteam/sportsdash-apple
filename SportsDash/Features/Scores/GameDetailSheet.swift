@@ -131,17 +131,14 @@ struct GameDetailSheet: View {
         .padding(.bottom, 32)
         .frame(maxWidth: .infinity)
         .background {
+            // Single soft surface for every game — no team-color splits.
             ZStack {
-                if game.usesMatchupLayout {
-                    TeamTheme.splitLTR(away: game.away, home: game.home)
-                } else {
-                    SportsColors.panelElevated
-                }
-                // Readability wash (keeps white type crisp over team colors)
+                SportsColors.voidBlack
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(0.15),
-                        Color.black.opacity(0.42),
+                        SportsColors.panelElevated.opacity(0.95),
+                        SportsColors.panel.opacity(0.90),
+                        SportsColors.voidBlack,
                     ],
                     startPoint: .top,
                     endPoint: .bottom
