@@ -16,23 +16,6 @@ enum TeamTheme {
         let hue = Double(hash % 360) / 360.0
         return Color(hue: hue, saturation: 0.70, brightness: 0.38)
     }
-
-    /// Left → right, split at midpoint (away | home) with a soft blend band.
-    static func splitLTR(away: TeamInfo, home: TeamInfo) -> LinearGradient {
-        let a = accent(for: away)
-        let h = accent(for: home)
-        return LinearGradient(
-            stops: [
-                .init(color: a, location: 0.0),
-                .init(color: a, location: 0.42),
-                .init(color: Color.black.opacity(0.55), location: 0.50),
-                .init(color: h, location: 0.58),
-                .init(color: h, location: 1.0),
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
 }
 
 extension Color {
