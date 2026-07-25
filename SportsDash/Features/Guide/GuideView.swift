@@ -699,6 +699,19 @@ private struct GuideTimelineGrid: View {
             ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        #if os(tvOS)
+                        GuideTimelineRow(
+                            row: row,
+                            windowStart: windowStart,
+                            windowEnd: windowEnd,
+                            now: now,
+                            cleanUpNames: cleanUpNames,
+                            scrollSync: scrollSync,
+                            onPlay: onPlay,
+                            prefersDefault: index == 0,
+                            focusNamespace: guideFocusNS
+                        )
+                        #else
                         GuideTimelineRow(
                             row: row,
                             windowStart: windowStart,
@@ -708,10 +721,8 @@ private struct GuideTimelineGrid: View {
                             scrollSync: scrollSync,
                             onPlay: onPlay,
                             prefersDefault: index == 0
-                            #if os(tvOS)
-                            , focusNamespace: guideFocusNS
-                            #endif
                         )
+                        #endif
                     }
                 }
                 #if os(tvOS)
