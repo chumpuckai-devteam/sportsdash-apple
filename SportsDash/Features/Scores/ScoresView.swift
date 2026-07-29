@@ -74,7 +74,11 @@ struct ScoresView: View {
                 || appModel.dashboardFilter == .favorites)
         let sections: [SportScoreSection] = appModel.dashboardFilter == .favorites
             ? []
-            : ScoreboardGrouping.sportSections(from: appModel.filteredGames)
+            : Self.buildSections(
+                games: appModel.filteredGames,
+                filter: appModel.dashboardFilter,
+                selectedLeagues: appModel.selectedLeagues
+            )
 
         return VStack(spacing: 0) {
             filterBar
@@ -114,6 +118,56 @@ struct ScoresView: View {
             }
             .sportsRefreshable { await appModel.refreshScores() }
         }
+    }
+
+    /// Group games by sport → league; on Upcoming, keep empty shelves for selected
+    /// leagues so MLB (etc.) never "disappears" when the slate is quiet.
+    private static func buildSections(
+        games: [Game],
+        filter: DashboardFilter,
+        selectedLeagues: [SportLeague]
+    ) -> [SportScoreSection] {
+        var sections = ScoreboardGrouping.sportSections(from: games)
+        guard filter == .upcoming else { return sections }
+
+        let selected = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
+        let present = Set(sections.flatMap { $0.leagues.map(\.key) })
+        let missing = selected.filter { !present.contains($0.rawValue) }
+        guard !missing.isEmpty else { return sections }
+
+        // Attach empty league shelves under the right sport bucket.
+        for league in ScoreboardGrouping.leagueOrder where missing.contains(league) {
+            let emptyShelf = LeagueShelf(
+                key: league.rawValue,
+                title: league.label,
+                sportKey: league.sportPath,
+                sportTitle: league.sportSectionTitle,
+                showSportHeader: true,
+                games: []
+            )
+            if let idx = sections.firstIndex(where: { $0.sportKey == league.sportPath }) {
+                if !sections[idx].leagues.contains(where: { $0.key == league.rawValue }) {
+                    sections[idx].leagues.append(emptyShelf)
+                }
+            } else {
+                sections.append(
+                    SportScoreSection(
+                        sportKey: league.sportPath,
+                        sportTitle: league.sportSectionTitle,
+                        emoji: league.emoji,
+                        leagues: [emptyShelf]
+                    )
+                )
+            }
+        }
+        // Keep sport order stable (first appearance in leagueOrder).
+        let sportOrder = ScoreboardGrouping.leagueOrder.map(\.sportPath)
+        sections.sort { a, b in
+            let ia = sportOrder.firstIndex(of: a.sportKey) ?? 999
+            let ib = sportOrder.firstIndex(of: b.sportKey) ?? 999
+            return ia < ib
+        }
+        return sections
     }
 
     // MARK: - Sport → league hierarchy (collapsible sports)
@@ -192,11 +246,26 @@ struct ScoresView: View {
                 .clipShape(Capsule())
             Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
-                .frame(width: 16)
+                .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.gold)
+                .frame(width: 22, height: 22)
+                .background(
+                    (focused ? SportsColors.voidBlack.opacity(0.12) : SportsColors.gold.opacity(0.15)),
+                    in: Circle()
+                )
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
+        #if os(iOS)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(SportsColors.panel.opacity(0.55))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(SportsColors.border.opacity(0.45), lineWidth: 1)
+        }
+        .padding(.horizontal, 12)
+        #endif
         #if os(tvOS)
         .frame(minHeight: SportsTVMetrics.minFocusSize)
         .background {
@@ -300,38 +369,53 @@ struct ScoresView: View {
                     Text("\(live) Live")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(SportsColors.live)
+                } else if games.isEmpty {
+                    Text("None scheduled")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(SportsColors.muted)
+                } else {
+                    Text("\(games.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SportsColors.muted)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
 
-            VStack(spacing: 12) {
-                ForEach(games) { game in
-                    GameScoreFocusRow(
-                        game: game,
-                        isFavorite: appModel.isFavorite(game),
-                        onSelect: { selectedGame = game },
-                        onFavorite: {
-                            if !game.home.id.isEmpty {
-                                appModel.toggleFavorite(teamId: game.home.id)
+            if games.isEmpty {
+                Text("No upcoming games in the next week for this league.")
+                    .font(.caption)
+                    .foregroundStyle(SportsColors.muted)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(games) { game in
+                        GameScoreFocusRow(
+                            game: game,
+                            isFavorite: appModel.isFavorite(game),
+                            onSelect: { selectedGame = game },
+                            onFavorite: {
+                                if !game.home.id.isEmpty {
+                                    appModel.toggleFavorite(teamId: game.home.id)
+                                }
+                                if !game.away.id.isEmpty {
+                                    appModel.toggleFavorite(teamId: game.away.id)
+                                }
                             }
-                            if !game.away.id.isEmpty {
-                                appModel.toggleFavorite(teamId: game.away.id)
-                            }
-                        }
-                    )
+                        )
+                    }
                 }
+                #if os(tvOS)
+                .frame(maxWidth: SportsTVMetrics.scoreCardMaxWidth)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
+                .focusSection()
+                #else
+                .sportsSoftSurface(radius: 22)
+                .padding(.horizontal, 12)
+                #endif
             }
-            #if os(tvOS)
-            // Inset + max width so focus scale doesn't clip at screen edges (HIG scale margin).
-            .frame(maxWidth: SportsTVMetrics.scoreCardMaxWidth)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
-            .focusSection()
-            #else
-            .sportsSoftSurface(radius: 22)
-            .padding(.horizontal, 12)
-            #endif
         }
     }
 

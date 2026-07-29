@@ -191,12 +191,16 @@ final class AppModel: ObservableObject {
         scoresError = nil
         defer { if !silent { isLoadingScores = false } }
         let leagues = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
-        // Progressive updates — first leagues paint quickly instead of waiting for all.
+        // Progressive updates — always apply denser snapshots so dated Upcoming
+        // boards aren't dropped when pass-1 already filled finals/live.
         let result = await sportsAPI.fetchScoreboards(leagues: leagues) { [weak self] partial in
             Task { @MainActor in
                 guard let self else { return }
-                // Only push partial if we still have nothing or fewer games
-                if self.games.count < partial.count || self.games.isEmpty {
+                let richer =
+                    partial.count > self.games.count
+                    || Self.upcomingCount(partial) > Self.upcomingCount(self.games)
+                    || self.games.isEmpty
+                if richer {
                     self.games = partial
                     self.lastUpdated = Date()
                 }
@@ -204,6 +208,10 @@ final class AppModel: ObservableObject {
         }
         games = result
         lastUpdated = Date()
+    }
+
+    private static func upcomingCount(_ games: [Game]) -> Int {
+        games.filter(\.isUpcoming).count
     }
 
     /// Matching can be heavy with large playlists — keep off hot SwiftUI paths when possible.

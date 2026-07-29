@@ -50,7 +50,14 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
 
     var isLive: Bool { status == .live }
     var isFinal: Bool { status == .final_ }
-    var isUpcoming: Bool { status == .upcoming }
+    /// Scheduled / not started. Also treats future kickoff as upcoming if ESPN
+    /// left status ambiguous (unknown) but start is still ahead.
+    var isUpcoming: Bool {
+        if status == .upcoming { return true }
+        if status == .live || status == .final_ || status == .postponed { return false }
+        // unknown + future start → show under Upcoming rather than disappearing
+        return startTime > Date().addingTimeInterval(-15 * 60)
+    }
 
     var usesMatchupLayout: Bool {
         isHeadToHead && league.sportPath != "golf" && league.sportPath != "racing"
