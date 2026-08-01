@@ -207,7 +207,7 @@ struct GameDetailSheet: View {
                 .padding(.horizontal, 16)
             } else {
                 VStack(spacing: 12) {
-                    ForEach(Array(matches.enumerated()), id: \.element.id) { index, m in
+                    ForEach(matches) { m in
                         Button {
                             appModel.recordLastPlayed(gameId: game.id)
                             playerRoute = PlayerRoute(
@@ -273,10 +273,10 @@ struct GameDetailSheet: View {
                 .foregroundStyle(focused ? SportsColors.gold : SportsColors.voidBlack)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(
-                    (focused ? SportsColors.voidBlack.opacity(0.9) : SportsColors.gold).gradient,
-                    in: Capsule()
-                )
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(focused ? SportsColors.voidBlack.opacity(0.88) : SportsColors.gold)
+                }
         }
     }
 

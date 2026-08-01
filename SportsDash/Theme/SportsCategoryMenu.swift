@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Toolbar / chrome category picker.
-/// - iOS: button → searchable sheet (long IPTV group lists)
-/// - tvOS: caller opens `SportsCategoryPickerScreen`
+/// Toolbar / chrome category picker for long IPTV group lists.
+/// - iOS: button opens searchable sheet (caller `onOpen`, or internal sheet fallback)
+/// - tvOS: caller opens `SportsCategoryPickerScreen` via `onOpen` (focus-friendly fullScreen)
 struct SportsCategoryMenu: View {
     let title: String
     @Binding var selection: String
@@ -23,17 +23,24 @@ struct SportsCategoryMenu: View {
         .sportsTVFocusClean()
         #else
         Button {
-            showPicker = true
+            if let onOpen {
+                onOpen()
+            } else {
+                showPicker = true
+            }
         } label: {
             categoryLabel(focused: false)
         }
         .buttonStyle(.plain)
+        .accessibilityHint("Opens searchable category list")
         .sheet(isPresented: $showPicker) {
             SportsCategoryPickerScreen(
                 selection: $selection,
                 options: options,
                 onDone: { showPicker = false }
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         #endif
     }
@@ -70,15 +77,35 @@ struct SportsCategoryMenu: View {
     }
 }
 
-/// Category list with search — iOS sheet + tvOS fullScreenCover.
+/// Searchable category list — iOS sheet + tvOS fullScreenCover.
 struct SportsCategoryPickerScreen: View {
     @Binding var selection: String
     let options: [String]
     var onDone: () -> Void
 
     @State private var query = ""
+    #if os(tvOS)
+    @FocusState private var searchFocused: Bool
+    #endif
 
+    /// Case-insensitive substring filter over group names.
     private var filtered: [String] {
+        Self.filteredGroups(options: options, query: query)
+    }
+
+    private var trimmedQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var headerText: String {
+        if trimmedQuery.isEmpty {
+            return "\(options.count) groups"
+        }
+        return "\(filtered.count) of \(options.count) groups"
+    }
+
+    /// Pure filter helper (testable / shared).
+    static func filteredGroups(options: [String], query: String) -> [String] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return options }
         return options.filter { $0.localizedCaseInsensitiveContains(q) }
@@ -93,9 +120,7 @@ struct SportsCategoryPickerScreen: View {
                 List {
                     Section {
                         if filtered.isEmpty {
-                            Text("No groups match “\(query)”")
-                                .foregroundStyle(SportsColors.muted)
-                                .listRowBackground(SportsColors.panel)
+                            emptyRow
                         } else {
                             ForEach(filtered, id: \.self) { name in
                                 Button {
@@ -121,7 +146,7 @@ struct SportsCategoryPickerScreen: View {
                             }
                         }
                     } header: {
-                        Text("\(filtered.count) of \(options.count) groups")
+                        Text(headerText)
                             .foregroundStyle(SportsColors.muted)
                     }
                 }
@@ -135,37 +160,100 @@ struct SportsCategoryPickerScreen: View {
             }
             .navigationTitle("Category")
             #if os(tvOS)
-            // Search field for Siri Remote text entry when available
             .safeAreaInset(edge: .top) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(SportsColors.muted)
-                    TextField("Search groups", text: $query)
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(SportsColors.text)
-                }
-                .padding(14)
-                .background(SportsColors.panelElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .padding(.horizontal, 24)
-                .padding(.vertical, 8)
+                tvSearchField
             }
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    #if os(tvOS)
-                    SportsTVIconButton(
-                        systemName: "xmark",
-                        accessibilityLabelText: "Close",
-                        action: onDone
-                    )
-                    #else
                     Button("Close", action: onDone)
-                    #endif
+                        #if os(tvOS)
+                        .sportsTVFocusClean()
+                        #endif
                 }
             }
         }
         .preferredColorScheme(.dark)
     }
+
+    @ViewBuilder
+    private var emptyRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(emptyTitle)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(SportsColors.text)
+            Text(emptySubtitle)
+                .font(.subheadline)
+                .foregroundStyle(SportsColors.muted)
+            if !trimmedQuery.isEmpty {
+                Button("Clear search") { query = "" }
+                    #if os(tvOS)
+                    .sportsTVFocusClean()
+                    #endif
+            }
+        }
+        .padding(.vertical, 8)
+        #if os(iOS)
+        .listRowBackground(SportsColors.panel)
+        #else
+        .listRowBackground(Color.clear)
+        #endif
+    }
+
+    private var emptyTitle: String {
+        options.isEmpty ? "No categories" : "No groups match"
+    }
+
+    private var emptySubtitle: String {
+        if options.isEmpty {
+            return "Load a playlist with groups to pick a category."
+        }
+        if trimmedQuery.isEmpty {
+            return "Nothing to show."
+        }
+        return "Nothing matches “\(trimmedQuery)”."
+    }
+
+    #if os(tvOS)
+    private var tvSearchField: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "magnifyingglass")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(searchFocused ? SportsColors.voidBlack : SportsColors.gold)
+            TextField("Search groups", text: $query)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
+                .foregroundStyle(searchFocused ? SportsColors.voidBlack : SportsColors.text)
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(searchFocused ? SportsColors.voidBlack.opacity(0.75) : SportsColors.muted)
+                }
+                .sportsTVFocusClean()
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(minHeight: SportsTVMetrics.minFocusSize)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(searchFocused ? SportsColors.gold : SportsColors.panelElevated)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    searchFocused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
+                    lineWidth: searchFocused ? 2 : 1
+                )
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 8)
+        .animation(SportsTVFocusMotion.animation, value: searchFocused)
+    }
+    #endif
 
     private func categoryRow(name: String, focused: Bool) -> some View {
         let selected = name == selection
