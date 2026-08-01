@@ -99,10 +99,11 @@ private fun GuideBrowseBody(vm: AppViewModel, state: AppUiState) {
                 singleLine = true,
                 colors = guideFieldColors(),
             )
+            // LIST = hour timeline (iOS Guide); GRID = cards
             FilterChip(
                 selected = state.guideLayout == GuideLayout.LIST,
                 onClick = { vm.setGuideLayout(GuideLayout.LIST) },
-                label = { Text("List") },
+                label = { Text("Guide") },
                 colors = chipColors(),
             )
             FilterChip(
@@ -113,7 +114,8 @@ private fun GuideBrowseBody(vm: AppViewModel, state: AppUiState) {
             )
         }
 
-        if (state.groups.size > 1) {
+        // Provider order — no alphabetical re-sort
+        if (state.groups.isNotEmpty()) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -133,9 +135,10 @@ private fun GuideBrowseBody(vm: AppViewModel, state: AppUiState) {
 
         val status = state.channelStatus
         if (status != null) {
-            val layoutLabel = if (state.guideLayout == GuideLayout.LIST) "List" else "Grid"
+            val layoutLabel = if (state.guideLayout == GuideLayout.LIST) "Hour guide" else "Grid"
+            val cat = state.selectedGroup.ifBlank { "—" }
             Text(
-                text = "$status · $layoutLabel",
+                text = "$status · $layoutLabel · $cat",
                 color = Muted,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -159,25 +162,20 @@ private fun GuideBrowseBody(vm: AppViewModel, state: AppUiState) {
             )
         }
 
-        val channels = vm.filteredChannels()
         when (state.guideLayout) {
             GuideLayout.LIST -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                GuideTimeline(
+                    channels = vm.guideChannels(),
+                    programsFor = { id -> vm.programsFor(id) },
+                    windowStartMs = state.guideWindowStartMs,
+                    onPlay = { ch -> vm.play(ch) },
+                    onShiftHours = { d -> vm.shiftGuideWindowHours(d) },
+                    onResetToNow = { vm.resetGuideWindowToNow() },
                     modifier = Modifier.fillMaxSize(),
-                ) {
-                    listItems(items = channels, key = { it.id }) { ch ->
-                        ChannelListRow(
-                            channel = ch,
-                            nowTitle = vm.nowTitle(ch.id),
-                            nextTitle = vm.nextTitle(ch.id),
-                            onPlay = { vm.play(ch) },
-                        )
-                    }
-                }
+                )
             }
             GuideLayout.GRID -> {
+                val channels = vm.guideChannels()
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 140.dp),
                     contentPadding = PaddingValues(12.dp),
@@ -205,72 +203,6 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
     containerColor = Panel,
     labelColor = TextPrimary,
 )
-
-@Composable
-private fun ChannelListRow(
-    channel: IptvChannel,
-    nowTitle: String?,
-    nextTitle: String?,
-    onPlay: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Panel)
-            .clickable(onClick = onPlay)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ChannelLogo(channel = channel)
-        Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.name,
-                color = TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-            )
-            when {
-                !nowTitle.isNullOrBlank() -> {
-                    Text(
-                        text = "Now · $nowTitle",
-                        color = Gold,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (!nextTitle.isNullOrBlank()) {
-                        Text(
-                            text = "Next · $nextTitle",
-                            color = Muted,
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                channel.group != null -> {
-                    Text(
-                        text = channel.group.orEmpty(),
-                        color = Muted,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                    )
-                }
-                else -> {
-                    Text(
-                        text = "No guide for this channel",
-                        color = Muted,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Gold)
-    }
-}
 
 @Composable
 private fun ChannelGridCard(
@@ -336,34 +268,6 @@ private fun ChannelGridCard(
 }
 
 @Composable
-private fun ChannelLogo(channel: IptvChannel) {
-    val logo = channel.logo
-    if (!logo.isNullOrBlank()) {
-        AsyncImage(
-            model = logo,
-            contentDescription = null,
-            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Fit,
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(VoidBlack),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = Gold,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
-
-@Composable
 private fun EmptyGuideHint() {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -380,8 +284,8 @@ private fun EmptyGuideHint() {
         Text(text = "Guide", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Add an Xtream server URL + credentials (or M3U URL) in Settings. " +
-                "EPG loads automatically (xmltv.php + short fill). List or Grid layout.",
+            text = "Add Xtream credentials in Settings. Categories keep provider order. " +
+                "Default layout is the hour-by-hour guide (like iOS).",
             color = Muted,
             textAlign = TextAlign.Center,
         )

@@ -11,9 +11,16 @@ import okhttp3.Request
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
+data class ChannelLoadResult(
+    val channels: List<IptvChannel>,
+    /** Category display names in **provider order** (not alphabetical). */
+    val categoryOrder: List<String>,
+)
+
 /**
  * Xtream Codes + M3U loader — port of iOS IptvService essentials.
  * Live streams preferred as TS (panel default).
+ * Categories keep panel order from get_live_categories / first-seen M3U groups.
  */
 class IptvRepository(
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -22,16 +29,17 @@ class IptvRepository(
         .followRedirects(true)
         .build(),
 ) {
-    suspend fun loadChannels(config: PlaylistConfig): Result<List<IptvChannel>> = withContext(Dispatchers.IO) {
-        runCatching {
-            when (config.type) {
-                PlaylistType.XTREAM -> loadXtream(config)
-                PlaylistType.M3U -> loadM3u(config.m3uUrl)
+    suspend fun loadChannels(config: PlaylistConfig): Result<ChannelLoadResult> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                when (config.type) {
+                    PlaylistType.XTREAM -> loadXtream(config)
+                    PlaylistType.M3U -> loadM3u(config.m3uUrl)
+                }
             }
         }
-    }
 
-    private fun loadXtream(config: PlaylistConfig): List<IptvChannel> {
+    private fun loadXtream(config: PlaylistConfig): ChannelLoadResult {
         val base = normalizeHost(config.host)
         require(config.username.isNotBlank() && config.password.isNotBlank()) {
             "Username and password required"
@@ -39,7 +47,7 @@ class IptvRepository(
         val user = enc(config.username)
         val pass = enc(config.password)
 
-        // Category id → display name (streams often only ship category_id)
+        // LinkedHashMap preserves get_live_categories order from the panel
         val categoryNames = linkedMapOf<String, String>()
         runCatching {
             val catBody = httpGet(
@@ -59,6 +67,8 @@ class IptvRepository(
         val body = httpGet(playerApi)
         val arr = JSONArray(body)
         val out = ArrayList<IptvChannel>(arr.length())
+        val seenGroups = linkedSetOf<String>()
+
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val streamId = o.optString("stream_id").ifBlank { o.optInt("stream_id").toString() }
@@ -70,7 +80,7 @@ class IptvRepository(
             val group = o.optString("category_name").takeIf { it.isNotBlank() }
                 ?: categoryNames[catId]
                 ?: catId.takeIf { it.isNotBlank() }
-            // Prefer raw TS live path (matches iOS preferredLiveFormat = .ts)
+            if (!group.isNullOrBlank()) seenGroups.add(group)
             val url = "$base/live/$user/$pass/$streamId"
             out.add(
                 IptvChannel(
@@ -84,13 +94,24 @@ class IptvRepository(
                 ),
             )
         }
-        return out
+
+        // Provider category order first; append any group only seen on streams
+        val ordered = ArrayList<String>()
+        for (name in categoryNames.values) {
+            if (name in seenGroups && name !in ordered) ordered.add(name)
+        }
+        for (g in seenGroups) {
+            if (g !in ordered) ordered.add(g)
+        }
+        return ChannelLoadResult(channels = out, categoryOrder = ordered)
     }
 
-    private fun loadM3u(url: String): List<IptvChannel> {
+    private fun loadM3u(url: String): ChannelLoadResult {
         require(url.isNotBlank()) { "M3U URL required" }
         val body = httpGet(url)
-        return parseM3u(body)
+        val channels = parseM3u(body)
+        val order = channels.mapNotNull { it.group }.filter { it.isNotBlank() }.distinct()
+        return ChannelLoadResult(channels = channels, categoryOrder = order)
     }
 
     fun parseM3u(body: String): List<IptvChannel> {
@@ -108,13 +129,13 @@ class IptvRepository(
                     .find(line)?.groupValues?.getOrNull(1)
                 val epg = Regex("""tvg-id="([^"]*)"""", RegexOption.IGNORE_CASE)
                     .find(line)?.groupValues?.getOrNull(1)
-                val url = lines.getOrNull(i + 1)?.takeIf { !it.startsWith("#") }
-                if (url != null) {
+                val streamUrl = lines.getOrNull(i + 1)?.takeIf { !it.startsWith("#") }
+                if (streamUrl != null) {
                     out.add(
                         IptvChannel(
                             id = "m3u-${idx++}",
                             name = name,
-                            url = url,
+                            url = streamUrl,
                             group = group,
                             logo = logo,
                             epgChannelId = epg,
@@ -129,7 +150,6 @@ class IptvRepository(
         return out
     }
 
-    /** Build playback URL candidates: preferred first, then alternate extension. */
     fun playbackCandidates(url: String, preferTs: Boolean = true): List<String> {
         val list = linkedSetOf<String>()
         list.add(url)
@@ -137,68 +157,52 @@ class IptvRepository(
             url.contains(".m3u8", ignoreCase = true) ->
                 url.replace(".m3u8", ".ts", ignoreCase = true)
             url.endsWith(".ts", ignoreCase = true) ->
-                url.replace(".ts", ".m3u8", ignoreCase = true)
-            url.contains("/live/") && !url.contains(".") ->
-                if (preferTs) "$url.ts" else "$url.m3u8"
+                url.replace(Regex("""\.ts$""", RegexOption.IGNORE_CASE), ".m3u8")
+            url.contains("/live/") && !url.contains(".") -> "$url.ts"
             else -> null
         }
-        if (alt != null) list.add(alt)
-        if (url.contains("/live/") && !url.substringAfterLast('/').contains('.')) {
-            list.add("$url.m3u8")
-            list.add("$url.ts")
+        if (alt != null && alt != url) {
+            if (preferTs && alt.endsWith(".ts", true)) {
+                list.clear()
+                list.add(alt)
+                list.add(url)
+            } else {
+                list.add(alt)
+            }
         }
-        return if (preferTs) {
-            list.sortedBy { if (StreamHints.isHls(it)) 1 else 0 }
-        } else {
-            list.sortedBy { if (StreamHints.isHls(it)) 0 else 1 }
+        return list.toList()
+    }
+
+    private fun normalizeHost(host: String): String {
+        var h = host.trim().trimEnd('/')
+        if (!h.startsWith("http://") && !h.startsWith("https://")) {
+            h = "https://$h"
         }
+        val url = h.toHttpUrlOrNull()
+            ?: error("Invalid host URL")
+        val scheme = url.scheme
+        val default = if (scheme == "https") 443 else 80
+        val portPart = if (url.port != default) ":${url.port}" else ""
+        return "$scheme://${url.host}$portPart"
     }
 
     private fun httpGet(url: String): String {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", "VLC/3.0.21 LibVLC/3.0.21")
-            .header("Accept", "*/*")
+            .header("User-Agent", "SportsDash/1.0")
             .get()
             .build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) error("HTTP ${resp.code} for ${url.substringBefore("?")}")
+            if (!resp.isSuccessful) error("HTTP ${resp.code}")
             return resp.body?.string().orEmpty()
         }
     }
 
-    /**
-     * Normalize Xtream server URL → scheme://host[:port]
-     * Accepts bare host, full URL, or player_api.php link.
-     * Prefers https when scheme omitted.
-     */
-    private fun normalizeHost(host: String): String {
-        var h = host.trim().trimEnd('/')
-        // If user pasted full player_api / get.php URL, keep origin only
-        if (!h.startsWith("http://") && !h.startsWith("https://")) {
-            h = "https://$h"
-        }
-        val u = h.toHttpUrlOrNull() ?: return h
-        return buildString {
-            append(u.scheme)
-            append("://")
-            append(u.host)
-            val isDefault =
-                (u.scheme == "http" && u.port == 80) ||
-                    (u.scheme == "https" && u.port == 443)
-            if (!isDefault) append(":").append(u.port)
-        }
-    }
-
-    private fun enc(s: String): String = java.net.URLEncoder.encode(s, Charsets.UTF_8.name())
+    private fun enc(s: String): String =
+        java.net.URLEncoder.encode(s, Charsets.UTF_8.name())
 }
 
-private object StreamHints {
-    fun isHls(url: String) = url.contains("m3u8", ignoreCase = true)
-}
-
-/** Optional auth probe. */
 fun PlaylistConfig.describe(): String = when (type) {
-    PlaylistType.XTREAM -> "$name · Xtream"
-    PlaylistType.M3U -> "$name · M3U"
+    PlaylistType.XTREAM -> "Xtream · $name"
+    PlaylistType.M3U -> "M3U · $name"
 }

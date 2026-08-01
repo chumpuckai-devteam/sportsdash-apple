@@ -27,27 +27,32 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 enum class ScoresFilter { LIVE, UPCOMING, FINAL }
 
+/** LIST = hour timeline (iOS Guide list); GRID = channel cards. */
 enum class GuideLayout { LIST, GRID }
 
 data class AppUiState(
     val playlist: PlaylistConfig? = null,
     val channels: List<IptvChannel> = emptyList(),
+    /** Provider order — never alphabetically sorted. */
     val groups: List<String> = emptyList(),
-    val selectedGroup: String = "All",
+    val selectedGroup: String = "",
     val searchQuery: String = "",
     val guideLayout: GuideLayout = GuideLayout.LIST,
     val isLoadingChannels: Boolean = false,
     val channelStatus: String? = null,
     val channelError: String? = null,
 
-    /** channelId → programmes (auto bulk + short fill). */
     val epgByChannelId: Map<String, List<EpgProgram>> = emptyMap(),
     val isLoadingEpg: Boolean = false,
     val isAutoFillingEpg: Boolean = false,
     val epgStatus: String? = null,
+
+    /** Timeline window start (epoch ms), snapped to local hour. */
+    val guideWindowStartMs: Long = snappedCurrentHourMs(),
 
     val games: List<Game> = emptyList(),
     val selectedLeagueIds: Set<String> = SportLeague.DEFAULTS.map { it.id }.toSet(),
@@ -66,7 +71,6 @@ data class AppUiState(
     val playerMessage: String? = null,
     val playingGameId: String? = null,
 
-    /** Player live-scores ticker (persisted). Default on like iOS. */
     val showScoresTicker: Boolean = true,
 )
 
@@ -82,6 +86,7 @@ class AppViewModel(
     val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     private var epgJob: Job? = null
+    private var categoryEpgJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -100,8 +105,6 @@ class AppViewModel(
         refreshScores()
     }
 
-    // region Playlist / Guide
-
     fun saveXtream(name: String, serverUrl: String, user: String, pass: String) {
         val cfg = PlaylistConfig(
             name = name.ifBlank { "Xtream" },
@@ -117,6 +120,7 @@ class AppViewModel(
                     playlist = cfg,
                     channelError = null,
                     channels = emptyList(),
+                    groups = emptyList(),
                     epgByChannelId = emptyMap(),
                 )
             }
@@ -137,6 +141,7 @@ class AppViewModel(
                     playlist = cfg,
                     channelError = null,
                     channels = emptyList(),
+                    groups = emptyList(),
                     epgByChannelId = emptyMap(),
                 )
             }
@@ -154,27 +159,30 @@ class AppViewModel(
                     channelStatus = "Loading ${cfg.describe()}…",
                 )
             }
-            iptv.loadChannels(cfg).onSuccess { channels ->
-                val groups = buildList {
-                    add("All")
-                    addAll(
-                        channels.mapNotNull { it.group }
-                            .distinct()
-                            .sortedWith(String.CASE_INSENSITIVE_ORDER),
-                    )
+            iptv.loadChannels(cfg).onSuccess { loaded ->
+                val channels = loaded.channels
+                // Provider order only — no alphabetical sort
+                val groups = loaded.categoryOrder
+                val previous = _state.value.selectedGroup
+                val selected = when {
+                    previous.isNotBlank() && previous in groups -> previous
+                    groups.isNotEmpty() -> groups.first()
+                    else -> ""
                 }
                 _state.update {
                     it.copy(
                         channels = channels,
                         groups = groups,
-                        selectedGroup = if (it.selectedGroup in groups) it.selectedGroup else "All",
+                        selectedGroup = selected,
                         isLoadingChannels = false,
-                        channelStatus = "${channels.size} channels · ${groups.size - 1} categories",
+                        channelStatus = "${channels.size} channels · ${groups.size} categories",
                         channelError = null,
+                        guideWindowStartMs = snappedCurrentHourMs(),
                     )
                 }
-                // Auto EPG — no user tap (product law)
-                reloadEpg(force = true)
+                // EPG: open category first (snappy), bulk full playlist in background
+                loadEpgForOpenCategory(force = true)
+                reloadEpgBulkBackground()
             }.onFailure { e ->
                 _state.update {
                     it.copy(
@@ -189,6 +197,8 @@ class AppViewModel(
 
     fun selectGroup(group: String) {
         _state.update { it.copy(selectedGroup = group) }
+        // Category-scoped short EPG so Guide fills without waiting for full 13k bulk
+        loadEpgForOpenCategory(force = false)
     }
 
     fun setSearchQuery(q: String) {
@@ -199,16 +209,56 @@ class AppViewModel(
         _state.update { it.copy(guideLayout = layout) }
     }
 
+    fun shiftGuideWindowHours(deltaHours: Int) {
+        _state.update {
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = it.guideWindowStartMs
+            cal.add(Calendar.HOUR_OF_DAY, deltaHours)
+            // snap
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            it.copy(guideWindowStartMs = cal.timeInMillis)
+        }
+    }
+
+    fun resetGuideWindowToNow() {
+        _state.update { it.copy(guideWindowStartMs = snappedCurrentHourMs()) }
+    }
+
     fun filteredChannels(): List<IptvChannel> {
         val s = _state.value
-        val base = if (s.selectedGroup == "All") s.channels
-        else s.channels.filter { it.group == s.selectedGroup }
+        val base = when {
+            s.selectedGroup.isBlank() -> s.channels
+            else -> s.channels.filter { it.group == s.selectedGroup }
+        }
         val q = s.searchQuery.trim()
         if (q.isEmpty()) return base
         return base.filter {
             it.name.contains(q, ignoreCase = true) ||
                 (it.group?.contains(q, ignoreCase = true) == true)
         }
+    }
+
+    /** Dedupe clones in category (keep richer EPG) — iOS Guide parity. */
+    fun guideChannels(): List<IptvChannel> {
+        val channels = filteredChannels()
+        val epg = _state.value.epgByChannelId
+        val best = LinkedHashMap<String, IptvChannel>()
+        for (ch in channels) {
+            val key = ch.name.lowercase().trim().ifBlank { ch.id }
+            val existing = best[key]
+            if (existing == null) {
+                best[key] = ch
+            } else {
+                val ec = epg[existing.id]?.size ?: 0
+                val nc = epg[ch.id]?.size ?: 0
+                if (nc > ec || (nc == ec && ch.id < existing.id)) {
+                    best[key] = ch
+                }
+            }
+        }
+        return best.values.toList()
     }
 
     fun programsFor(channelId: String): List<EpgProgram> =
@@ -220,47 +270,89 @@ class AppViewModel(
     fun nextTitle(channelId: String): String? =
         programsFor(channelId).upNext()?.title
 
-    fun reloadEpg(force: Boolean = false) {
+    /** Short-EPG / bulk map for currently open category only. */
+    fun loadEpgForOpenCategory(force: Boolean = false) {
+        val s = _state.value
+        val cfg = s.playlist ?: return
+        val channels = filteredChannels()
+        if (channels.isEmpty()) return
+        val missing = if (force) {
+            channels
+        } else {
+            channels.filter { s.epgByChannelId[it.id].isNullOrEmpty() }
+        }
+        if (missing.isEmpty()) return
+
+        categoryEpgJob?.cancel()
+        categoryEpgJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    isAutoFillingEpg = true,
+                    epgStatus = "Loading guide for ${s.selectedGroup.ifBlank { "category" }}…",
+                )
+            }
+            val result = epg.loadForChannels(
+                channels = missing,
+                config = cfg,
+                onStatus = { status ->
+                    _state.update { st -> st.copy(epgStatus = status, isAutoFillingEpg = true) }
+                },
+                onBatch = { batch ->
+                    _state.update { st ->
+                        st.copy(epgByChannelId = st.epgByChannelId + batch)
+                    }
+                },
+            )
+            _state.update { st ->
+                val merged = st.epgByChannelId + result.programsByChannelId
+                val covered = st.channels.count { !merged[it.id].isNullOrEmpty() }
+                st.copy(
+                    epgByChannelId = merged,
+                    isAutoFillingEpg = false,
+                    isLoadingEpg = false,
+                    epgStatus = "Guide ready · $covered/${st.channels.size} channels",
+                )
+            }
+        }
+    }
+
+    /** Full-playlist bulk + fill in background (does not block category UI). */
+    fun reloadEpgBulkBackground() {
         val channels = _state.value.channels
         val cfg = _state.value.playlist
         if (channels.isEmpty()) return
-        if (!force && _state.value.epgByChannelId.isNotEmpty()) return
-
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    isLoadingEpg = true,
-                    isAutoFillingEpg = true,
-                    epgStatus = "Loading guide…",
-                )
-            }
+            _state.update { it.copy(isLoadingEpg = true) }
             val result = epg.loadForChannels(
                 channels = channels,
                 config = cfg,
                 onStatus = { status ->
-                    _state.update { s ->
-                        s.copy(
-                            epgStatus = status,
-                            isAutoFillingEpg = status.contains("Auto-filling", ignoreCase = true) ||
-                                status.contains("Downloading", ignoreCase = true) ||
-                                status.contains("parsing", ignoreCase = true),
-                        )
+                    // Don't stomp category-focused status while filling open group
+                    _state.update { st ->
+                        if (st.isAutoFillingEpg && status.contains("Auto-filling")) st
+                        else st.copy(epgStatus = status)
                     }
                 },
                 onBatch = { batch ->
-                    _state.update { s -> s.copy(epgByChannelId = batch) }
+                    _state.update { st -> st.copy(epgByChannelId = st.epgByChannelId + batch) }
                 },
             )
-            _state.update {
-                it.copy(
-                    epgByChannelId = result.programsByChannelId,
+            _state.update { st ->
+                val merged = st.epgByChannelId + result.programsByChannelId
+                val covered = st.channels.count { !merged[it.id].isNullOrEmpty() }
+                st.copy(
+                    epgByChannelId = merged,
                     isLoadingEpg = false,
-                    isAutoFillingEpg = false,
-                    epgStatus = result.status,
+                    epgStatus = "Guide ready · $covered/${st.channels.size} channels",
                 )
             }
         }
+    }
+
+    fun reloadEpg(force: Boolean = false) {
+        loadEpgForOpenCategory(force = force)
+        reloadEpgBulkBackground()
     }
 
     fun play(channel: IptvChannel, gameId: String? = null) {
@@ -298,10 +390,6 @@ class AppViewModel(
     fun toggleScoresTicker() {
         setShowScoresTicker(!_state.value.showScoresTicker)
     }
-
-    // endregion
-
-    // region Scores + matching
 
     fun refreshScores() {
         viewModelScope.launch {
@@ -419,9 +507,18 @@ class AppViewModel(
         }
     }
 
-    // endregion
-
     companion object {
+        const val GUIDE_HOURS = 12
+        const val PX_PER_HOUR = 140
+
+        fun snappedCurrentHourMs(): Long {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            return cal.timeInMillis
+        }
+
         fun factory(context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
