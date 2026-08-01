@@ -1,83 +1,77 @@
-# tvOS focus & selection pass (later)
+# tvOS focus & selection pass (S-TV.1)
 
-**Status:** implemented on main `47148be` — **device dogfood review required**  
+**Status:** code complete on main — **Apple TV sim/device dogfood still required**  
 **Board:** sportsdash · `t_0c034e64` mobile-engineer  
-**Pattern:** full custom `SportsTVFocused` + `sportsTVFocusClean()` (no `.card` / no `@FocusState` hybrid).
+**Pattern:** full custom `SportsTVFocused` + `sportsTVFocusClean()` (no `.card` / no `@FocusState` hybrid on Buttons).
 
-## Problem (dogfood)
+## Canonical pattern (one system)
 
-| Surface | Issue |
-|---------|--------|
-| Guide channel cells | System **white** focus plate behind/around **gold** custom fill; hard to read |
-| Scores rows | `.buttonStyle(.card)` **scale** clips edges; white plume |
-| Filters / menus | Early: Menu dead under Siri Remote; plain chips in H-ScrollView not focusable |
-| Category picker | Needed opaque fullScreenCover list, not translucent toolbar Menu |
+```swift
+Button { /* activate */ } label: {
+  SportsTVFocused { focused in
+    // gold fill / stroke / scale from `focused` only
+  }
+}
+.sportsTVFocusClean() // .buttonStyle(.plain) + .focusEffectDisabled(true)
+```
 
-Partial mitigations on `main`: `sportsTVFocusClean()`, gold fill/stroke, Category fullScreenCover, inset score cards, icon-only Refresh. **Still not HIG-quality.**
+Helpers in `Theme/SportsColors.swift`:
+- `SportsTVFocused` — `@Environment(\.isFocused)` bridge
+- `sportsTVFocusClean()` — kill system white lift
+- `SportsTVMetrics` — 66pt min, channel 88, score inset 56 / maxWidth 960
+- `SportsTVIconButton` — circular toolbar chrome
+- `SportsTVListRowLabel` — opaque sheet/list row chrome (selection ≠ focus)
 
-## Apple guidance (official)
+**Never:** `.buttonStyle(.card)` under brand gold · `@FocusState` + `.focused($)` fighting Button focus  
+**OK:** `@FocusState` only for `TextField` search chrome (category picker)
 
-### HIG — [Focus and selection](https://developer.apple.com/design/human-interface-guidelines/focus-and-selection)
+## Surfaces
 
-- Focus shows **what interaction targets**; on tvOS, **focusing ≠ activating** — click/select is a **separate** gesture.
-- **Design for multiple focus states** (up to five on tvOS). Focused items often **increase scale** — supply sharp assets and **don’t let larger focused items crowd** neighbors (padding/margins).
-- Full-screen content: gestures affect content, not focus chrome.
-- Prefer **focus model** over free-form pointer for menus/grids.
+| Surface | Focus chrome |
+|---------|----------------|
+| Guide channel name | Gold **fill** + dark type; scale 1.045; row ≥88pt; gutter 10; first row `prefersDefaultFocus` in `focusScope` |
+| Guide category card / settings icon | Gold fill when focused; `focusSection` vs channel list; settings sheet uses `SportsTVListRowLabel` |
+| Guide card grid play row | Gold fill + min 66pt |
+| Scores game row | Gold **stroke** + panel lift; maxWidth 960; inset 56; minHeight 120; no nested star Button |
+| Scores filters | **Selected** = gold fill; **focused** = ring/scale; HStack (no H-ScrollView); `focusSection` |
+| Scores sport headers | Gold fill when focused |
+| Scores refresh / dismiss | `SportsTVIconButton` |
+| Game detail streams | `SportsTVListRowLabel` + inset; Close = `SportsTVIconButton` |
+| Category picker rows | Gold fill when focused; void black canvas; searchable; Close = `SportsTVIconButton` |
 
-### HIG — Accessibility (control size)
+## Navigation (tvOS)
 
-- tvOS recommended control size **66×66 pt** (min **56×56**). Channel cells and chips should meet this.
+- No Menu-only primary paths — sheet / fullScreenCover / in-content Button
+- `focusSection` between Category ↔ channel list; filters ↔ score rows
+- Guide: `focusScope` + first channel `prefersDefaultFocus`
 
-### SwiftUI / WWDC
+## Acceptance criteria
 
-| Source | Takeaway |
-|--------|----------|
-| [Build SwiftUI apps for tvOS (WWDC20)](https://developer.apple.com/videos/play/wwdc2020/10042/) | `@Environment(\.isFocused)` even on non-focusable children; `prefersDefaultFocus` |
-| [SwiftUI cookbook for focus (WWDC23)](https://developer.apple.com/videos/play/wwdc2023/10162/) | tvOS default for **Button/NavigationLink** = **lift hover effect**; text+image cells suit **lift**; artwork grids can use **`.hoverEffect(.highlight)`** (tvOS 17+). **`focusSection()`** for adjacent groups (filters ↔ list). |
-| Forums / `focusEffectDisabled` | Custom focus is possible; **Button still often paints system material**; order of `.focusable` / `.focused` / `.focusEffectDisabled` matters; pure disable is imperfect on some OS versions. |
+- [x] Code: no `.card` / no hybrid white plate under custom gold (system lift disabled)
+- [x] Guide channels ≥56–66pt (88pt rows); click activates play separately from focus move
+- [x] Scores inset focus styling (stroke + scale margin)
+- [x] Scores row focus distinct from filter selection chrome and sheet open (activate on click)
+- [x] Filters + Category focusable without Menu
+- [x] focusSection boundaries; preferred default focus on first Guide channel
+- [x] ~66pt preferred hit targets via `SportsTVMetrics`
+- [x] Skill ref documents final pattern
+- [ ] **Device:** Apple TV sim/hardware — no white under gold screenshots
+- [ ] **Device:** click-to-play Guide + click-to-open Scores; no edge clip / focus traps
+- [ ] **Device:** Menu/Back restores focus to prior/default element
 
-### Materials (related)
+## Dogfood checklist (Samir / SportsDashTV)
 
-- [Materials HIG](https://developer.apple.com/design/human-interface-guidelines/materials): Liquid Glass = **control layer**; content uses **standard materials**. Focus chrome is control/selection, not full-screen glass wash.
+1. Guide: swipe channels — gold only, no white plate; click plays  
+2. Guide: Category card → list → Back restores near Category  
+3. Guide settings ellipsis → sheet rows gold focus; Close works  
+4. Scores: filters focus ≠ selected gold fill  
+5. Scores: row focus stroke doesn’t clip; click opens detail  
+6. Detail streams: gold focus; click plays; Close dismisses  
+7. Cross Category ↔ list ↔ filters — no traps  
 
-## Recommended product approach (when unblocked)
+## Out of scope
 
-1. **Canonical pattern per control type**
-   - **Primary actions** (play channel, open game): `Button` / `NavigationLink` with **intentional** hover effect — prefer **system lift** *or* fully custom via `@Environment(\.isFocused)` on label, not half-disabled Button + gold fight.
-   - **If custom gold brand focus:** build **label-driven** chrome from `isFocused`; disable system effect only when verified on **tvOS 17–18 simulator + device**; clipShape matching focus shape; **never** full-bleed white behind gold.
-   - **Avoid** full-width `.buttonStyle(.card)` on list rows (scale + white + edge clip).
-
-2. **Guide list**
-   - Channel column: focusable row meeting **≥56–66pt** height; clear focused vs unfocused (scale *or* gold stroke/fill — pick one system, document).
-   - Program strip: decide focus model — channel-only select vs program cells (`focusSection` between name column and strip).
-   - Preferred focus on appear: first channel or last-played.
-
-3. **Scores**
-   - Inset cards (already ~maxWidth 980); focus = **gold stroke + slight scale** with **padding so scale doesn’t clip**.
-   - Filters: keep HStack + `focusSection()`; selected filter distinct from focus (selection ≠ focus per HIG).
-
-4. **Chrome**
-   - No Menu-only TV controls; keep sheet / fullScreenCover / NavigationLink lists.
-   - Toolbar: icon-only actions with `accessibilityLabel`.
-
-5. **Verify**
-   - Simulator + hardware: swipe paths, click-to-play, Menu back restores focus.
-   - No focus traps (filters ↔ list ↔ category card).
-   - Screenshot AC: no white plate under gold.
-
-## Out of scope for that card
-
-- iOS-only chrome
-- Player engine / KSPlayer thrash
-- Cloning Apple Sports 1:1 layout
-
-## Code touchpoints
-
-- `GuideView.swift` — `GuideTimelineRow` channel cell
-- `ScoresView.swift` / `GameScoreFocusRow`
-- `Theme/SportsColors.swift` — `sportsTVFocusClean()`
-- `SportsCategoryMenu.swift` / picker screen
-- `references/tvos-focus-and-apis.md` (skill)
+- iOS redesign · player engine · Apple Sports 1:1 clone · superseded cards `t_ebb7ec84` / `t_1e22a51d`
 
 ## Links
 

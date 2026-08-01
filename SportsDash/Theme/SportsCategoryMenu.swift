@@ -166,10 +166,15 @@ struct SportsCategoryPickerScreen: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    #if os(tvOS)
+                    SportsTVIconButton(
+                        systemName: "xmark",
+                        accessibilityLabelText: "Close",
+                        action: onDone
+                    )
+                    #else
                     Button("Close", action: onDone)
-                        #if os(tvOS)
-                        .sportsTVFocusClean()
-                        #endif
+                    #endif
                 }
             }
         }
@@ -186,10 +191,37 @@ struct SportsCategoryPickerScreen: View {
                 .font(.subheadline)
                 .foregroundStyle(SportsColors.muted)
             if !trimmedQuery.isEmpty {
+                #if os(tvOS)
+                Button {
+                    query = ""
+                } label: {
+                    SportsTVFocused { focused in
+                        Text("Clear search")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .frame(minHeight: SportsTVMetrics.minFocusSize)
+                            .background {
+                                Capsule(style: .continuous)
+                                    .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+                            }
+                            .overlay {
+                                Capsule(style: .continuous)
+                                    .stroke(
+                                        focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
+                                        lineWidth: focused ? 2 : 1
+                                    )
+                            }
+                            .clipShape(Capsule(style: .continuous))
+                            .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                            .animation(SportsTVFocusMotion.animation, value: focused)
+                    }
+                }
+                .sportsTVFocusClean()
+                #else
                 Button("Clear search") { query = "" }
-                    #if os(tvOS)
-                    .sportsTVFocusClean()
-                    #endif
+                #endif
             }
         }
         .padding(.vertical, 8)
@@ -228,8 +260,21 @@ struct SportsCategoryPickerScreen: View {
                 Button {
                     query = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(searchFocused ? SportsColors.voidBlack.opacity(0.75) : SportsColors.muted)
+                    SportsTVFocused { focused in
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(
+                                focused
+                                    ? SportsColors.voidBlack
+                                    : (searchFocused ? SportsColors.voidBlack.opacity(0.75) : SportsColors.muted)
+                            )
+                            .frame(width: 44, height: 44)
+                            .background {
+                                Circle().fill(focused ? SportsColors.gold.opacity(0.35) : Color.clear)
+                            }
+                            .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                            .animation(SportsTVFocusMotion.animation, value: focused)
+                    }
                 }
                 .sportsTVFocusClean()
                 .accessibilityLabel("Clear search")
