@@ -380,6 +380,8 @@ class EpgRepository(
         val windowStart = now - HOURS_BEHIND * 3600_000L
         val windowEnd = now + HOURS_AHEAD * 3600_000L
         val map = LinkedHashMap<String, MutableList<EpgProgram>>()
+        // channel id → display names (for name matching to playlist)
+        val displayNames = LinkedHashMap<String, MutableList<String>>()
 
         FileInputStream(file).use { fis ->
             val parser = Xml.newPullParser()
@@ -388,6 +390,7 @@ class EpgRepository(
 
             var event = parser.eventType
             var inProgramme = false
+            var inChannel = false
             var channelId: String? = null
             var startMs: Long? = null
             var endMs: Long? = null
@@ -401,6 +404,14 @@ class EpgRepository(
                 when (event) {
                     XmlPullParser.START_TAG -> {
                         when (parser.name.lowercase(Locale.US)) {
+                            "channel" -> {
+                                inChannel = true
+                                channelId = parser.getAttributeValue(null, "id")
+                            }
+                            "display-name" -> if (inChannel) {
+                                capture = "display-name"
+                                text.clear()
+                            }
                             "programme" -> {
                                 inProgramme = true
                                 channelId = parser.getAttributeValue(null, "channel")
@@ -435,8 +446,16 @@ class EpgRepository(
                                 "title" -> title = v
                                 "category" -> category = v
                                 "desc" -> desc = v
+                                "display-name" -> {
+                                    val id = channelId
+                                    if (id != null && v.isNotBlank()) {
+                                        displayNames.getOrPut(id) { ArrayList() }.add(v)
+                                    }
+                                }
                             }
                             capture = null
+                        } else if (name == "channel") {
+                            inChannel = false
                         } else if (name == "programme" && inProgramme) {
                             val ch = channelId
                             val s = startMs
@@ -470,7 +489,20 @@ class EpgRepository(
             list.sortBy { it.startMs }
             map[k] = list
         }
-        return map
+
+        // Alias programmes under display-name keys so playlist names can match
+        val aliased = LinkedHashMap<String, List<EpgProgram>>(map.size * 2)
+        for ((id, list) in map) {
+            aliased[id] = list
+            for (dn in displayNames[id].orEmpty()) {
+                if (dn.isNotBlank()) {
+                    aliased.putIfAbsent(dn, list)
+                    aliased.putIfAbsent(dn.lowercase(Locale.US), list)
+                    aliased.putIfAbsent(slug(dn), list)
+                }
+            }
+        }
+        return aliased
     }
 
     /** XMLTV: yyyyMMddHHmmss optional offset (+0000 / +00:00 / Z). */

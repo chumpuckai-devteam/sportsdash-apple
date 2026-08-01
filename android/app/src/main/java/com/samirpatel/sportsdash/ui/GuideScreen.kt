@@ -147,8 +147,17 @@ private fun GuideBrowseBody(vm: AppViewModel, state: AppUiState) {
         val epgStatus = state.epgStatus
         if (epgStatus != null) {
             Text(
-                text = epgStatus + if (state.isLoadingEpg || state.isAutoFillingEpg) " …" else "",
-                color = if (state.isLoadingEpg || state.isAutoFillingEpg) Gold else Muted,
+                text = epgStatus + if (state.isAutoFillingEpg) " …" else "",
+                color = if (state.isAutoFillingEpg) Gold else Muted,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
+        }
+        val bulkStatus = state.bulkEpgStatus
+        if (bulkStatus != null) {
+            Text(
+                text = bulkStatus + if (state.isLoadingEpg) " …" else "",
+                color = if (state.isLoadingEpg) Gold else Muted,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
             )

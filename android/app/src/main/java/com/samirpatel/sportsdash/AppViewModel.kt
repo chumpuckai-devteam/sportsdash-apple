@@ -59,7 +59,10 @@ data class AppUiState(
     val epgByChannelId: Map<String, List<EpgProgram>> = emptyMap(),
     val isLoadingEpg: Boolean = false,
     val isAutoFillingEpg: Boolean = false,
+    /** Open-category short EPG status. */
     val epgStatus: String? = null,
+    /** Background bulk xmltv download/parse status (always visible while working). */
+    val bulkEpgStatus: String? = null,
 
     /** Timeline window start (epoch ms), snapped to local hour. */
     val guideWindowStartMs: Long = snappedCurrentHourMs(),
@@ -291,7 +294,6 @@ class AppViewModel(
         val s = _state.value
         val cfg = s.playlist ?: return
         if (cfg.type != PlaylistType.XTREAM) {
-            // M3U relies on bulk/cache
             reloadEpgBulkBackground()
             return
         }
@@ -309,7 +311,7 @@ class AppViewModel(
             _state.update {
                 it.copy(
                     isAutoFillingEpg = true,
-                    epgStatus = "Loading Now/Next for ${s.selectedGroup.ifBlank { "category" }}…",
+                    epgStatus = "Now/Next · ${missing.size} channels in ${s.selectedGroup.ifBlank { "category" }}…",
                 )
             }
             val result = epg.loadShortEpgForChannels(
@@ -324,15 +326,29 @@ class AppViewModel(
                     }
                 },
             )
+            val catTotal = filteredChannels().size.coerceAtLeast(1)
             _state.update { st ->
                 val merged = st.epgByChannelId + result.programsByChannelId
                 val catCovered = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
-                val catTotal = filteredChannels().size.coerceAtLeast(1)
+                val note = if (catCovered == 0) {
+                    "Now/Next empty for this category (common for movies) — waiting on full guide…"
+                } else {
+                    "Now/Next · $catCovered/$catTotal in category"
+                }
                 st.copy(
                     epgByChannelId = merged,
                     isAutoFillingEpg = false,
-                    epgStatus = "Category guide · $catCovered/$catTotal · ${result.status}",
+                    epgStatus = note,
                 )
+            }
+            // Ensure bulk is running so timeline can fill from xmltv
+            if (_state.value.epgByChannelId.let { map ->
+                    filteredChannels().count { !map[it.id].isNullOrEmpty() }
+                } < catTotal / 2
+            ) {
+                if (!_state.value.isLoadingEpg) {
+                    reloadEpgBulkBackground()
+                }
             }
         }
     }
@@ -342,29 +358,51 @@ class AppViewModel(
         val channels = _state.value.channels
         val cfg = _state.value.playlist
         if (channels.isEmpty() || cfg == null) return
-        epgJob?.cancel()
+        if (epgJob?.isActive == true) return
         epgJob = viewModelScope.launch {
-            _state.update { it.copy(isLoadingEpg = true) }
+            _state.update {
+                it.copy(
+                    isLoadingEpg = true,
+                    bulkEpgStatus = "Full guide: starting…",
+                )
+            }
             val result = epg.loadBulkThenFill(
                 channels = channels,
                 config = cfg,
                 onStatus = { status ->
-                    _state.update { st ->
-                        // Prefer category short-fill status while that job is active
-                        if (st.isAutoFillingEpg) st else st.copy(epgStatus = status)
-                    }
+                    _state.update { st -> st.copy(bulkEpgStatus = status, isLoadingEpg = true) }
                 },
                 onBatch = { batch ->
-                    _state.update { st -> st.copy(epgByChannelId = st.epgByChannelId + batch) }
+                    _state.update { st ->
+                        val merged = st.epgByChannelId + batch
+                        val cat = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
+                        val catTotal = filteredChannels().size
+                        st.copy(
+                            epgByChannelId = merged,
+                            // Refresh category line when bulk maps open group
+                            epgStatus = if (catTotal > 0 && cat > 0) {
+                                "Category listings · $cat/$catTotal"
+                            } else {
+                                st.epgStatus
+                            },
+                        )
+                    }
                 },
             )
             _state.update { st ->
                 val merged = st.epgByChannelId + result.programsByChannelId
                 val covered = st.channels.count { !merged[it.id].isNullOrEmpty() }
+                val cat = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
+                val catTotal = filteredChannels().size
                 st.copy(
                     epgByChannelId = merged,
                     isLoadingEpg = false,
-                    epgStatus = "Guide ready · $covered/${st.channels.size} channels",
+                    bulkEpgStatus = "Full guide ready · $covered/${st.channels.size} channels",
+                    epgStatus = if (catTotal > 0) {
+                        "Category listings · $cat/$catTotal"
+                    } else {
+                        st.epgStatus
+                    },
                 )
             }
         }
@@ -372,8 +410,15 @@ class AppViewModel(
 
     fun reloadEpg(force: Boolean = false) {
         if (force) {
-            // clear in-memory so UI refills
-            _state.update { it.copy(epgByChannelId = emptyMap()) }
+            _state.update {
+                it.copy(
+                    epgByChannelId = emptyMap(),
+                    epgStatus = null,
+                    bulkEpgStatus = null,
+                )
+            }
+            epgJob?.cancel()
+            categoryEpgJob?.cancel()
         }
         loadEpgForOpenCategory(force = true)
         reloadEpgBulkBackground()
