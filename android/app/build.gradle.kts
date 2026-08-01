@@ -11,14 +11,15 @@ android {
     defaultConfig {
         applicationId = "com.samirpatel.sportsdash"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1-dogfood"
+        // 34 sideloads more predictably on some Samsung One UI builds than 35
+        targetSdk = 34
+        versionCode = 3
+        versionName = "1.0.2-dogfood"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
-        // Explicit ABIs so Samsung / arm devices get libVLC .so files
+        // Phone ABIs only — smaller universal APK for friends
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
     }
 
@@ -31,10 +32,15 @@ android {
             )
         }
         debug {
-            // No applicationIdSuffix — same id as release for simple friend sideload.
-            // Reinstall over an older build if signatures match (debug keystore).
             versionNameSuffix = "-debug"
             isDebuggable = true
+        }
+    }
+
+    // One APK file (no ABI splits)
+    splits {
+        abi {
+            isEnable = false
         }
     }
 
@@ -55,13 +61,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
+            // Pairs with android:extractNativeLibs=true for sideload
             useLegacyPackaging = true
         }
     }
 }
 
 // Do NOT pin kotlin.jvmToolchain(17) — Studio often only has JBR 21.
-// That pin fails with: Cannot find a Java installation matching languageVersion=17
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")

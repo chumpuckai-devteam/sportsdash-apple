@@ -53,31 +53,70 @@ File: **`app-debug.apk`** (debug-signed — fine for dogfood, not Play Store)
 - AirDrop / Drive / Dropbox — send the **`.apk` file only** (not a zip of the whole project).
 - Prefer **Google Drive “anyone with link”** over SMS (SMS can corrupt large APKs).
 
-## Install on Samsung (and most Android phones)
+## Install on Samsung — “App not installed”
 
-1. On the phone: open the APK with **My Files** or **Files** (not a random browser cache if possible).
-2. If blocked: **Settings → Apps → More → Special access → Install unknown apps → My Files** (or Chrome) → **Allow**.
-3. If **Play Protect** blocks: open the Protect notification → **More details → Install anyway** (or briefly disable Play Protect scans).
-4. If it says **App not installed**:
-   - Uninstall any older **SportsDash** first.
-   - Re-download the APK (don’t rename oddly; keep `.apk`).
-   - Confirm file size is **tens of MB** (libVLC) — a tiny APK is incomplete.
-   - Phone must be **Android 8+** (`minSdk 26`).
-5. After install, open **SportsDash** → Settings → Xtream → wait for full guide on first load.
+Do these **in order**. Step 1 fixes most modern Galaxy phones.
 
-### USB install (most reliable)
+### 1. Turn OFF Auto Blocker (One UI 6 / 7)
+
+**Settings → Security and privacy → Auto Blocker → Off**
+
+Samsung blocks many sideloaded APKs with a generic **App not installed** when this is on.
+
+### 2. Allow installs from My Files
+
+**Settings → Apps → ⋮ → Special access → Install unknown apps → My Files → Allow**
+
+### 3. Play Protect
+
+If a shield notification appears: **More details → Install anyway**  
+(or Play Store → profile → Play Protect → settings → briefly disable scanning)
+
+### 4. Remove any old SportsDash
+
+Long-press icon → Uninstall (or Settings → Apps → SportsDash → Uninstall)
+
+### 5. Use a full APK (not a tiny file)
+
+After rebuild, `app-debug.apk` should be **roughly 50–120 MB** (libVLC).  
+If it’s under ~10 MB, the build/copy is wrong.
+
+Share via **Google Drive / AirDrop**, not SMS/iMessage (can corrupt).
+
+### 6. Install via USB (shows the real error)
+
+On Mac, with USB debugging enabled on the phone:
 
 ```bash
-# Phone: Developer options → USB debugging ON
-adb devices
+cd ~/agency/sportsdash-apple
+git pull origin main
+cd android
+./gradlew :app:clean :app:assembleDebug
+adb uninstall com.samirpatel.sportsdash   # ok if it says not found
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`-r` replaces an existing install. If signature conflict:
+If it fails, `adb` prints a code like:
+
+| Code | Meaning |
+|------|---------|
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Uninstall old SportsDash first |
+| `INSTALL_FAILED_INVALID_APK` | Bad/corrupt file — rebuild + re-copy |
+| `INSTALL_FAILED_NO_MATCHING_ABIS` | Wrong CPU APK (rebuild after latest pull) |
+| `INSTALL_FAILED_USER_RESTRICTED` | Auto Blocker / unknown apps still on |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | Newer version already installed |
+
+Copy/paste that `INSTALL_FAILED_…` line back to me.
+
+### Rebuild dogfood APK
 
 ```bash
-adb uninstall com.samirpatel.sportsdash
-adb install app/build/outputs/apk/debug/app-debug.apk
+cd ~/agency/sportsdash-apple
+git pull origin main
+cd android
+./gradlew :app:clean :app:assembleDebug
+open app/build/outputs/apk/debug/
+# → app-debug.apk
 ```
 
 ## Android TV
