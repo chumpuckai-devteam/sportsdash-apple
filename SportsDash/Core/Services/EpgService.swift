@@ -39,31 +39,30 @@ actor EpgService {
 
     /// Load EPG for channels. Heavy work never touches the main actor.
     ///
-    /// - `onStatus`: rare progress strings (download % / parse)
-    /// - `onBatch`: optional mid-parse updates (throttled by caller); final map is returned
+    /// Pipeline matches quality IPTV apps:
+    /// 1. Bulk XMLTV download + full-window parse (all channel ids in file)
+    /// 2. Map to playlist (id + slug + name)
+    /// 3. Progressive Xtream short-EPG for **every** still-missing channel
+    ///    with `onBatch` after each wave so UI fills in automatically.
+    ///
+    /// - `onStatus`: rare progress strings (download % / parse / short fill)
+    /// - `onBatch`: progressive map merges (caller updates UI + cache)
     func loadForChannels(
         channels: [IptvChannel],
         config: IptvConfig?,
         limitPerChannel: Int = maxProgramsPerChannel,
-        batchSize: Int = 12,
+        batchSize: Int = 16,
         preferBulk: Bool = true,
-        fillMissingWithShortEpg: Bool = false,
+        fillMissingWithShortEpg: Bool = true,
         onBatch: (@Sendable ([String: [EpgProgram]]) -> Void)? = nil,
         onStatus: (@Sendable (String) -> Void)? = nil
     ) async -> [String: [EpgProgram]] {
         guard !channels.isEmpty else { return [:] }
 
-        // When most streams lack epg_channel_id (common on US Movies packs), interest-key
-        // filtering drops almost all XMLTV programmes. Open the window so name/slug map works.
-        let withEpgId = channels.filter {
-            !($0.epgChannelId ?? "").isEmpty || !($0.tvgId ?? "").isEmpty
-        }.count
-        let interest: Set<String>
-        if withEpgId * 2 < channels.count, channels.count <= 500 {
-            interest = []
-        } else {
-            interest = Self.interestKeys(for: channels)
-        }
+        // Full bulk like other IPTV clients: keep all programmes in the time window.
+        // Window + max-per-channel already bound memory; interest-key filtering was
+        // dropping entire movie packs with empty epg_channel_id.
+        let interest: Set<String> = preferBulk ? [] : Self.interestKeys(for: channels)
         var result: [String: [EpgProgram]] = [:]
 
         if preferBulk {
@@ -83,33 +82,54 @@ actor EpgService {
                 }
             }
             if result.isEmpty {
-                onStatus?("Bulk guide unavailable — short EPG…")
+                onStatus?("Bulk guide unavailable — loading per-channel EPG…")
             }
         }
 
-        // Short EPG gap-fill (Xtream). Critical for US Movies etc. where many streams
-        // have empty epg_channel_id so XMLTV never attaches.
-        let missing = channels.filter { result[$0.id] == nil }
-        let shortCap = fillMissingWithShortEpg ? 100 : 60
-        let need = Array(missing.prefix(shortCap))
-        guard !need.isEmpty,
+        guard fillMissingWithShortEpg,
               let config,
               config.type == .xtream,
               config.isConfigured else {
+            onStatus?("Guide ready · \(result.count) channels")
             return result
         }
 
-        onStatus?("Loading short EPG (\(need.count) channels)…")
-        let short = await loadXtreamShortBatch(
-            channels: need,
-            config: config,
-            limit: min(limitPerChannel, 8),
-            batchSize: batchSize
-        )
-        for (k, v) in short where !v.isEmpty {
-            result[k] = v
+        // Progressive short-EPG until every missing channel has been attempted.
+        // Cap total waves by channel count (never infinite).
+        var missing = channels.filter { result[$0.id] == nil }
+        guard !missing.isEmpty else {
+            onStatus?("Guide ready · \(result.count)/\(channels.count) channels")
+            return result
         }
-        onStatus?("Guide ready · \(result.count) channels")
+
+        let waveSize = max(batchSize, 12)
+        var wave = 0
+        let totalMissing = missing.count
+        while !missing.isEmpty {
+            wave += 1
+            let slice = Array(missing.prefix(waveSize * 4)) // 4 concurrent batches worth
+            onStatus?("Auto-filling guide \(result.count)/\(channels.count) · \(totalMissing - missing.count + slice.count)/\(totalMissing) gaps…")
+            let short = await loadXtreamShortBatch(
+                channels: slice,
+                config: config,
+                limit: min(limitPerChannel, 8),
+                batchSize: waveSize
+            )
+            if !short.isEmpty {
+                for (k, v) in short where !v.isEmpty {
+                    result[k] = v
+                }
+                onBatch?(result)
+            }
+            let attempted = Set(slice.map(\.id))
+            missing = missing.filter { !attempted.contains($0.id) }
+            // Bail if provider returns nothing for a full wave (dead EPG endpoint).
+            if short.isEmpty, wave >= 2 {
+                onStatus?("Guide partial · \(result.count)/\(channels.count) — provider has no listings for remaining channels")
+                break
+            }
+        }
+        onStatus?("Guide ready · \(result.count)/\(channels.count) channels")
         onBatch?(result)
         return result
     }

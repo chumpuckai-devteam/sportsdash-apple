@@ -488,12 +488,13 @@ struct GuideView: View {
             }
             #endif
 
-            if appModel.isLoadingEpg {
+            if appModel.isLoadingEpg || appModel.isAutoFillingEpg {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small).tint(SportsColors.gold)
                     Text(epgStatusText)
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(SportsColors.muted)
+                        .lineLimit(2)
                     Spacer()
                 }
                 .padding(.horizontal, 12)
@@ -505,16 +506,12 @@ struct GuideView: View {
                     Text("Guide \(withGuide)/\(activeChannels.count) in this category")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(withGuide == 0 ? SportsColors.danger : SportsColors.muted)
-                    Spacer()
-                    if withGuide < activeChannels.count {
-                        Button {
-                            Task { await appModel.loadEpgIfNeeded(for: activeChannels) }
-                        } label: {
-                            Text("Fill missing")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(SportsColors.gold)
-                        }
-                        .buttonStyle(.plain)
+                    Spacer(minLength: 8)
+                    if let s = appModel.epgStatus, s.localizedCaseInsensitiveContains("ready") {
+                        Text(s)
+                            .font(.caption2)
+                            .foregroundStyle(SportsColors.muted)
+                            .lineLimit(1)
                     }
                 }
                 .padding(.horizontal, 12)
