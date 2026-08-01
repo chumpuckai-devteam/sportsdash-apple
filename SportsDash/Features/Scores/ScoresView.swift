@@ -57,13 +57,25 @@ struct ScoresView: View {
         }
     }
 
-    /// Filters + context strip stay pinned for Live/Upcoming/All empty & full states.
+    /// Filters + context strip stay pinned under nav while body scrolls (S-UX.P1.1).
     private var scoresRoot: some View {
         VStack(spacing: 0) {
-            filterBar
-            scoresContextStrip
-                .padding(.bottom, 4)
-            Divider().overlay(SportsColors.border.opacity(0.35))
+            VStack(spacing: 0) {
+                filterBar
+                scoresContextStrip
+                Rectangle()
+                    .fill(SportsColors.border.opacity(0.4))
+                    .frame(height: 1)
+                    .allowsHitTesting(false)
+            }
+            #if os(iOS)
+            .background {
+                SportsColors.voidBlack.opacity(0.94)
+                    .background(.ultraThinMaterial)
+            }
+            #else
+            .background(SportsColors.voidBlack.opacity(0.92))
+            #endif
             scoresBody
         }
     }
@@ -119,7 +131,8 @@ struct ScoresView: View {
             )
 
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            // Wider gap between sport buckets; leagues stay tighter under sport headers.
+            LazyVStack(alignment: .leading, spacing: 28) {
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
                         .padding(.horizontal, 16)
@@ -188,8 +201,8 @@ struct ScoresView: View {
             #endif
         }
         .padding(.horizontal, horizontalChromeInset)
-        .padding(.vertical, 8)
-        .background(SportsColors.voidBlack.opacity(0.92))
+        .padding(.top, 2)
+        .padding(.bottom, 10)
         #if os(tvOS)
         .focusSection()
         #endif
@@ -330,16 +343,19 @@ struct ScoresView: View {
     @ViewBuilder
     private func sportSectionBlock(_ section: SportScoreSection) -> some View {
         let collapsed = collapsedSports.contains(section.sportKey)
-        VStack(alignment: .leading, spacing: 14) {
+        // Sport header primary; leagues closer underneath than sport-to-sport gap.
+        VStack(alignment: .leading, spacing: collapsed ? 0 : 16) {
             sportHeader(section, collapsed: collapsed)
             if !collapsed {
-                ForEach(section.leagues) { shelf in
-                    leagueBlock(
-                        title: shelf.title,
-                        systemImage: nil,
-                        goldTitle: false,
-                        games: shelf.games
-                    )
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(section.leagues) { shelf in
+                        leagueBlock(
+                            title: shelf.title,
+                            systemImage: nil,
+                            goldTitle: false,
+                            games: shelf.games
+                        )
+                    }
                 }
             }
         }
@@ -380,16 +396,17 @@ struct ScoresView: View {
         gameCount: Int,
         focused: Bool
     ) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Text(section.emoji)
-                .font(.title3)
+                .font(.title2)
             Text(section.sportTitle)
-                .font(.title2.weight(.bold))
+                .font(.title2.weight(.heavy))
                 .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                .lineLimit(1)
             Spacer(minLength: 8)
             if liveCount > 0 {
                 Text("\(liveCount) Live")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.75) : SportsColors.live)
             }
             Text("\(gameCount)")
@@ -397,27 +414,30 @@ struct ScoresView: View {
                 .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background((focused ? SportsColors.voidBlack.opacity(0.12) : SportsColors.panel.opacity(0.9)))
+                .background((focused ? SportsColors.voidBlack.opacity(0.12) : SportsColors.panelElevated.opacity(0.95)))
                 .clipShape(Capsule())
             Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.gold)
-                .frame(width: 22, height: 22)
+                .frame(width: 24, height: 24)
                 .background(
-                    (focused ? SportsColors.voidBlack.opacity(0.12) : SportsColors.gold.opacity(0.15)),
+                    (focused ? SportsColors.voidBlack.opacity(0.12) : SportsColors.gold.opacity(0.18)),
                     in: Circle()
                 )
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         #if os(iOS)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(SportsColors.panel.opacity(0.55))
+                .fill(SportsColors.panelElevated.opacity(0.72))
         }
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(SportsColors.border.opacity(0.45), lineWidth: 1)
+                .stroke(
+                    collapsed ? SportsColors.border.opacity(0.35) : SportsColors.gold.opacity(0.45),
+                    lineWidth: 1
+                )
         }
         .padding(.horizontal, 12)
         #endif
@@ -497,7 +517,8 @@ struct ScoresView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
         }
         #endif
     }
@@ -548,7 +569,7 @@ struct ScoresView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     ForEach(games) { game in
                         GameScoreFocusRow(
                             game: game,
