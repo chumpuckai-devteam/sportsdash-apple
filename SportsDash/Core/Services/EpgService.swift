@@ -193,35 +193,107 @@ actor EpgService {
 
     // MARK: - URLs
 
+    /// Xtream bulk guide = same panel as get.php M3U, but `xmltv.php?username=&password=`.
+    /// Example: `https://host/xmltv.php?username=USER&password=PASS`
     private func bulkURLs(config: IptvConfig?) async -> [String] {
         var urls: [String] = []
         guard let config else { return urls }
 
-        if config.type == .m3u, let tvg = await discoverM3UXmltvURL(config: config) {
-            urls.append(tvg)
+        if config.type == .m3u {
+            if let tvg = await discoverM3UXmltvURL(config: config) {
+                urls.append(tvg)
+            }
+            // M3U that is really Xtream get.php — derive xmltv.php on the same host.
+            if let m3u = config.m3uURL, let derived = Self.xtreamXmltvURLs(fromAnyURL: m3u) {
+                urls.append(contentsOf: derived)
+            }
         }
 
         if config.type == .xtream, config.isConfigured,
-           let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+           let rawHost = config.xtreamHost,
            let user = config.xtreamUsername,
            let pass = config.xtreamPassword {
-            let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
-            let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
-            let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
-            urls.append(contentsOf: [
-                "\(host)/xmltv.php?username=\(userQ)&password=\(passQ)",
-                "\(host)/xmltv.php?username=\(userQ)&password=\(passQ)&type=m3u_plus",
-            ])
+            urls.append(contentsOf: Self.xtreamXmltvURLs(hostField: rawHost, user: user, pass: pass))
         }
-        return urls
+
+        // De-dupe preserving order
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0).inserted }
+    }
+
+    /// Build canonical Xtream XMLTV endpoints (https preferred, then http).
+    nonisolated private static func xtreamXmltvURLs(hostField: String, user: String, pass: String) -> [String] {
+        guard let base = normalizeXtreamBase(hostField) else { return [] }
+        let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
+        let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
+        let query = "username=\(userQ)&password=\(passQ)"
+        // Prefer https (user example: halfvex) then plain path variants.
+        var out: [String] = []
+        for root in httpsPreferredRoots(base) {
+            out.append("\(root)/xmltv.php?\(query)")
+            out.append("\(root)/xmltv.php?\(query)&type=m3u_plus")
+        }
+        return out
+    }
+
+    /// When M3U URL embeds user/pass (get.php?username=…), build xmltv.php siblings.
+    nonisolated private static func xtreamXmltvURLs(fromAnyURL raw: String) -> [String]? {
+        guard let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        let items = comps.queryItems ?? []
+        let user = items.first(where: { $0.name == "username" })?.value
+        let pass = items.first(where: { $0.name == "password" })?.value
+        guard let user, let pass, !user.isEmpty, !pass.isEmpty else { return nil }
+        // Only treat as Xtream-style if path looks like get.php / player_api / xmltv
+        let path = (comps.path).lowercased()
+        guard path.contains("get.php") || path.contains("player_api") || path.contains("xmltv")
+                || raw.lowercased().contains("username=") else { return nil }
+        var root = comps
+        root.path = ""
+        root.query = nil
+        root.fragment = nil
+        guard let base = root.string?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) else { return nil }
+        return xtreamXmltvURLs(hostField: base, user: user, pass: pass)
+    }
+
+    /// `305.halfvex.com` | `https://305.halfvex.com/` | `https://host/c/` → scheme+host(+port)
+    nonisolated private static func normalizeXtreamBase(_ raw: String) -> String? {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return nil }
+        if !s.contains("://") {
+            s = "https://\(s)" // default https (matches halfvex-style panels)
+        }
+        guard var comps = URLComponents(string: s) else { return nil }
+        comps.path = ""
+        comps.query = nil
+        comps.fragment = nil
+        guard let host = comps.host, !host.isEmpty else { return nil }
+        let scheme = (comps.scheme?.isEmpty == false) ? comps.scheme! : "https"
+        if let port = comps.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
+    }
+
+    nonisolated private static func httpsPreferredRoots(_ base: String) -> [String] {
+        var roots: [String] = [base]
+        if base.hasPrefix("http://") {
+            roots.insert("https://" + base.dropFirst("http://".count), at: 0)
+        } else if base.hasPrefix("https://") {
+            roots.append("http://" + base.dropFirst("https://".count))
+        }
+        var seen = Set<String>()
+        return roots.filter { seen.insert($0).inserted }
     }
 
     private func discoverM3UXmltvURL(config: IptvConfig) async -> String? {
         guard let raw = config.m3uURL?.trimmingCharacters(in: .whitespacesAndNewlines),
               let url = URL(string: raw) else { return nil }
+        // Direct xmltv.php already?
+        if raw.lowercased().contains("xmltv.php") { return raw }
         do {
             var req = URLRequest(url: url)
-            req.setValue("bytes=0-4095", forHTTPHeaderField: "Range")
+            req.setValue("bytes=0-8191", forHTTPHeaderField: "Range")
             let (data, _) = try await session.data(for: req)
             let text = String(data: data, encoding: .utf8) ?? ""
             for pattern in [#"url-tvg="([^"]+)""#, #"x-tvg-url="([^"]+)""#] {

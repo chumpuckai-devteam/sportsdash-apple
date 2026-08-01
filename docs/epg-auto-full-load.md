@@ -22,5 +22,18 @@ Users never tap to “fill” EPG. Bulk XMLTV + progressive short-EPG run on boo
 
 Secrets never leave the device / never paste passwords into chat.
 
-## Manual force
-Settings → Reload EPG still works for a full refresh after provider changes.
+## Xtream bulk guide URL (confirmed)
+
+SportsDash builds the same endpoint panels expose for “M3U EPG”:
+
+```
+https://{host}/xmltv.php?username={user}&password={pass}
+https://{host}/xmltv.php?username={user}&password={pass}&type=m3u_plus
+```
+
+Example host style: `https://305.halfvex.com/xmltv.php?username=…&password=…`
+
+Also derived when the playlist is saved as M3U `get.php?username=&password=` on the same host.
+HTTPS is preferred; HTTP is tried as fallback.
+
+Never log or commit real username/password.
