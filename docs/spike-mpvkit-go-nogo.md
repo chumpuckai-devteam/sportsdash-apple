@@ -50,14 +50,27 @@ xcodegen generate   # resolves MPVKit binaries — first time is large/slow
 | **Buy KS LGPL** | You want store ship without engine rewrite | — |
 | **VLC Path A** | MPV packaging fails twice | — |
 
-## License
-- Auto/KS path: still **KSPlayer GPL** public package (dogfood/TestFlight risk for closed store)
-- MPVKit product: **LGPL** binaries when using non-GPL product
-- Do not enable `MPVKit-GPL` product
+## Package status (2026-08 build fix)
 
-## Files
-- `StreamContainer.swift`
-- `PlaybackController.swift` (router)
-- `MPVPlayerController.swift`, `PlayerSurface.swift`
-- `PlayerPrefs` auto/mpvKit
-- `Project.yml` MPVKit dep
+**MPVKit SPM was removed from `Project.yml`** after Mac Xcode reported:
+
+- Missing package product `KSPlayer`
+- Missing package product `MPVKit`
+
+Adding MPVKit to the package graph broke resolution for the whole project. **Auto TS→KS / HLS→AV still ships on KSPlayer only.**
+
+MPV source (`MPVPlayerController`) remains behind `#if canImport(Libmpv)` and is not linked until a future packaging pass.
+
+### Recover green build
+```bash
+cd ~/agency/sportsdash-apple
+# Quit Xcode
+git checkout -- SportsDash.xcodeproj/project.pbxproj
+git pull origin main
+rm -rf ~/Library/Developer/Xcode/DerivedData/SportsDash-*
+xcodegen generate
+open SportsDash.xcodeproj
+# File → Packages → Reset Package Caches (if needed)
+# File → Packages → Resolve Package Versions
+```
+Clean Build Folder → Run.

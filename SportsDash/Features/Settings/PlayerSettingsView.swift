@@ -39,7 +39,7 @@ struct PlayerSettingsView: View {
             }
 
             Section {
-                ForEach(PrimaryVideoPlayer.allCases) { player in
+                ForEach(PrimaryVideoPlayer.selectableCases) { player in
                     Button {
                         var p = appModel.playerPrefs
                         p.primaryPlayer = player
@@ -69,7 +69,7 @@ struct PlayerSettingsView: View {
             } header: {
                 Text("Primary video player")
             } footer: {
-                Text("Auto detects MPEG-TS vs HLS from the stream URL: TS → KSPlayer (FFmpeg), HLS → AVPlayer. MPV is an experimental hard path. Enable fallback to try the other engine if the first fails. Full-screen video AirPlay usually needs AV; KS/MPV are often audio-only on AirPlay.")
+                Text("Auto detects MPEG-TS vs HLS from the stream URL: TS → KSPlayer (FFmpeg), HLS → AVPlayer. Enable fallback to try the other engine if the first fails. Full-screen video AirPlay usually needs AV; KS is often audio-only on AirPlay. MPV spike is code-ready but not SPM-linked yet.")
                     .font(.caption2)
             }
 

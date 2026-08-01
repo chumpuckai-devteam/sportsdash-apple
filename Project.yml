@@ -9,14 +9,12 @@ options:
   developmentLanguage: en
 
 # FFmpeg-backed player (same stack used by UHF and other IPTV apps).
-# GPL license — see KSPlayer README. Default engine prefers FFmpeg for messy live streams.
-# MPVKit LGPL product only (spike hard engine for TS) — NEVER product MPVKit-GPL.
+# GPL license — see KSPlayer README. Auto router: TS→KS, HLS→AV.
+# MPVKit LGPL spike code is in-tree behind canImport(Libmpv) but NOT linked
+# until packaging is proven (adding MPVKit SPM broke package resolution on Mac).
 packages:
   KSPlayer:
     url: https://github.com/kingslay/KSPlayer.git
-    branch: main
-  MPVKit:
-    url: https://github.com/mpvkit/MPVKit.git
     branch: main
 
 settings:
@@ -58,8 +56,6 @@ targets:
     dependencies:
       - package: KSPlayer
         product: KSPlayer
-      - package: MPVKit
-        product: MPVKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
@@ -87,8 +83,6 @@ targets:
     dependencies:
       - package: KSPlayer
         product: KSPlayer
-      - package: MPVKit
-        product: MPVKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos

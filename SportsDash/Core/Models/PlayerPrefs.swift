@@ -28,10 +28,20 @@ enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
     case ksPlayer
     /// Apple AVKit / AVPlayer
     case avKit
-    /// libmpv via MPVKit LGPL (spike — opt-in)
+    /// libmpv via MPVKit LGPL — **not linked in this build** (SPM packaging deferred).
+    /// Kept in enum for prefs decode; UI hides until Libmpv is available.
     case mpvKit
 
     var id: String { rawValue }
+
+    /// Cases shown in Settings (hides MPV until package is linked).
+    static var selectableCases: [PrimaryVideoPlayer] {
+        #if canImport(Libmpv)
+        allCases
+        #else
+        [.auto, .ksPlayer, .avKit]
+        #endif
+    }
 
     var label: String {
         switch self {
@@ -51,7 +61,7 @@ enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
         case .avKit:
             return "Always Apple’s player. Fast on clean HLS; often fails on raw TS panels."
         case .mpvKit:
-            return "Experimental libmpv (MPVKit LGPL). Strong TS path; HLS still routes to AV. Dogfood only."
+            return "Experimental libmpv (MPVKit LGPL). Not linked in this build until SPM packaging is green."
         }
     }
 }

@@ -432,6 +432,7 @@ struct PlayerView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
             }
+            #if canImport(Libmpv)
             if appModel.playerPrefs.primaryPlayer != .mpvKit {
                 Button("Retry with MPV (spike)") {
                     var prefs = appModel.playerPrefs
@@ -444,6 +445,7 @@ struct PlayerView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
             }
+            #endif
         }
         .padding()
     }

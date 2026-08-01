@@ -400,10 +400,9 @@ final class PlaybackController: ObservableObject {
         isPlaying = false
         error = nil
 
-        // Route: explicit MPV, or Auto never uses MPV yet — MPV is opt-in spike.
-        let useMPV = prefs.primaryPlayer == .mpvKit
-            && detectedContainer != .hls // prefer AV/KS for clean HLS even if MPV selected? User asked AV for HLS
-        // If user picked MPV but stream is HLS → use AV via KS path
+        // Route: MPV only when Libmpv is linked AND user selected mpvKit AND not HLS.
+        #if canImport(Libmpv)
+        let useMPV = prefs.primaryPlayer == .mpvKit && detectedContainer != .hls
         if prefs.primaryPlayer == .mpvKit && detectedContainer == .hls {
             usesMPV = false
             openKS(urlString: urlString, generation: generation, forceAV: true)
@@ -414,6 +413,12 @@ final class PlaybackController: ObservableObject {
             openMPV(urlString: urlString, generation: generation)
             return
         }
+        #else
+        if prefs.primaryPlayer == .mpvKit {
+            // Package not linked — fall through to KS Auto hard path for TS.
+            banner = "MPV not linked — using KS/AV"
+        }
+        #endif
 
         usesMPV = false
         openKS(urlString: urlString, generation: generation, forceAV: nil)
