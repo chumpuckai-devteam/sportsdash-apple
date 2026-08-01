@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Shared first-run gates — playlist missing/unconfigured, or zero selected leagues.
 /// Ratings keys are optional and never block dismissal.
+/// `@MainActor` — reads `AppModel` observable state (main-actor isolated).
+@MainActor
 enum SetupChecklist {
     static func needsPlaylist(_ appModel: AppModel) -> Bool {
         appModel.playlists.isEmpty || appModel.iptvConfig?.isConfigured != true
