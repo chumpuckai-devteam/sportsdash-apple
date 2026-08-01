@@ -17,24 +17,31 @@ struct ScoresView: View {
                 #endif
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
+                        #if os(tvOS)
+                        if appModel.isLoadingScores {
+                            ProgressView().controlSize(.small).tint(SportsColors.gold)
+                        } else {
+                            SportsTVIconButton(
+                                systemName: "arrow.clockwise",
+                                accessibilityLabelText: "Refresh"
+                            ) {
+                                Task { await appModel.refreshScores() }
+                            }
+                            .disabled(appModel.isLoadingScores)
+                        }
+                        #else
                         Button {
                             Task { await appModel.refreshScores() }
                         } label: {
                             if appModel.isLoadingScores {
                                 ProgressView().controlSize(.small).tint(SportsColors.gold)
                             } else {
-                                #if os(tvOS)
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(SportsColors.gold)
-                                    .accessibilityLabel("Refresh")
-                                #else
                                 Label("Refresh", systemImage: "arrow.clockwise")
-                                #endif
                             }
                         }
                         .disabled(appModel.isLoadingScores)
                         .sportsToolbarControl()
+                        #endif
                     }
                 }
                 .sheet(item: $selectedGame) { game in
@@ -50,12 +57,31 @@ struct ScoresView: View {
         }
     }
 
-    @ViewBuilder
+    /// Filters + context strip stay pinned for Live/Upcoming/All empty & full states.
     private var scoresRoot: some View {
+        VStack(spacing: 0) {
+            filterBar
+            scoresContextStrip
+                .padding(.bottom, 4)
+            Divider().overlay(SportsColors.border.opacity(0.35))
+            scoresBody
+        }
+    }
+
+    @ViewBuilder
+    private var scoresBody: some View {
         if appModel.isLoadingScores && appModel.games.isEmpty {
-            ProgressView()
-                .tint(SportsColors.gold)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 16) {
+                if SetupChecklist.isIncomplete(appModel) {
+                    SetupChecklistCard()
+                        .padding(.horizontal, 16)
+                }
+                Spacer(minLength: 12)
+                ProgressView()
+                    .tint(SportsColors.gold)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let err = appModel.scoresError, appModel.games.isEmpty {
             ScrollView {
                 VStack(spacing: 22) {
@@ -92,100 +118,161 @@ struct ScoresView: View {
                 selectedLeagues: appModel.selectedLeagues
             )
 
-        return VStack(spacing: 0) {
-            filterBar
-            scoresContextStrip
-                .padding(.bottom, 4)
-            Divider().overlay(SportsColors.border.opacity(0.35))
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                if SetupChecklist.isIncomplete(appModel) {
+                    SetupChecklistCard()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                }
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    if SetupChecklist.isIncomplete(appModel) {
-                        SetupChecklistCard()
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                    }
+                if showFaves {
+                    leagueBlock(
+                        title: "My teams",
+                        systemImage: "star.fill",
+                        goldTitle: true,
+                        games: appModel.favoriteGames
+                    )
+                }
 
-                    if showFaves {
-                        leagueBlock(
-                            title: "My teams",
-                            systemImage: "star.fill",
-                            goldTitle: true,
-                            games: appModel.favoriteGames
-                        )
-                    }
-
-                    if sections.isEmpty && !showFaves {
-                        ContentUnavailableView(
-                            emptyTitle,
-                            systemImage: "sportscourt",
-                            description: Text(emptySubtitle)
-                        )
-                        .frame(maxWidth: .infinity, minHeight: SetupChecklist.isIncomplete(appModel) ? 180 : 280)
-                    } else {
-                        ForEach(sections) { section in
-                            sportSectionBlock(section)
-                        }
+                if sections.isEmpty && !showFaves {
+                    ContentUnavailableView(
+                        emptyTitle,
+                        systemImage: "sportscourt",
+                        description: Text(emptySubtitle)
+                    )
+                    .frame(maxWidth: .infinity, minHeight: SetupChecklist.isIncomplete(appModel) ? 180 : 280)
+                } else {
+                    ForEach(sections) { section in
+                        sportSectionBlock(section)
                     }
                 }
-                .padding(.vertical, 12)
-                .padding(.bottom, 28)
             }
-            .sportsRefreshable { await appModel.refreshScores() }
+            .padding(.vertical, 12)
+            .padding(.bottom, 28)
         }
+        .sportsRefreshable { await appModel.refreshScores() }
     }
 
-    /// Leagues summary + updated time + edit entry (P0.2).
+    /// Always-visible: leagues (truncated) · Updated time + Edit leagues (S-UX.P0.2).
     private var scoresContextStrip: some View {
-        let leagues = appModel.selectedLeagues.isEmpty
-            ? SportLeague.defaults
-            : appModel.selectedLeagues
-        let labels = leagues.map(\.label)
-        let summary: String = {
-            if labels.isEmpty { return "No leagues selected" }
-            if labels.count <= 3 { return labels.joined(separator: " · ") }
-            return labels.prefix(3).joined(separator: " · ") + " +\(labels.count - 3)"
-        }()
+        HStack(alignment: .center, spacing: 10) {
+            Text(contextSummaryLine)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(SportsColors.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(contextSummaryLine)
 
-        return HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(summary)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(SportsColors.textSecondary)
-                    .lineLimit(1)
-                if appModel.isLoadingScores {
-                    Text("Updating scores…")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(SportsColors.gold)
-                } else if let updated = appModel.lastUpdated {
-                    Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(SportsColors.muted)
-                } else {
-                    Text("Pull to refresh")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(SportsColors.muted)
-                }
-            }
-            Spacer(minLength: 8)
             #if os(iOS)
             Button {
                 showLeaguesSettings = true
             } label: {
-                Text("Leagues")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SportsColors.gold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .sportsGlass(in: Capsule(style: .continuous))
+                editLeaguesChip(focused: false)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Edit leagues")
+            .accessibilityHint("Opens Scores and leagues settings")
+            #else
+            NavigationLink {
+                ScoresSettingsView()
+            } label: {
+                SportsTVFocused { focused in
+                    editLeaguesChip(focused: focused)
+                }
+            }
+            .sportsTVFocusClean()
+            .accessibilityLabel("Edit leagues")
+            .accessibilityHint("Opens Scores and leagues settings")
             #endif
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, horizontalChromeInset)
         .padding(.vertical, 8)
         .background(SportsColors.voidBlack.opacity(0.92))
+        #if os(tvOS)
+        .focusSection()
+        #endif
+    }
+
+    private func editLeaguesChip(focused: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.caption.weight(.bold))
+            Text("Edit leagues")
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        #if os(iOS)
+        .background {
+            Capsule(style: .continuous)
+                .fill(.clear)
+                .sportsGlass(in: Capsule(style: .continuous))
+        }
+        .overlay {
+            Capsule(style: .continuous)
+                .stroke(SportsColors.gold.opacity(0.35), lineWidth: 1)
+        }
+        #else
+        .frame(minHeight: SportsTVMetrics.minFocusSize * 0.72)
+        .background {
+            Capsule(style: .continuous)
+                .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+        }
+        .overlay {
+            if focused {
+                Capsule(style: .continuous)
+                    .stroke(SportsColors.goldDim, lineWidth: 2)
+            }
+        }
+        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+        #endif
+    }
+
+    private var horizontalChromeInset: CGFloat {
+        #if os(tvOS)
+        32
+        #else
+        16
+        #endif
+    }
+
+    /// Effective leagues driving the scoreboard (defaults when unset).
+    private var activeLeagues: [SportLeague] {
+        appModel.selectedLeagues.isEmpty ? SportLeague.defaults : appModel.selectedLeagues
+    }
+
+    /// e.g. "World Cup, Champions League, Premier League +4 · Updated 3:42 PM"
+    private var contextSummaryLine: String {
+        "\(leaguesSummaryText) · \(updatedSummaryText)"
+    }
+
+    private var leaguesSummaryText: String {
+        let leagues = activeLeagues
+        guard !leagues.isEmpty else { return "No leagues selected" }
+        let labels = leagues.map(\.label)
+        let head = labels.prefix(3).joined(separator: ", ")
+        if labels.count > 3 {
+            return "\(head) +\(labels.count - 3)"
+        }
+        return head
+    }
+
+    private var updatedSummaryText: String {
+        if appModel.isLoadingScores && appModel.lastUpdated == nil {
+            return "Updating…"
+        }
+        if let updated = appModel.lastUpdated {
+            let time = updated.formatted(date: .omitted, time: .shortened)
+            if appModel.isLoadingScores {
+                return "Updating… · last \(time)"
+            }
+            return "Updated \(time)"
+        }
+        return "Not updated yet"
     }
 
     /// Group games by sport → league; on Upcoming, keep empty shelves for selected
