@@ -22,7 +22,7 @@ private enum GuideMetrics {
 struct GuideView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var selectedGroup: String = ""
-    @State private var windowStart: Date = GuideView.snappedNowMinusOneHour()
+    @State private var windowStart: Date = GuideView.snappedCurrentHour()
     @State private var playerRoute: PlayerRoute?
     @State private var nowTick = Date()
     @State private var sideWorkTask: Task<Void, Never>?
@@ -186,6 +186,9 @@ struct GuideView: View {
                 if selectedGroup.isEmpty {
                     selectedGroup = groupNames.first ?? ""
                 }
+                // Always open on the current hour (left edge of timeline).
+                windowStart = Self.snappedCurrentHour()
+                nowTick = Date()
                 // Background only — never block first Guide paint on EPG network.
                 scheduleGuideSideWork()
             }
@@ -209,8 +212,12 @@ struct GuideView: View {
                 }
             }
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in
-                // Progress bars only need minute-level refresh (was 30s full guide redraw).
                 nowTick = date
+                // Roll the grid when the clock crosses into a new hour.
+                let hour = Self.snappedCurrentHour()
+                if hour != windowStart {
+                    windowStart = hour
+                }
             }
             .sportsPlayerCover(item: $playerRoute) { route in
                 PlayerView(
@@ -636,11 +643,11 @@ struct GuideView: View {
         }
     }
 
-    private static func snappedNowMinusOneHour() -> Date {
+    /// Start of the current local hour — Guide timeline left edge defaults here.
+    private static func snappedCurrentHour() -> Date {
         let n = Date()
         let cal = Calendar.current
-        let hour = cal.dateInterval(of: .hour, for: n)?.start ?? n
-        return cal.date(byAdding: .hour, value: -1, to: hour) ?? hour
+        return cal.dateInterval(of: .hour, for: n)?.start ?? n
     }
 }
 
@@ -883,7 +890,14 @@ private struct GuideTimelineGrid: View {
         #if os(tvOS)
         .focusScope(guideFocusNS)
         #endif
-        // No auto jump / snap — user freely scrolls horizontally.
+        .onAppear {
+            // Open scrolled to the left edge = current hour.
+            scrollSync.resetToStart()
+        }
+        .onChange(of: windowStart) { _, _ in
+            // New hour window → jump back to "now" (left edge).
+            scrollSync.resetToStart()
+        }
     }
 
     private var timeHeader: some View {
@@ -1290,8 +1304,13 @@ final class GuideScrollSync: ObservableObject {
     /// Weak set of visible row scroll views (LazyVStack recycles these).
     private let bodyScrolls = NSHashTable<UIScrollView>.weakObjects()
     private var locking = false
-    /// Shared free-scroll offset (user-controlled only — never auto-jump to “now”).
+    /// Shared free-scroll offset. Defaults to 0 = current hour at left edge.
     private(set) var sharedOffsetX: CGFloat = 0
+
+    /// Jump all linked scrolls to the timeline start (current hour).
+    func resetToStart() {
+        apply(0, excluding: nil)
+    }
 
     func register(_ scrollView: UIScrollView, role: GuideScrollRole) {
         #if os(iOS)
@@ -1305,7 +1324,7 @@ final class GuideScrollSync: ObservableObject {
             bodyScrolls.add(scrollView)
         }
         scrollView.delegate = bridge
-        // Align newly visible rows to the user's current offset only (no global re-snap).
+        // Align newly visible rows to shared offset (0 on first open = current hour).
         if abs(scrollView.contentOffset.x - sharedOffsetX) > 0.5 {
             locking = true
             scrollView.contentOffset.x = sharedOffsetX
