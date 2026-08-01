@@ -5,38 +5,28 @@ Same repo as iOS/tvOS (`sportsdash-apple`). Shared product law: **TS → VLC**, 
 
 ## JDK / Gradle note
 
-Gradle **8.9** needs a JVM **≤ 22**. Android Studio’s default is sometimes **JDK 25** → import fails.
+1. **Gradle JDK = 21** (JetBrains Runtime) in Studio:  
+   **Settings → Build Tools → Gradle → Gradle JDK → 21**
+2. We do **not** pin `jvmToolchain(17)` (that requires a separate JDK 17 install and breaks with only JBR 21).
+3. App still compiles to **Java 17 bytecode** via `compileOptions` / `jvmTarget = "17"`.
 
-**Fix:** in the dialog click **Use JVM 21** (or 17).
+If you see `Cannot find a Java installation matching languageVersion=17` → `git pull` and Sync again.
 
-Or: **Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK → 21** (or 17).
+Ignore “New Minor Gradle Version” for now.
 
-Project is pinned to **Java 17** toolchain in `app/build.gradle.kts`.
+## Open & run
 
 ```bash
-# On a machine with Android Studio (Mac/Windows/Linux)
 cd sportsdash-apple   # or ~/agency/sportsdash-apple
 git pull origin main
 
-# Open the android folder (not the iOS xcodeproj)
 # Android Studio → Open → select android/
 ```
 
-Or from CLI (JDK 17+ + Android SDK):
-
-```bash
-cd android
-# First time: Android Studio will generate gradlew; or:
-# gradle wrapper
-./gradlew :app:assembleDebug
-./gradlew :app:installDebug
-```
-
-## First dogfood
-
-1. Run **app** on emulator or device  
-2. **Settings** → Xtream: host + user + password → Save  
-3. **Channels** → pick a live stream → VLC player overlay  
+1. Sync Gradle  
+2. Start Pixel emulator  
+3. Run **app**  
+4. Settings → Xtream → Save → Channels → play  
 
 ## Layout
 
@@ -55,7 +45,6 @@ android/
 - Full Guide / EPG (`xmltv.php`)  
 - ESPN scores  
 - Android TV leanback  
-- Soft ExoPlayer path for clean HLS (optional; VLC handles HLS too)
 
 ## License
 

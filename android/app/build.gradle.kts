@@ -4,10 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-kotlin {
-    jvmToolchain(17)
-}
-
 android {
     namespace = "com.samirpatel.sportsdash"
     compileSdk = 35
@@ -37,6 +33,7 @@ android {
     }
 
     compileOptions {
+        // Bytecode target 17; build with Studio Gradle JDK 21
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -52,11 +49,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            // libVLC ships many ABIs
             useLegacyPackaging = true
         }
     }
 }
+
+// Do NOT pin kotlin.jvmToolchain(17) — Studio often only has JBR 21.
+// That pin fails with: Cannot find a Java installation matching languageVersion=17
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
@@ -75,12 +74,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Networking (Xtream / M3U / XMLTV)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     // Hard IPTV engine — same libVLC family as iOS MobileVLCKit (LGPL)
-    // https://central.sonatype.com/artifact/org.videolan.android/libvlc-all
     implementation("org.videolan.android:libvlc-all:3.6.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
