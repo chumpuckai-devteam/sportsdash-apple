@@ -1,6 +1,7 @@
 package com.samirpatel.sportsdash.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,13 +19,19 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +45,7 @@ import coil.compose.AsyncImage
 import com.samirpatel.sportsdash.AppUiState
 import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.ScoresFilter
+import com.samirpatel.sportsdash.core.matching.ChannelMatch
 import com.samirpatel.sportsdash.core.sports.Game
 import com.samirpatel.sportsdash.core.sports.TeamInfo
 import com.samirpatel.sportsdash.ui.theme.Gold
@@ -47,114 +55,207 @@ import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScoresScreen(vm: AppViewModel, state: AppUiState) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(VoidBlack),
-    ) {
-        if (state.playlist == null) {
-            SetupBanner(
-                title = "Add IPTV in Settings",
-                body = "Scores work without a playlist. Add Xtream/M3U under Settings to watch streams.",
-            )
-        }
-
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(VoidBlack),
         ) {
-            item {
-                ScoreFilterChip(
-                    label = "Live",
-                    selected = state.scoresFilter == ScoresFilter.LIVE,
-                    onClick = { vm.setScoresFilter(ScoresFilter.LIVE) },
+            if (state.playlist == null) {
+                SetupBanner(
+                    title = "Add IPTV in Settings",
+                    body = "Tap a game to pick a matching channel once your playlist is loaded.",
+                )
+            } else {
+                SetupBanner(
+                    title = "Watch from Scores",
+                    body = "Tap any game → choose a matched IPTV channel → plays in VLC.",
                 )
             }
-            item {
-                ScoreFilterChip(
-                    label = "Upcoming",
-                    selected = state.scoresFilter == ScoresFilter.UPCOMING,
-                    onClick = { vm.setScoresFilter(ScoresFilter.UPCOMING) },
-                )
-            }
-            item {
-                ScoreFilterChip(
-                    label = "Final",
-                    selected = state.scoresFilter == ScoresFilter.FINAL,
-                    onClick = { vm.setScoresFilter(ScoresFilter.FINAL) },
-                )
-            }
-        }
 
-        state.scoresStatus?.let { status ->
-            Text(
-                text = status,
-                color = Muted,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-        state.scoresError?.let { err ->
-            Text(
-                text = err,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(16.dp),
-            )
-        }
-
-        val byLeague = vm.gamesByLeague()
-        when {
-            state.isLoadingScores && state.games.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = Gold)
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    ScoreFilterChip("Live", state.scoresFilter == ScoresFilter.LIVE) {
+                        vm.setScoresFilter(ScoresFilter.LIVE)
+                    }
                 }
-            }
-            byLeague.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Sports,
-                            contentDescription = null,
-                            tint = Muted,
-                            modifier = Modifier.size(40.dp),
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = when (state.scoresFilter) {
-                                ScoresFilter.LIVE -> "No live games right now"
-                                ScoresFilter.UPCOMING -> "Nothing upcoming for selected leagues"
-                                ScoresFilter.FINAL -> "No finals in current boards"
-                            },
-                            color = Muted,
-                        )
+                item {
+                    ScoreFilterChip("Upcoming", state.scoresFilter == ScoresFilter.UPCOMING) {
+                        vm.setScoresFilter(ScoresFilter.UPCOMING)
+                    }
+                }
+                item {
+                    ScoreFilterChip("Final", state.scoresFilter == ScoresFilter.FINAL) {
+                        vm.setScoresFilter(ScoresFilter.FINAL)
                     }
                 }
             }
-            else -> {
-                LazyColumn(
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    byLeague.forEach { (league, games) ->
-                        item(key = "hdr-${league.id}") {
+
+            state.scoresStatus?.let { status ->
+                Text(
+                    text = status,
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            state.scoresError?.let { err ->
+                Text(
+                    text = err,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+
+            val byLeague = vm.gamesByLeague()
+            when {
+                state.isLoadingScores && state.games.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = Gold)
+                    }
+                }
+                byLeague.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Sports, null, tint = Muted, modifier = Modifier.size(40.dp))
+                            Spacer(Modifier.height(8.dp))
                             Text(
-                                text = league.label.uppercase(),
+                                when (state.scoresFilter) {
+                                    ScoresFilter.LIVE -> "No live games right now"
+                                    ScoresFilter.UPCOMING -> "Nothing upcoming for selected leagues"
+                                    ScoresFilter.FINAL -> "No finals in current boards"
+                                },
                                 color = Muted,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 4.dp),
                             )
                         }
-                        items(items = games, key = { it.id }) { game ->
-                            GameRow(game = game)
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        byLeague.forEach { (league, games) ->
+                            item(key = "hdr-${league.id}") {
+                                Text(
+                                    text = league.label.uppercase(),
+                                    color = Muted,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                )
+                            }
+                            items(items = games, key = { it.id }) { game ->
+                                GameRow(game = game, onClick = { vm.openStreamPicker(game) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Stream picker sheet
+        val pickerGame = state.streamPickerGame
+        if (pickerGame != null) {
+            ModalBottomSheet(
+                onDismissRequest = { vm.dismissStreamPicker() },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = Panel,
+            ) {
+                StreamPickerContent(
+                    game = pickerGame,
+                    matches = state.streamMatches,
+                    hasPlaylist = state.playlist != null,
+                    onClose = { vm.dismissStreamPicker() },
+                    onPlay = { match -> vm.playMatch(match, pickerGame) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamPickerContent(
+    game: Game,
+    matches: List<ChannelMatch>,
+    hasPlaylist: Boolean,
+    onClose: () -> Unit,
+    onPlay: (ChannelMatch) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 32.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier = Modifier.weight(1f)) {
+                Text("Watch stream", color = Gold, fontWeight = FontWeight.Bold)
+                Text(
+                    game.matchupLabel + " · " + game.league.label,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(game.statusLine, color = if (game.isLive) LiveMint else Muted, fontSize = 12.sp)
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Muted)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        when {
+            !hasPlaylist -> {
+                Text(
+                    "Add Xtream or M3U under Settings, then come back and tap this game.",
+                    color = Muted,
+                )
+            }
+            matches.isEmpty() -> {
+                Text(
+                    "No strong IPTV matches for this game. Open Guide and pick a sports channel manually.",
+                    color = Muted,
+                )
+            }
+            else -> {
+                Text(
+                    "${matches.size} matched channels — tap to play",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(8.dp))
+                matches.forEach { match ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(VoidBlack)
+                            .clickable { onPlay(match) }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Default.PlayArrow, null, tint = Gold)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier = Modifier.weight(1f)) {
+                            Text(match.channel.name, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "${match.reason} · score ${match.score.toInt()}",
+                                color = Muted,
+                                fontSize = 11.sp,
+                                maxLines = 2,
+                            )
                         }
                     }
                 }
@@ -179,23 +280,20 @@ private fun ScoreFilterChip(label: String, selected: Boolean, onClick: () -> Uni
 }
 
 @Composable
-private fun GameRow(game: Game) {
+private fun GameRow(game: Game, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(Panel)
+            .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TeamCell(
-                team = game.away,
-                modifier = Modifier.weight(1f),
-                alignEnd = false,
-            )
+            TeamCell(game.away, Modifier.weight(1f), alignEnd = false)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(horizontal = 8.dp),
@@ -215,13 +313,11 @@ private fun GameRow(game: Game) {
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,
                     )
+                } else {
+                    Text("TAP TO WATCH", color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            TeamCell(
-                team = game.home,
-                modifier = Modifier.weight(1f),
-                alignEnd = true,
-            )
+            TeamCell(game.home, Modifier.weight(1f), alignEnd = true)
         }
         if (game.broadcasts.isNotEmpty()) {
             Text(
@@ -235,33 +331,29 @@ private fun GameRow(game: Game) {
 }
 
 @Composable
-private fun TeamCell(
-    team: TeamInfo,
-    modifier: Modifier,
-    alignEnd: Boolean,
-) {
+private fun TeamCell(team: TeamInfo, modifier: Modifier, alignEnd: Boolean) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
     ) {
         if (!alignEnd) {
-            TeamLogo(url = team.logoUrl, abbrev = team.abbreviation)
-            Spacer(modifier = Modifier.width(8.dp))
+            TeamLogo(team.logoUrl, team.abbreviation)
+            Spacer(Modifier.width(8.dp))
         }
         Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
             Text(
-                text = team.rowLabel,
+                team.rowLabel,
                 color = TextPrimary,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(text = team.abbreviation, color = Muted, fontSize = 11.sp)
+            Text(team.abbreviation, color = Muted, fontSize = 11.sp)
         }
         if (alignEnd) {
-            Spacer(modifier = Modifier.width(8.dp))
-            TeamLogo(url = team.logoUrl, abbrev = team.abbreviation)
+            Spacer(Modifier.width(8.dp))
+            TeamLogo(team.logoUrl, team.abbreviation)
         }
     }
 }
@@ -272,25 +364,15 @@ private fun TeamLogo(url: String?, abbrev: String) {
         AsyncImage(
             model = url,
             contentDescription = abbrev,
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Fit,
         )
     } else {
         Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(VoidBlack),
+            Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(VoidBlack),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = abbrev.take(3),
-                color = Gold,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Text(abbrev.take(3), color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -305,7 +387,7 @@ fun SetupBanner(title: String, body: String) {
             .background(Gold.copy(alpha = 0.12f))
             .padding(12.dp),
     ) {
-        Text(text = title, color = Gold, fontWeight = FontWeight.Bold)
-        Text(text = body, color = Muted, style = MaterialTheme.typography.bodySmall)
+        Text(title, color = Gold, fontWeight = FontWeight.Bold)
+        Text(body, color = Muted, style = MaterialTheme.typography.bodySmall)
     }
 }

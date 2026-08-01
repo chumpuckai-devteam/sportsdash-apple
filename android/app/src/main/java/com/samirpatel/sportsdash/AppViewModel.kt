@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.samirpatel.sportsdash.core.iptv.IptvRepository
 import com.samirpatel.sportsdash.core.iptv.describe
+import com.samirpatel.sportsdash.core.matching.ChannelMatch
+import com.samirpatel.sportsdash.core.matching.MatchingService
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
@@ -23,12 +25,15 @@ import kotlinx.coroutines.launch
 
 enum class ScoresFilter { LIVE, UPCOMING, FINAL }
 
+enum class GuideLayout { LIST, GRID }
+
 data class AppUiState(
     val playlist: PlaylistConfig? = null,
     val channels: List<IptvChannel> = emptyList(),
     val groups: List<String> = emptyList(),
     val selectedGroup: String = "All",
     val searchQuery: String = "",
+    val guideLayout: GuideLayout = GuideLayout.LIST,
     val isLoadingChannels: Boolean = false,
     val channelStatus: String? = null,
     val channelError: String? = null,
@@ -41,16 +46,23 @@ data class AppUiState(
     val scoresError: String? = null,
     val scoresUpdatedAtMs: Long? = null,
 
+    /** Stream picker opened from a scoreboard game. */
+    val streamPickerGame: Game? = null,
+    val streamMatches: List<ChannelMatch> = emptyList(),
+
     val playing: IptvChannel? = null,
     val playUrl: String? = null,
     val engineLabel: String = "VLC",
     val playerMessage: String? = null,
+    /** Optional game context while watching (for ticker / hero). */
+    val playingGameId: String? = null,
 )
 
 class AppViewModel(
     private val prefs: PrefsStore,
     private val iptv: IptvRepository = IptvRepository(),
     private val sports: SportsRepository = SportsRepository(),
+    private val matching: MatchingService = MatchingService(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppUiState())
@@ -147,6 +159,10 @@ class AppViewModel(
         _state.update { it.copy(searchQuery = q) }
     }
 
+    fun setGuideLayout(layout: GuideLayout) {
+        _state.update { it.copy(guideLayout = layout) }
+    }
+
     fun filteredChannels(): List<IptvChannel> {
         val s = _state.value
         val base = if (s.selectedGroup == "All") s.channels
@@ -159,7 +175,7 @@ class AppViewModel(
         }
     }
 
-    fun play(channel: IptvChannel) {
+    fun play(channel: IptvChannel, gameId: String? = null) {
         val url = iptv.playbackCandidates(channel.url, preferTs = true).first()
         val kind = StreamContainer.detect(url)
         _state.update {
@@ -168,17 +184,27 @@ class AppViewModel(
                 playUrl = url,
                 engineLabel = "VLC · ${kind.name}",
                 playerMessage = null,
+                playingGameId = gameId,
+                streamPickerGame = null,
+                streamMatches = emptyList(),
             )
         }
     }
 
     fun stopPlayback() {
-        _state.update { it.copy(playing = null, playUrl = null, playerMessage = null) }
+        _state.update {
+            it.copy(
+                playing = null,
+                playUrl = null,
+                playerMessage = null,
+                playingGameId = null,
+            )
+        }
     }
 
     // endregion
 
-    // region Scores
+    // region Scores + matching
 
     fun refreshScores() {
         viewModelScope.launch {
@@ -248,6 +274,54 @@ class AppViewModel(
         return filteredGames()
             .groupBy { it.league }
             .toSortedMap(compareBy { it.label })
+    }
+
+    fun liveGames(): List<Game> = _state.value.games.filter { it.isLive }
+
+    /** Tap a scoreboard game → open channel picker (or prompt to add playlist). */
+    fun openStreamPicker(game: Game) {
+        val channels = _state.value.channels
+        if (channels.isEmpty()) {
+            _state.update {
+                it.copy(
+                    streamPickerGame = game,
+                    streamMatches = emptyList(),
+                    scoresError = if (it.playlist == null) {
+                        "Add an IPTV playlist in Settings to watch streams"
+                    } else {
+                        "No channels loaded yet — pull to refresh Guide"
+                    },
+                )
+            }
+            return
+        }
+        val matches = matching.matchGameToChannels(game, channels)
+        _state.update {
+            it.copy(
+                streamPickerGame = game,
+                streamMatches = matches,
+                scoresError = null,
+            )
+        }
+    }
+
+    fun dismissStreamPicker() {
+        _state.update { it.copy(streamPickerGame = null, streamMatches = emptyList()) }
+    }
+
+    fun playMatch(match: ChannelMatch, game: Game) {
+        play(match.channel, gameId = game.id)
+    }
+
+    fun playFromTicker(game: Game) {
+        // Prefer best match if available
+        val matches = matching.matchGameToChannels(game, _state.value.channels, limit = 1)
+        val best = matches.firstOrNull()
+        if (best != null) {
+            play(best.channel, gameId = game.id)
+        } else {
+            openStreamPicker(game)
+        }
     }
 
     // endregion

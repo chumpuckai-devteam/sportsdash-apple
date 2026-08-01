@@ -36,7 +36,6 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 @Composable
 fun SportsDashRoot(vm: AppViewModel) {
     val state by vm.state.collectAsState()
-    // 0 Scores · 1 Guide · 2 Settings
     var tab by remember { mutableIntStateOf(0) }
 
     val playing = state.playing
@@ -46,7 +45,14 @@ fun SportsDashRoot(vm: AppViewModel) {
             channel = playing,
             url = playUrl,
             engineLabel = state.engineLabel,
+            liveGames = vm.liveGames(),
+            currentGameId = state.playingGameId,
             onClose = { vm.stopPlayback() },
+            onTickerGame = { game -> vm.playFromTicker(game) },
+            onReplay = {
+                // restart same channel
+                vm.play(playing, gameId = state.playingGameId)
+            },
         )
         return
     }
@@ -64,11 +70,7 @@ fun SportsDashRoot(vm: AppViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "SportsDash",
-                        fontWeight = FontWeight.Bold,
-                        color = Gold,
-                    )
+                    Text("SportsDash", fontWeight = FontWeight.Bold, color = Gold)
                 },
                 actions = {
                     IconButton(
@@ -79,11 +81,7 @@ fun SportsDashRoot(vm: AppViewModel) {
                             }
                         },
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = Gold,
-                        )
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Gold)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -97,27 +95,21 @@ fun SportsDashRoot(vm: AppViewModel) {
                 NavigationBarItem(
                     selected = tab == 0,
                     onClick = { tab = 0 },
-                    icon = {
-                        Icon(Icons.Default.Sports, contentDescription = "Scores")
-                    },
+                    icon = { Icon(Icons.Default.Sports, contentDescription = "Scores") },
                     label = { Text("Scores") },
                     colors = navColors,
                 )
                 NavigationBarItem(
                     selected = tab == 1,
                     onClick = { tab = 1 },
-                    icon = {
-                        Icon(Icons.Default.LiveTv, contentDescription = "Guide")
-                    },
+                    icon = { Icon(Icons.Default.LiveTv, contentDescription = "Guide") },
                     label = { Text("Guide") },
                     colors = navColors,
                 )
                 NavigationBarItem(
                     selected = tab == 2,
                     onClick = { tab = 2 },
-                    icon = {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
                     label = { Text("Settings") },
                     colors = navColors,
                 )
