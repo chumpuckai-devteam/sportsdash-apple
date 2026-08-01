@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.samirpatel.sportsdash.core.epg.EpgProgram
 import com.samirpatel.sportsdash.core.epg.EpgRepository
+import com.samirpatel.sportsdash.core.epg.nowOrNearest
 import com.samirpatel.sportsdash.core.epg.nowPlaying
 import com.samirpatel.sportsdash.core.epg.upNext
 import com.samirpatel.sportsdash.core.iptv.IptvRepository
@@ -21,6 +22,7 @@ import com.samirpatel.sportsdash.core.sports.GameStatus
 import com.samirpatel.sportsdash.core.sports.SportLeague
 import com.samirpatel.sportsdash.core.sports.SportsRepository
 import com.samirpatel.sportsdash.data.PrefsStore
+import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,7 +89,7 @@ class AppViewModel(
     private val iptv: IptvRepository = IptvRepository(),
     private val sports: SportsRepository = SportsRepository(),
     private val matching: MatchingService = MatchingService(),
-    private val epg: EpgRepository = EpgRepository(),
+    private val epg: EpgRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppUiState())
@@ -273,15 +275,26 @@ class AppViewModel(
         _state.value.epgByChannelId[channelId].orEmpty()
 
     fun nowTitle(channelId: String): String? =
-        programsFor(channelId).nowPlaying()?.title
+        programsFor(channelId).nowOrNearest()?.title
 
-    fun nextTitle(channelId: String): String? =
-        programsFor(channelId).upNext()?.title
+    fun nextTitle(channelId: String): String? {
+        val list = programsFor(channelId)
+        val now = System.currentTimeMillis()
+        return list.upNext(now)?.title
+            ?: list.nowPlaying(now)?.let { cur ->
+                list.filter { it.startMs >= cur.endMs }.minByOrNull { it.startMs }?.title
+            }
+    }
 
-    /** Short-EPG / bulk map for currently open category only. */
+    /** Short EPG only for open category — populates Guide/Grid fast. */
     fun loadEpgForOpenCategory(force: Boolean = false) {
         val s = _state.value
         val cfg = s.playlist ?: return
+        if (cfg.type != PlaylistType.XTREAM) {
+            // M3U relies on bulk/cache
+            reloadEpgBulkBackground()
+            return
+        }
         val channels = filteredChannels()
         if (channels.isEmpty()) return
         val missing = if (force) {
@@ -296,10 +309,10 @@ class AppViewModel(
             _state.update {
                 it.copy(
                     isAutoFillingEpg = true,
-                    epgStatus = "Loading guide for ${s.selectedGroup.ifBlank { "category" }}…",
+                    epgStatus = "Loading Now/Next for ${s.selectedGroup.ifBlank { "category" }}…",
                 )
             }
-            val result = epg.loadForChannels(
+            val result = epg.loadShortEpgForChannels(
                 channels = missing,
                 config = cfg,
                 onStatus = { status ->
@@ -313,33 +326,32 @@ class AppViewModel(
             )
             _state.update { st ->
                 val merged = st.epgByChannelId + result.programsByChannelId
-                val covered = st.channels.count { !merged[it.id].isNullOrEmpty() }
+                val catCovered = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
+                val catTotal = filteredChannels().size.coerceAtLeast(1)
                 st.copy(
                     epgByChannelId = merged,
                     isAutoFillingEpg = false,
-                    isLoadingEpg = false,
-                    epgStatus = "Guide ready · $covered/${st.channels.size} channels",
+                    epgStatus = "Category guide · $catCovered/$catTotal · ${result.status}",
                 )
             }
         }
     }
 
-    /** Full-playlist bulk + fill in background (does not block category UI). */
+    /** Bulk xmltv (disk-cached) + fill gaps in background. */
     fun reloadEpgBulkBackground() {
         val channels = _state.value.channels
         val cfg = _state.value.playlist
-        if (channels.isEmpty()) return
+        if (channels.isEmpty() || cfg == null) return
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
             _state.update { it.copy(isLoadingEpg = true) }
-            val result = epg.loadForChannels(
+            val result = epg.loadBulkThenFill(
                 channels = channels,
                 config = cfg,
                 onStatus = { status ->
-                    // Don't stomp category-focused status while filling open group
                     _state.update { st ->
-                        if (st.isAutoFillingEpg && status.contains("Auto-filling")) st
-                        else st.copy(epgStatus = status)
+                        // Prefer category short-fill status while that job is active
+                        if (st.isAutoFillingEpg) st else st.copy(epgStatus = status)
                     }
                 },
                 onBatch = { batch ->
@@ -359,7 +371,11 @@ class AppViewModel(
     }
 
     fun reloadEpg(force: Boolean = false) {
-        loadEpgForOpenCategory(force = force)
+        if (force) {
+            // clear in-memory so UI refills
+            _state.update { it.copy(epgByChannelId = emptyMap()) }
+        }
+        loadEpgForOpenCategory(force = true)
         reloadEpgBulkBackground()
     }
 
@@ -523,7 +539,12 @@ class AppViewModel(
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return AppViewModel(PrefsStore(context.applicationContext)) as T
+                    val app = context.applicationContext
+                    val epgCache = File(app.cacheDir, "epg")
+                    return AppViewModel(
+                        prefs = PrefsStore(app),
+                        epg = EpgRepository(cacheDir = epgCache),
+                    ) as T
                 }
             }
     }

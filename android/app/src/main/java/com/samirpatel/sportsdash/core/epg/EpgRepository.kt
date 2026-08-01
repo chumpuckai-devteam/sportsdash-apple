@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -16,21 +18,26 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
+import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileReader
+import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 import kotlin.math.min
 
 /**
- * Auto EPG like iOS:
- * 1. Bulk xmltv.php download → stream-parse
- * 2. Map by epg id / slug / name
- * 3. Progressive Xtream get_short_epg for remaining gaps
+ * Auto EPG:
+ * - Category path: **short EPG first** (fast Now/Next)
+ * - Background: bulk xmltv.php download → disk cache → map → short fill gaps
  */
 class EpgRepository(
+    private val cacheDir: File? = null,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS)
@@ -38,10 +45,11 @@ class EpgRepository(
         .build(),
 ) {
     companion object {
-        const val MAX_PER_CHANNEL = 12
-        const val HOURS_BEHIND = 1
-        const val HOURS_AHEAD = 18
-        const val MAX_DOWNLOAD_BYTES = 120L * 1024 * 1024
+        const val MAX_PER_CHANNEL = 16
+        const val HOURS_BEHIND = 6
+        const val HOURS_AHEAD = 36
+        const val MAX_DOWNLOAD_BYTES = 150L * 1024 * 1024
+        private const val CACHE_VERSION = 2
     }
 
     data class LoadResult(
@@ -49,75 +57,209 @@ class EpgRepository(
         val status: String,
     )
 
-    suspend fun loadForChannels(
+    private val bulkMutex = Mutex()
+
+    /** Fast path for open Guide category — short EPG only. */
+    suspend fun loadShortEpgForChannels(
+        channels: List<IptvChannel>,
+        config: PlaylistConfig,
+        onStatus: (String) -> Unit = {},
+        onBatch: (Map<String, List<EpgProgram>>) -> Unit = {},
+    ): LoadResult = withContext(Dispatchers.IO) {
+        if (channels.isEmpty()) return@withContext LoadResult(emptyMap(), "No channels")
+        if (config.type != PlaylistType.XTREAM) {
+            return@withContext LoadResult(emptyMap(), "Short EPG needs Xtream")
+        }
+        onStatus("Loading Now/Next for ${channels.size} channels…")
+        val result = linkedMapOf<String, List<EpgProgram>>()
+        var missing = channels.toList()
+        var wave = 0
+        while (missing.isNotEmpty() && wave < 30) {
+            wave++
+            val slice = missing.take(40)
+            onStatus(
+                "EPG ${result.size}/${channels.size} · wave $wave…",
+            )
+            val short = loadXtreamShortBatch(slice, config, limit = 10)
+            if (short.isNotEmpty()) {
+                for ((k, v) in short) {
+                    if (v.isNotEmpty()) result[k] = v
+                }
+                onBatch(result.toMap())
+            }
+            val attempted = slice.map { it.id }.toSet()
+            missing = missing.filter { it.id !in attempted }
+            if (short.isEmpty() && wave >= 2) break
+        }
+        val status = "Category guide · ${result.size}/${channels.size} channels"
+        onStatus(status)
+        onBatch(result.toMap())
+        LoadResult(result.toMap(), status)
+    }
+
+    /**
+     * Full path: disk cache → bulk xmltv → map → short fill remaining.
+     * Serialised so category + background don't thrash the same download.
+     */
+    suspend fun loadBulkThenFill(
         channels: List<IptvChannel>,
         config: PlaylistConfig?,
         onStatus: (String) -> Unit = {},
         onBatch: (Map<String, List<EpgProgram>>) -> Unit = {},
     ): LoadResult = withContext(Dispatchers.IO) {
-        if (channels.isEmpty()) {
-            return@withContext LoadResult(emptyMap(), "No channels")
-        }
+        if (channels.isEmpty()) return@withContext LoadResult(emptyMap(), "No channels")
+        bulkMutex.withLock {
+            var result = linkedMapOf<String, List<EpgProgram>>()
 
-        var result = linkedMapOf<String, List<EpgProgram>>()
-
-        if (config != null) {
-            val urls = bulkXmltvUrls(config)
-            for ((index, url) in urls.withIndex()) {
-                onStatus("Downloading guide… (${index + 1}/${urls.size})")
-                val byTvg = runCatching { downloadAndParseXmltv(url, onStatus) }.getOrNull()
-                if (!byTvg.isNullOrEmpty()) {
-                    result = LinkedHashMap(mapXmltv(byTvg, channels))
-                    onStatus("Guide mapped · ${result.size}/${channels.size} channels")
-                    onBatch(result)
-                    break
+            // 1) Disk cache of raw tvg map
+            if (config != null) {
+                val cached = readTvgCache(config)
+                if (!cached.isNullOrEmpty()) {
+                    onStatus("Using cached guide (${cached.size} listings)…")
+                    result = LinkedHashMap(mapXmltv(cached, channels))
+                    onStatus("Cache mapped · ${result.size}/${channels.size} channels")
+                    onBatch(result.toMap())
                 }
             }
-            if (result.isEmpty()) {
-                onStatus("Bulk guide unavailable — loading per-channel EPG…")
-            }
-        }
 
-        if (config?.type == PlaylistType.XTREAM &&
-            config.username.isNotBlank() &&
-            config.password.isNotBlank()
-        ) {
-            var missing = channels.filter { result[it.id].isNullOrEmpty() }
-            if (missing.isNotEmpty()) {
-                val totalMissing = missing.size
-                var wave = 0
-                while (missing.isNotEmpty() && wave < 40) {
-                    wave++
-                    val slice = missing.take(48)
-                    onStatus(
-                        "Auto-filling guide ${result.size}/${channels.size} · " +
-                            "${totalMissing - missing.size + slice.size}/$totalMissing gaps…",
-                    )
-                    val short = loadXtreamShortBatch(slice, config, limit = 8)
-                    if (short.isNotEmpty()) {
-                        for ((k, v) in short) {
-                            if (v.isNotEmpty()) result[k] = v
+            // 2) Bulk download if still thin coverage
+            val coverage = result.size.toFloat() / channels.size.coerceAtLeast(1)
+            if (config != null && coverage < 0.15f) {
+                val urls = bulkXmltvUrls(config)
+                for ((index, url) in urls.withIndex()) {
+                    onStatus("Downloading guide… (${index + 1}/${urls.size})")
+                    val byTvg = runCatching { downloadAndParseXmltv(url, onStatus) }.getOrNull()
+                    if (!byTvg.isNullOrEmpty()) {
+                        writeTvgCache(config, byTvg)
+                        val mapped = mapXmltv(byTvg, channels)
+                        // merge richer
+                        for ((k, v) in mapped) {
+                            val old = result[k]
+                            if (old == null || v.size > old.size) result[k] = v
                         }
+                        onStatus("Bulk mapped · ${result.size}/${channels.size} channels")
                         onBatch(result.toMap())
-                    }
-                    val attempted = slice.map { it.id }.toSet()
-                    missing = missing.filter { it.id !in attempted }
-                    if (short.isEmpty() && wave >= 2) {
-                        onStatus(
-                            "Guide partial · ${result.size}/${channels.size} — " +
-                                "provider has no listings for remaining channels",
-                        )
                         break
                     }
                 }
             }
-        }
 
-        val status = "Guide ready · ${result.size}/${channels.size} channels"
-        onStatus(status)
-        onBatch(result.toMap())
-        LoadResult(result.toMap(), status)
+            // 3) Short EPG for gaps (Xtream)
+            if (config?.type == PlaylistType.XTREAM &&
+                config.username.isNotBlank() &&
+                config.password.isNotBlank()
+            ) {
+                var missing = channels.filter { result[it.id].isNullOrEmpty() }
+                if (missing.isNotEmpty()) {
+                    val totalMissing = missing.size
+                    var wave = 0
+                    while (missing.isNotEmpty() && wave < 50) {
+                        wave++
+                        val slice = missing.take(48)
+                        onStatus(
+                            "Auto-filling ${result.size}/${channels.size} · " +
+                                "${totalMissing - missing.size + slice.size}/$totalMissing…",
+                        )
+                        val short = loadXtreamShortBatch(slice, config, limit = 10)
+                        if (short.isNotEmpty()) {
+                            for ((k, v) in short) {
+                                if (v.isNotEmpty()) result[k] = v
+                            }
+                            onBatch(result.toMap())
+                        }
+                        val attempted = slice.map { it.id }.toSet()
+                        missing = missing.filter { it.id !in attempted }
+                        if (short.isEmpty() && wave >= 3) break
+                    }
+                }
+            }
+
+            val status = "Guide ready · ${result.size}/${channels.size} channels"
+            onStatus(status)
+            onBatch(result.toMap())
+            LoadResult(result.toMap(), status)
+        }
     }
+
+    // region Cache
+
+    private fun cacheKey(config: PlaylistConfig): String {
+        val host = when (config.type) {
+            PlaylistType.XTREAM -> config.host.trim().lowercase(Locale.US)
+            PlaylistType.M3U -> config.m3uUrl.trim().lowercase(Locale.US).take(120)
+        }
+        val user = config.username.trim().lowercase(Locale.US)
+        return (host + "|" + user).hashCode().toUInt().toString(16)
+    }
+
+    private fun tvgCacheFile(config: PlaylistConfig): File? {
+        val dir = cacheDir ?: return null
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, "tvg-v$CACHE_VERSION-${cacheKey(config)}.tsv")
+    }
+
+    private fun readTvgCache(config: PlaylistConfig): Map<String, List<EpgProgram>>? {
+        val file = tvgCacheFile(config) ?: return null
+        if (!file.isFile || file.length() < 32) return null
+        // stale after 18h
+        if (System.currentTimeMillis() - file.lastModified() > 18 * 3600_000L) return null
+        return runCatching {
+            val map = LinkedHashMap<String, MutableList<EpgProgram>>()
+            BufferedReader(FileReader(file)).use { br ->
+                var line = br.readLine()
+                while (line != null) {
+                    val parts = line.split('\t')
+                    if (parts.size >= 4) {
+                        val ch = parts[0]
+                        val start = parts[1].toLongOrNull()
+                        val end = parts[2].toLongOrNull()
+                        val title = parts[3].replace("\\n", "\n").replace("\\t", "\t")
+                        if (start != null && end != null && end > start) {
+                            val list = map.getOrPut(ch) { ArrayList() }
+                            if (list.size < MAX_PER_CHANNEL) {
+                                list.add(
+                                    EpgProgram(
+                                        channelKey = ch,
+                                        title = title.ifBlank { "Program" },
+                                        startMs = start,
+                                        endMs = end,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    line = br.readLine()
+                }
+            }
+            map.mapValues { (_, v) -> v.sortedBy { it.startMs } }
+        }.getOrNull()
+    }
+
+    private fun writeTvgCache(config: PlaylistConfig, byTvg: Map<String, List<EpgProgram>>) {
+        val file = tvgCacheFile(config) ?: return
+        runCatching {
+            val tmp = File(file.parentFile, file.name + ".tmp")
+            BufferedWriter(FileWriter(tmp)).use { bw ->
+                for ((ch, list) in byTvg) {
+                    for (p in list) {
+                        val title = p.title.replace("\t", " ").replace("\n", " ")
+                        bw.append(ch).append('\t')
+                            .append(p.startMs.toString()).append('\t')
+                            .append(p.endMs.toString()).append('\t')
+                            .append(title).append('\n')
+                    }
+                }
+            }
+            if (!tmp.renameTo(file)) {
+                tmp.copyTo(file, overwrite = true)
+                tmp.delete()
+            }
+        }
+    }
+
+    // endregion
+
+    // region Bulk XMLTV
 
     private fun bulkXmltvUrls(config: PlaylistConfig): List<String> {
         val out = ArrayList<String>()
@@ -151,12 +293,6 @@ class EpgRepository(
         val user = url.queryParameter("username") ?: return null
         val pass = url.queryParameter("password") ?: return null
         if (user.isBlank() || pass.isBlank()) return null
-        val path = url.encodedPath.lowercase(Locale.US)
-        if (!path.contains("get.php") && !path.contains("player_api") &&
-            !path.contains("xmltv") && !raw.lowercase(Locale.US).contains("username=")
-        ) {
-            return null
-        }
         val base = buildString {
             append(url.scheme)
             append("://")
@@ -230,7 +366,9 @@ class EpgRepository(
                         onStatus(String.format(Locale.US, "Downloaded %.1f MB — parsing…", mb))
                     }
                 }
-                return parseXmltvFile(tmp)
+                val parsed = parseXmltvFile(tmp)
+                onStatus("Parsed ${parsed.size} guide channels")
+                return parsed
             } finally {
                 tmp.delete()
             }
@@ -335,21 +473,33 @@ class EpgRepository(
         return map
     }
 
+    /** XMLTV: yyyyMMddHHmmss optional offset (+0000 / +00:00 / Z). */
     private fun parseXmltvDate(raw: String?): Long? {
         if (raw.isNullOrBlank()) return null
         val cleaned = raw.trim()
         val core = cleaned.take(14)
-        if (core.length < 14) return null
+        if (core.length < 14 || !core.all { it.isDigit() }) return null
+        val rest = cleaned.drop(14).trim()
+        val tz: TimeZone = when {
+            rest.isEmpty() || rest.equals("Z", true) || rest.equals("UTC", true) ->
+                TimeZone.getTimeZone("UTC")
+            else -> {
+                // "+0000", "+00:00", " +0100"
+                val digits = rest.replace(":", "").replace(" ", "")
+                val sign = when {
+                    digits.startsWith("+") || digits.startsWith("-") -> digits.first()
+                    else -> '+'
+                }
+                val num = digits.dropWhile { it == '+' || it == '-' }.padStart(4, '0').take(4)
+                val hh = num.take(2)
+                val mm = num.drop(2).take(2)
+                TimeZone.getTimeZone("GMT$sign$hh:$mm")
+            }
+        }
         return try {
             val fmt = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-            val rest = cleaned.drop(14).trim()
-            fmt.timeZone = when {
-                rest.startsWith("+") || rest.startsWith("-") -> {
-                    TimeZone.getTimeZone("GMT" + rest.replace(" ", ""))
-                }
-                rest.equals("UTC", true) || rest.equals("Z", true) -> TimeZone.getTimeZone("UTC")
-                else -> TimeZone.getDefault()
-            }
+            fmt.timeZone = tz
+            fmt.isLenient = false
             fmt.parse(core)?.time
         } catch (_: Exception) {
             null
@@ -360,12 +510,21 @@ class EpgRepository(
         byTvg: Map<String, List<EpgProgram>>,
         channels: List<IptvChannel>,
     ): Map<String, List<EpgProgram>> {
-        if (byTvg.isEmpty()) return emptyMap()
-        val index = HashMap<String, List<EpgProgram>>(byTvg.size * 2)
+        if (byTvg.isEmpty() || channels.isEmpty()) return emptyMap()
+
+        val index = HashMap<String, List<EpgProgram>>(byTvg.size * 4)
         for ((k, v) in byTvg) {
-            index[k] = v
-            index[k.lowercase(Locale.US)] = v
-            index[slug(k)] = v
+            fun put(key: String) {
+                if (key.isBlank()) return
+                index.putIfAbsent(key, v)
+                index.putIfAbsent(key.lowercase(Locale.US), v)
+                index.putIfAbsent(slug(key), v)
+            }
+            put(k)
+            // common tvg id variants
+            put(k.replace(' ', '_'))
+            put(k.replace('_', '.'))
+            put(k.replace('.', '_'))
         }
 
         val out = LinkedHashMap<String, List<EpgProgram>>()
@@ -375,15 +534,20 @@ class EpgRepository(
                     add(it)
                     add(it.lowercase(Locale.US))
                     add(slug(it))
+                    add(it.replace(' ', '_'))
+                    add(it.replace('_', '.'))
                 }
                 add(ch.name)
                 add(ch.name.lowercase(Locale.US))
                 add(slug(ch.name))
-                ch.streamId?.let { add(it) }
+                ch.streamId?.let {
+                    add(it)
+                    add("xtream-$it")
+                }
             }
             var hit: List<EpgProgram>? = null
             for (c in candidates) {
-                val found = index[c]
+                val found = index[c] ?: index[c.lowercase(Locale.US)] ?: index[slug(c)]
                 if (!found.isNullOrEmpty()) {
                     hit = found
                     break
@@ -391,9 +555,10 @@ class EpgRepository(
             }
             if (hit == null) {
                 val ns = slug(ch.name)
-                if (ns.length >= 4) {
+                if (ns.length >= 5) {
                     hit = index.entries.firstOrNull { (k, _) ->
-                        k.contains(ns) || ns.contains(k)
+                        val ks = slug(k)
+                        ks == ns || (ks.length >= 5 && (ks.contains(ns) || ns.contains(ks)))
                     }?.value
                 }
             }
@@ -407,6 +572,10 @@ class EpgRepository(
     private fun slug(s: String): String =
         s.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "")
 
+    // endregion
+
+    // region Short EPG
+
     private suspend fun loadXtreamShortBatch(
         channels: List<IptvChannel>,
         config: PlaylistConfig,
@@ -415,7 +584,8 @@ class EpgRepository(
         val base = normalizeBase(config.host) ?: return@coroutineScope emptyMap()
         val userQ = enc(config.username)
         val passQ = enc(config.password)
-        val batchSize = 12
+        val roots = httpsPreferredRoots(base)
+        val batchSize = 10
         val out = LinkedHashMap<String, List<EpgProgram>>()
         var i = 0
         while (i < channels.size) {
@@ -424,7 +594,12 @@ class EpgRepository(
             val parts = slice.map { ch ->
                 async(Dispatchers.IO) {
                     val sid = ch.streamId ?: xtreamStreamId(ch) ?: return@async ch.id to emptyList()
-                    ch.id to fetchShortEpg(base, userQ, passQ, sid, limit, ch.id)
+                    var programs: List<EpgProgram> = emptyList()
+                    for (root in roots) {
+                        programs = fetchShortEpg(root, userQ, passQ, sid, limit, ch.id)
+                        if (programs.isNotEmpty()) break
+                    }
+                    ch.id to programs
                 }
             }.awaitAll()
             for ((id, programs) in parts) {
@@ -443,48 +618,68 @@ class EpgRepository(
         limit: Int,
         channelKey: String,
     ): List<EpgProgram> {
-        val url =
-            "$base/player_api.php?username=$userQ&password=$passQ" +
-                "&action=get_short_epg&stream_id=$streamId&limit=$limit"
-        val body = runCatching { httpGet(url) }.getOrNull() ?: return emptyList()
-        if (body.length > 256_000) return emptyList()
-        val listings = try {
-            val trimmed = body.trim()
+        val actions = listOf(
+            "get_short_epg",
+            "get_simple_data_table",
+        )
+        for (action in actions) {
+            val url =
+                "$base/player_api.php?username=$userQ&password=$passQ" +
+                    "&action=$action&stream_id=$streamId&limit=$limit"
+            val body = runCatching { httpGet(url) }.getOrNull() ?: continue
+            if (body.length > 512_000 || body.isBlank()) continue
+            val listings = parseListingsArray(body) ?: continue
+            if (listings.length() == 0) continue
+            val out = ArrayList<EpgProgram>(listings.length())
+            for (i in 0 until min(listings.length(), limit)) {
+                val item = listings.optJSONObject(i) ?: continue
+                val title = decodeBase64Maybe(item.optString("title"))
+                    ?: decodeBase64Maybe(item.optString("name"))
+                    ?: "Program"
+                val start = parseEpgDate(
+                    item.optString("start_timestamp")
+                        .ifBlank { item.optString("start") }
+                        .ifBlank { item.optString("time") },
+                ) ?: continue
+                val end = parseEpgDate(
+                    item.optString("end_timestamp")
+                        .ifBlank { item.optString("stop_timestamp") }
+                        .ifBlank { item.optString("stop") }
+                        .ifBlank { item.optString("end") }
+                        .ifBlank { item.optString("time_to") },
+                ) ?: continue
+                if (end <= start) continue
+                out.add(
+                    EpgProgram(
+                        channelKey = channelKey,
+                        title = title,
+                        startMs = start,
+                        endMs = end,
+                        description = decodeBase64Maybe(item.optString("description")),
+                    ),
+                )
+            }
+            if (out.isNotEmpty()) return out.sortedBy { it.startMs }
+        }
+        return emptyList()
+    }
+
+    private fun parseListingsArray(body: String): JSONArray? {
+        val trimmed = body.trim()
+        return try {
             when {
                 trimmed.startsWith("{") -> {
-                    JSONObject(trimmed).optJSONArray("epg_listings") ?: JSONArray()
+                    val obj = JSONObject(trimmed)
+                    obj.optJSONArray("epg_listings")
+                        ?: obj.optJSONArray("listings")
+                        ?: obj.optJSONArray("data")
                 }
                 trimmed.startsWith("[") -> JSONArray(trimmed)
-                else -> JSONArray()
+                else -> null
             }
         } catch (_: Exception) {
-            return emptyList()
+            null
         }
-        val out = ArrayList<EpgProgram>(listings.length())
-        for (i in 0 until min(listings.length(), limit)) {
-            val item = listings.optJSONObject(i) ?: continue
-            val title = decodeBase64Maybe(item.optString("title")) ?: "Program"
-            val start = parseEpgDate(
-                item.optString("start_timestamp").ifBlank { item.optString("start") },
-            ) ?: continue
-            val end = parseEpgDate(
-                item.optString("end_timestamp")
-                    .ifBlank { item.optString("stop_timestamp") }
-                    .ifBlank { item.optString("stop") }
-                    .ifBlank { item.optString("end") },
-            ) ?: continue
-            if (end <= start) continue
-            out.add(
-                EpgProgram(
-                    channelKey = channelKey,
-                    title = title,
-                    startMs = start,
-                    endMs = end,
-                    description = decodeBase64Maybe(item.optString("description")),
-                ),
-            )
-        }
-        return out.sortedBy { it.startMs }
     }
 
     private fun xtreamStreamId(ch: IptvChannel): String? {
@@ -499,7 +694,7 @@ class EpgRepository(
         return try {
             val decoded = Base64.decode(s, Base64.DEFAULT)
             val str = String(decoded, Charsets.UTF_8)
-            if (str.isNotBlank()) str else s
+            if (str.isNotBlank() && str.any { it.isLetterOrDigit() }) str else s
         } catch (_: Exception) {
             s
         }
@@ -516,6 +711,8 @@ class EpgRepository(
                 else -> null
             }
         }
+        // XMLTV-ish without space
+        parseXmltvDate(s)?.let { return it }
         return try {
             val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
             fmt.timeZone = TimeZone.getDefault()
@@ -546,3 +743,23 @@ fun List<EpgProgram>.nowPlaying(nowMs: Long = System.currentTimeMillis()): EpgPr
 
 fun List<EpgProgram>.upNext(nowMs: Long = System.currentTimeMillis()): EpgProgram? =
     filter { it.startMs > nowMs }.minByOrNull { it.startMs }
+
+/** Prefer live, else nearest listing (Grid + empty timeline labels). */
+fun List<EpgProgram>.nowOrNearest(nowMs: Long = System.currentTimeMillis()): EpgProgram? {
+    nowPlaying(nowMs)?.let { return it }
+    if (isEmpty()) return null
+    // started recently / about to start
+    val soon = filter {
+        it.endMs > nowMs - 30 * 60_000L && it.startMs < nowMs + 6 * 3600_000L
+    }
+    if (soon.isNotEmpty()) {
+        return soon.minByOrNull { p ->
+            when {
+                p.contains(nowMs) -> 0L
+                p.startMs >= nowMs -> p.startMs - nowMs
+                else -> nowMs - p.endMs
+            }
+        }
+    }
+    return minByOrNull { abs((it.startMs + it.endMs) / 2 - nowMs) }
+}
