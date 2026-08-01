@@ -514,15 +514,15 @@ final class AppModel: ObservableObject {
 
         let service = epgService
         let config = iptvConfig
-        // Small batches keep category switches snappy
-        let need = Array(missing.prefix(24))
+        // Fill more of the open category — movie groups are often large and under-matched in bulk XMLTV.
+        let need = Array(missing.prefix(80))
 
         let map = await Task.detached(priority: .utility) {
             await service.loadForChannels(
                 channels: need,
                 config: config,
-                limitPerChannel: 6,
-                batchSize: 8,
+                limitPerChannel: 8,
+                batchSize: 10,
                 preferBulk: false,
                 fillMissingWithShortEpg: true,
                 onBatch: nil,

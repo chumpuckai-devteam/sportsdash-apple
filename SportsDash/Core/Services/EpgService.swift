@@ -53,7 +53,17 @@ actor EpgService {
     ) async -> [String: [EpgProgram]] {
         guard !channels.isEmpty else { return [:] }
 
-        let interest = Self.interestKeys(for: channels)
+        // When most streams lack epg_channel_id (common on US Movies packs), interest-key
+        // filtering drops almost all XMLTV programmes. Open the window so name/slug map works.
+        let withEpgId = channels.filter {
+            !($0.epgChannelId ?? "").isEmpty || !($0.tvgId ?? "").isEmpty
+        }.count
+        let interest: Set<String>
+        if withEpgId * 2 < channels.count, channels.count <= 500 {
+            interest = []
+        } else {
+            interest = Self.interestKeys(for: channels)
+        }
         var result: [String: [EpgProgram]] = [:]
 
         if preferBulk {
@@ -67,21 +77,21 @@ actor EpgService {
                     onStatus: onStatus
                 ), !byTvg.isEmpty {
                     result = mapXmltv(byTvg, to: channels, limit: limitPerChannel)
-                    onStatus?("Guide ready · \(result.count) channels")
+                    onStatus?("Guide mapped · \(result.count)/\(channels.count) channels")
                     onBatch?(result)
-                    if !fillMissingWithShortEpg || result.count > max(20, channels.count / 10) {
-                        return result
-                    }
                     break
                 }
             }
             if result.isEmpty {
-                onStatus?("Bulk guide unavailable — short EPG for open category…")
+                onStatus?("Bulk guide unavailable — short EPG…")
             }
         }
 
-        // Short EPG only for a small gap set (never full playlist).
-        let need = Array(channels.filter { result[$0.id] == nil }.prefix(80))
+        // Short EPG gap-fill (Xtream). Critical for US Movies etc. where many streams
+        // have empty epg_channel_id so XMLTV never attaches.
+        let missing = channels.filter { result[$0.id] == nil }
+        let shortCap = fillMissingWithShortEpg ? 100 : 60
+        let need = Array(missing.prefix(shortCap))
         guard !need.isEmpty,
               let config,
               config.type == .xtream,
@@ -99,9 +109,8 @@ actor EpgService {
         for (k, v) in short where !v.isEmpty {
             result[k] = v
         }
-        if !short.isEmpty {
-            onBatch?(short)
-        }
+        onStatus?("Guide ready · \(result.count) channels")
+        onBatch?(result)
         return result
     }
 
@@ -208,6 +217,7 @@ actor EpgService {
 
     // MARK: - Map XMLTV channel id → app channel id
 
+    // Map XMLTV ids → app channels; also try stripped name tokens when IDs miss.
     private func mapXmltv(
         _ byTvg: [String: [EpgProgram]],
         to channels: [IptvChannel],
@@ -216,6 +226,15 @@ actor EpgService {
         var lowerIndex: [String: String] = [:]
         lowerIndex.reserveCapacity(byTvg.count)
         for key in byTvg.keys { lowerIndex[key.lowercased()] = key }
+
+        // Secondary index: normalized slug of XMLTV channel id (showtime.us → showtime)
+        var slugIndex: [String: String] = [:]
+        for key in byTvg.keys {
+            let slug = Self.epgSlug(key)
+            if !slug.isEmpty, slugIndex[slug] == nil {
+                slugIndex[slug] = key
+            }
+        }
 
         var result: [String: [EpgProgram]] = [:]
         result.reserveCapacity(min(channels.count, byTvg.count))
@@ -232,12 +251,56 @@ actor EpgService {
                     programs = list
                     break
                 }
+                let slug = Self.epgSlug(k)
+                if !slug.isEmpty, let real = slugIndex[slug], let list = byTvg[real] {
+                    programs = list
+                    break
+                }
             }
+
+            // Name-based fallback: "US: Showtime" / "Showtime HD" → slug showtime
+            if programs.isEmpty {
+                let nameSlug = Self.epgSlug(ch.name)
+                if !nameSlug.isEmpty, let real = slugIndex[nameSlug], let list = byTvg[real] {
+                    programs = list
+                } else if !nameSlug.isEmpty {
+                    // Prefix match longest slug key contained in name (or vice versa)
+                    for (slug, real) in slugIndex where slug.count >= 4 {
+                        if nameSlug.contains(slug) || slug.contains(nameSlug) {
+                            if let list = byTvg[real], !list.isEmpty {
+                                programs = list
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
             guard !programs.isEmpty else { continue }
-            // Preserve XMLTV categories/description — dropping them killed P0 movie flags + Guide chips.
             result[ch.id] = Array(programs.prefix(limit)).map { $0.remapped(toChannelKey: ch.id) }
         }
         return result
+    }
+
+    /// Normalize EPG / channel labels for fuzzy match: alphanumerics only, lowercased.
+    nonisolated private static func epgSlug(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        var out = ""
+        out.reserveCapacity(lower.count)
+        for ch in lower where ch.isLetter || ch.isNumber {
+            out.append(ch)
+        }
+        // Drop common broadcast noise tokens from the slug ends if whole string still long
+        let noise = ["hd", "uhd", "4k", "fhd", "sd", "us", "uk", "ca", "hevc", "h265"]
+        for n in noise {
+            if out.hasSuffix(n), out.count > n.count + 3 {
+                out = String(out.dropLast(n.count))
+            }
+            if out.hasPrefix(n), out.count > n.count + 3 {
+                out = String(out.dropFirst(n.count))
+            }
+        }
+        return out
     }
 
     nonisolated private static func interestKeys(for channels: [IptvChannel]) -> Set<String> {

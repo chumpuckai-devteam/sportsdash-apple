@@ -10,7 +10,7 @@ private enum GuideMetrics {
     static let channelColWidth: CGFloat = 220
     static let rowHeight: CGFloat = SportsTVMetrics.channelRowHeight
     #else
-    static let channelColWidth: CGFloat = 120
+    static let channelColWidth: CGFloat = 148
     static let rowHeight: CGFloat = 78
     #endif
     static let timeHeaderHeight: CGFloat = 36
@@ -499,6 +499,27 @@ struct GuideView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(SportsColors.panel)
+            } else if !activeChannels.isEmpty {
+                let withGuide = activeChannels.filter { !(appModel.epgByChannel[$0.id] ?? []).isEmpty }.count
+                HStack(spacing: 8) {
+                    Text("Guide \(withGuide)/\(activeChannels.count) in this category")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(withGuide == 0 ? SportsColors.danger : SportsColors.muted)
+                    Spacer()
+                    if withGuide < activeChannels.count {
+                        Button {
+                            Task { await appModel.loadEpgIfNeeded(for: activeChannels) }
+                        } label: {
+                            Text("Fill missing")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(SportsColors.gold)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(SportsColors.panel.opacity(0.85))
             }
 
             switch displayMode {
@@ -889,8 +910,17 @@ private struct GuideTimelineRow: View {
                             .offset(x: CGFloat(h) * GuideMetrics.pxPerHour)
                     }
 
-                    ForEach(visiblePrograms, id: \.id) { program in
-                        programBlock(program)
+                    if visiblePrograms.isEmpty {
+                        Text(row.programs.isEmpty ? "No guide for this channel" : "Nothing in this time range")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(SportsColors.muted)
+                            .padding(.horizontal, 12)
+                            .frame(height: GuideMetrics.rowHeight, alignment: .leading)
+                            .frame(maxWidth: 280, alignment: .leading)
+                    } else {
+                        ForEach(visiblePrograms, id: \.id) { program in
+                            programBlock(program)
+                        }
                     }
                 }
                 .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.rowHeight, alignment: .topLeading)
@@ -977,16 +1007,8 @@ private struct GuideTimelineRow: View {
     private var visiblePrograms: [EpgProgram] {
         let inWindow = row.programs.filter { $0.end > windowStart && $0.start < windowEnd }
         if !inWindow.isEmpty { return inWindow }
-        let title = row.programs.isEmpty ? "No EPG data" : "No programs in this time range"
-        return [
-            EpgProgram(
-                channelKey: row.channel.id,
-                title: title,
-                start: windowStart,
-                end: min(windowEnd, windowStart.addingTimeInterval(3600 * 3)),
-                description: nil
-            )
-        ]
+        // Empty list → no fake "No EPG data" programme (frontend: empty cell instead).
+        return []
     }
 
     @ViewBuilder
