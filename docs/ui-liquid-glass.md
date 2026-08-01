@@ -37,10 +37,9 @@ SportsDash game cards use `sportsContentCard`: solid elevated fill + hairline ed
 |------|------|
 | `Theme/SportsColors.swift` | Tokens + glass/content helpers + chips/menus |
 | `App/RootTabView.swift` | `Tab` API + splash |
-| `Features/Scores/*` | Filter chips, game cards, snappy shelves |
-| `Features/Channels/ChannelsView.swift` | Category menu + tiles |
-| `Features/Guide/GuideView.swift` | Category + settings menus |
-| `Features/Settings/SettingsView.swift` | Grouped list + About logo |
+| `Features/Scores/*` | Filter chips, sticky context, collapsible sports, matchup rows |
+| `Features/Guide/GuideView.swift` | Category search, Movies now, ratings chips |
+| `Features/Settings/SettingsView.swift` | Setup checklist + App section + About logo |
 | `Features/Player/PlayerView.swift` | Fullscreen floating control chrome (`sportsGlass` buttons/capsules); gradient scrims only over video |
 | `Features/Player/FloatingPlayerView.swift` | Mini-player transport / close / expand glass controls |
 | `Features/Player/LiveScoresStrip.swift` | Opaque content cards (`sportsContentCard`); no glass wash |
@@ -64,10 +63,15 @@ Reference UX cues only — no Apple Sports assets/trademarks:
 
 | Cue | SportsDash approach |
 |-----|---------------------|
-| Vertical league list | Grouped soft surface + hairline dividers (no bordered cards) |
+| Vertical league list | Soft groups + collapsible **sport** headers |
 | Big scores / team marks | `GameMatchupRow` + `TeamMarkView` (logo or monogram) |
-| Detail sheet bottom-up | System `.sheet` + large detent |
-| Team color wash on detail | `TeamTheme.heroGradient` from stable hash of team id (not scraped brand kits) |
+| Detail sheet bottom-up | System `.sheet` + soft gray hero (no team-color washes) |
+| Sticky filters | Live/Upcoming chips + leagues context strip stay above scroll |
+| Setup | `SetupChecklistCard` when playlist/leagues missing |
 | IPTV identity | Gold **WATCH** on matched streams |
 
 HIG still applies: Liquid Glass on chrome; content uses materials/soft surfaces.
+
+## Navigation
+
+Tabs: **Scores · Guide · Settings** only. Channels tab removed — Guide list/grid is browse/play.
