@@ -51,7 +51,8 @@ struct GuideView: View {
 
     private var guideRows: [GuideChannelRowData] {
         // Reference EPG map; LazyVStack/List only mount visible rows.
-        let chans = activeChannels
+        // Dedupe playlist clones (same display name in group — common on Xtream).
+        let chans = Self.dedupeChannels(activeChannels, epg: appModel.epgByChannel)
         var rows: [GuideChannelRowData] = []
         rows.reserveCapacity(chans.count)
         for ch in chans {
@@ -71,6 +72,36 @@ struct GuideView: View {
             rows.append(GuideChannelRowData(channel: ch, programs: programs))
         }
         return rows
+    }
+
+    /// Prefer the stream that already has EPG when names collide.
+    private static func dedupeChannels(
+        _ channels: [IptvChannel],
+        epg: [String: [EpgProgram]]
+    ) -> [IptvChannel] {
+        var bestByKey: [String: IptvChannel] = [:]
+        var order: [String] = []
+        order.reserveCapacity(channels.count)
+        for ch in channels {
+            let key = ChannelNameCleanup.displayName(ch.name, enabled: true)
+                .lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = key.isEmpty ? ch.id : key
+            if bestByKey[normalized] == nil {
+                bestByKey[normalized] = ch
+                order.append(normalized)
+                continue
+            }
+            let existing = bestByKey[normalized]!
+            let existingCount = epg[existing.id]?.count ?? 0
+            let newCount = epg[ch.id]?.count ?? 0
+            // Keep richer EPG; tie-break shorter id (stable).
+            if newCount > existingCount
+                || (newCount == existingCount && ch.id < existing.id) {
+                bestByKey[normalized] = ch
+            }
+        }
+        return order.compactMap { bestByKey[$0] }
     }
 
     var body: some View {
@@ -778,6 +809,25 @@ private struct GuideChannelRowData: Identifiable {
     let programs: [EpgProgram]
 }
 
+private enum GuideGapReason {
+    case noData
+    case outOfRange
+    case between
+}
+
+private enum GuideTimelineBlockKind {
+    case program
+    case gap(GuideGapReason)
+}
+
+private struct GuideTimelineBlock: Identifiable {
+    let id: String
+    let kind: GuideTimelineBlockKind
+    let start: Date
+    let end: Date
+    let program: EpgProgram?
+}
+
 // MARK: - Timeline grid (lazy rows — avoids O(channels × programs) views)
 
 private struct GuideTimelineGrid: View {
@@ -900,24 +950,21 @@ private struct GuideTimelineRow: View {
                 role: .body
             ) {
                 ZStack(alignment: .topLeading) {
+                    // Continuous track so empty airtime never looks like a broken grid.
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(SportsColors.panel.opacity(0.55))
+                        .frame(width: GuideMetrics.timelineWidth - 4, height: GuideMetrics.rowHeight - 12)
+                        .offset(x: 2, y: 6)
+
                     ForEach(0...GuideMetrics.hours, id: \.self) { h in
                         Rectangle()
-                            .fill(SportsColors.border.opacity(0.35))
+                            .fill(SportsColors.border.opacity(0.28))
                             .frame(width: 1, height: GuideMetrics.rowHeight)
                             .offset(x: CGFloat(h) * GuideMetrics.pxPerHour)
                     }
 
-                    if visiblePrograms.isEmpty {
-                        Text(row.programs.isEmpty ? "No guide for this channel" : "Nothing in this time range")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(SportsColors.muted)
-                            .padding(.horizontal, 12)
-                            .frame(height: GuideMetrics.rowHeight, alignment: .leading)
-                            .frame(maxWidth: 280, alignment: .leading)
-                    } else {
-                        ForEach(visiblePrograms, id: \.id) { program in
-                            programBlock(program)
-                        }
+                    ForEach(timelineBlocks) { block in
+                        timelineBlockView(block)
                     }
                 }
                 .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.rowHeight, alignment: .topLeading)
@@ -1001,19 +1048,132 @@ private struct GuideTimelineRow: View {
         #endif
     }
 
-    private var visiblePrograms: [EpgProgram] {
-        let inWindow = row.programs.filter { $0.end > windowStart && $0.start < windowEnd }
-        if !inWindow.isEmpty { return inWindow }
-        // Empty list → no fake "No EPG data" programme (frontend: empty cell instead).
-        return []
+    /// Real programmes + muted gap fillers so the row is continuous (no black holes).
+    private var timelineBlocks: [GuideTimelineBlock] {
+        Self.buildTimelineBlocks(
+            programs: row.programs,
+            windowStart: windowStart,
+            windowEnd: windowEnd
+        )
+    }
+
+    private static func buildTimelineBlocks(
+        programs: [EpgProgram],
+        windowStart: Date,
+        windowEnd: Date
+    ) -> [GuideTimelineBlock] {
+        let sorted = programs
+            .filter { $0.end > windowStart && $0.start < windowEnd }
+            .sorted { $0.start < $1.start }
+
+        var blocks: [GuideTimelineBlock] = []
+        var cursor = windowStart
+        let minGap: TimeInterval = 90 // don't invent tiny slivers
+
+        if sorted.isEmpty {
+            return [
+                GuideTimelineBlock(
+                    id: "gap-full-\(windowStart.timeIntervalSince1970)",
+                    kind: .gap(programs.isEmpty ? .noData : .outOfRange),
+                    start: windowStart,
+                    end: windowEnd,
+                    program: nil
+                )
+            ]
+        }
+
+        for (idx, prog) in sorted.enumerated() {
+            let segStart = max(prog.start, windowStart)
+            let segEnd = min(prog.end, windowEnd)
+            if segStart > cursor.addingTimeInterval(minGap) {
+                blocks.append(
+                    GuideTimelineBlock(
+                        id: "gap-\(idx)-\(cursor.timeIntervalSince1970)",
+                        kind: .gap(.between),
+                        start: cursor,
+                        end: segStart,
+                        program: nil
+                    )
+                )
+            }
+            if segEnd > segStart {
+                blocks.append(
+                    GuideTimelineBlock(
+                        id: prog.id,
+                        kind: .program,
+                        start: segStart,
+                        end: segEnd,
+                        program: prog
+                    )
+                )
+                cursor = max(cursor, segEnd)
+            }
+        }
+        if windowEnd > cursor.addingTimeInterval(minGap) {
+            blocks.append(
+                GuideTimelineBlock(
+                    id: "gap-end-\(cursor.timeIntervalSince1970)",
+                    kind: .gap(.between),
+                    start: cursor,
+                    end: windowEnd,
+                    program: nil
+                )
+            )
+        }
+        return blocks
     }
 
     @ViewBuilder
-    private func programBlock(_ program: EpgProgram) -> some View {
-        let start = max(program.start, windowStart)
-        let end = min(program.end, windowEnd)
-        let left = CGFloat(start.timeIntervalSince(windowStart) / 3600.0) * GuideMetrics.pxPerHour
-        let width = max(28, CGFloat(end.timeIntervalSince(start) / 3600.0) * GuideMetrics.pxPerHour)
+    private func timelineBlockView(_ block: GuideTimelineBlock) -> some View {
+        let left = CGFloat(block.start.timeIntervalSince(windowStart) / 3600.0) * GuideMetrics.pxPerHour
+        let width = max(20, CGFloat(block.end.timeIntervalSince(block.start) / 3600.0) * GuideMetrics.pxPerHour)
+
+        switch block.kind {
+        case .program:
+            if let program = block.program {
+                programBlock(program, left: left, width: width)
+            }
+        case .gap(let reason):
+            gapBlock(reason: reason, left: left, width: width)
+        }
+    }
+
+    @ViewBuilder
+    private func gapBlock(reason: GuideGapReason, left: CGFloat, width: CGFloat) -> some View {
+        let label: String = {
+            switch reason {
+            case .noData: return "No guide"
+            case .outOfRange: return "—"
+            case .between: return ""
+            }
+        }()
+        HStack {
+            if !label.isEmpty, width > 56 {
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(SportsColors.muted.opacity(0.85))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .frame(width: max(16, width - 4), height: GuideMetrics.rowHeight - 12, alignment: .center)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(SportsColors.panel.opacity(0.35))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(SportsColors.border.opacity(0.25), lineWidth: 1)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onPlay(row.channel) }
+        .offset(x: left + 2, y: 6)
+        .accessibilityLabel(label.isEmpty ? "No program information" : label)
+    }
+
+    @ViewBuilder
+    private func programBlock(_ program: EpgProgram, left: CGFloat, width: CGFloat) -> some View {
         let airing = program.start <= now && now < program.end
 
         VStack(alignment: .leading, spacing: 2) {
@@ -1049,7 +1209,7 @@ private struct GuideTimelineRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .frame(width: width - 4, height: GuideMetrics.rowHeight - 12, alignment: .topLeading)
+        .frame(width: max(24, width - 4), height: GuideMetrics.rowHeight - 12, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelElevated)
@@ -1063,7 +1223,7 @@ private struct GuideTimelineRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onPlay(row.channel) }
-        .offset(x: left + 2, y: 8)
+        .offset(x: left + 2, y: 6)
     }
 
     private func shortTimeRange(_ p: EpgProgram) -> String {
