@@ -192,6 +192,7 @@ class AppViewModel(
     }
 
     fun stopPlayback() {
+        // Clear first so UI leaves player immediately even if release races
         _state.update {
             it.copy(
                 playing = null,

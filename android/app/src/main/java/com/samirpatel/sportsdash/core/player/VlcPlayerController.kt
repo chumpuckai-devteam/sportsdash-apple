@@ -10,7 +10,9 @@ import org.videolan.libvlc.util.VLCVideoLayout
 
 /**
  * Hard IPTV engine — libVLC (same family as iOS MobileVLCKit).
- * Prefer for MPEG-TS / messy live; soft Exo path can be added later for clean HLS.
+ *
+ * Uses **TextureView** (not SurfaceView) so Compose overlays (back, pause, ticker)
+ * stay on top and receive taps. SurfaceView punches above the window and ate the X.
  */
 class VlcPlayerController(context: Context) {
     private val appContext = context.applicationContext
@@ -21,18 +23,24 @@ class VlcPlayerController(context: Context) {
             "--live-caching=1500",
             "--http-reconnect",
             "--avcodec-hw=any",
+            "--no-drop-late-frames",
+            "--no-skip-frames",
         ),
     )
     private val mediaPlayer: MediaPlayer = MediaPlayer(libVlc)
     private var attachedLayout: VLCVideoLayout? = null
+    private var muted: Boolean = false
 
     val isPlaying: Boolean get() = mediaPlayer.isPlaying
+    val isMuted: Boolean get() = muted
 
     fun attach(layout: VLCVideoLayout) {
         if (attachedLayout === layout) return
         detach()
-        mediaPlayer.attachViews(layout, null, false, false)
+        // subtitlesSurface=false, textureView=true → Compose chrome can receive clicks
+        mediaPlayer.attachViews(layout, null, false, true)
         attachedLayout = layout
+        applyVolume()
     }
 
     fun detach() {
@@ -52,10 +60,14 @@ class VlcPlayerController(context: Context) {
         mediaPlayer.media = media
         media.release()
         mediaPlayer.play()
+        applyVolume()
     }
 
     fun stop() {
-        mediaPlayer.stop()
+        try {
+            mediaPlayer.stop()
+        } catch (_: Exception) {
+        }
     }
 
     fun pause() {
@@ -70,11 +82,31 @@ class VlcPlayerController(context: Context) {
         if (mediaPlayer.isPlaying) pause() else resume()
     }
 
+    fun setMuted(value: Boolean) {
+        muted = value
+        applyVolume()
+    }
+
+    fun toggleMute() {
+        setMuted(!muted)
+    }
+
+    private fun applyVolume() {
+        // libVLC volume 0–100
+        mediaPlayer.volume = if (muted) 0 else 100
+    }
+
     fun release() {
         stop()
         detach()
-        mediaPlayer.release()
-        libVlc.release()
+        try {
+            mediaPlayer.release()
+        } catch (_: Exception) {
+        }
+        try {
+            libVlc.release()
+        } catch (_: Exception) {
+        }
     }
 
     fun setEventListener(listener: MediaPlayer.EventListener?) {
@@ -89,5 +121,8 @@ fun createVlcVideoLayout(context: Context): VLCVideoLayout {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
+        // Don't let the video layout steal focus from Compose buttons
+        isClickable = false
+        isFocusable = false
     }
 }

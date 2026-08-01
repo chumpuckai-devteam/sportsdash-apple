@@ -1,7 +1,9 @@
 package com.samirpatel.sportsdash.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,20 +13,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -43,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
 import com.samirpatel.sportsdash.core.player.createVlcVideoLayout
@@ -52,11 +59,16 @@ import com.samirpatel.sportsdash.ui.theme.LiveMint
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
+import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 /**
- * Fullscreen VLC player with:
- * - Play / pause / jump-to-live / close controls
- * - Live scores ticker (iOS LiveScoresStrip parity, simplified)
+ * Fullscreen player closer to iOS:
+ * - Always-reachable **Back** (system back + top-left)
+ * - Play / pause, mute, rejoin live
+ * - Channel title + engine / LIVE chips
+ * - Bottom live scores ticker
+ *
+ * VLC uses TextureView so overlays receive taps (SurfaceView was eating the X).
  */
 @Composable
 fun PlayerScreen(
@@ -73,6 +85,10 @@ fun PlayerScreen(
     val controller = remember { VlcPlayerController(context) }
     var chromeVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
+    var isMuted by remember { mutableStateOf(false) }
+
+    // System back must leave the player
+    BackHandler(onBack = onClose)
 
     DisposableEffect(url) {
         controller.play(url)
@@ -89,9 +105,9 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .clickable { chromeVisible = !chromeVisible },
+            .background(Color.Black),
     ) {
+        // Video layer
         AndroidView(
             factory = { ctx ->
                 createVlcVideoLayout(ctx).also { layout ->
@@ -99,90 +115,203 @@ fun PlayerScreen(
                 }
             },
             modifier = Modifier.fillMaxSize(),
-            update = { layout -> controller.attach(layout) },
+            update = { layout ->
+                if (!controller.isPlaying && url.isNotBlank()) {
+                    // keep attached
+                }
+                controller.attach(layout)
+            },
         )
 
-        if (chromeVisible) {
-            // Top bar
+        // Tap middle of video to toggle chrome (does NOT cover top/bottom control bands)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 96.dp, bottom = 168.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    chromeVisible = !chromeVisible
+                },
+        )
+
+        // ===== TOP CHROME (always on top of TextureView) =====
+        // Keep Back ALWAYS visible so exit never depends on chrome toggle.
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .zIndex(10f)
+                .statusBarsPadding()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent),
+                    ),
+                )
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent),
-                        ),
-                    )
-                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                // Large hit target — primary exit
+                CircleControl(
+                    onClick = onClose,
+                    contentDescription = "Back",
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = channel.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = engineLabel,
-                        color = Gold,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+
+                if (chromeVisible) {
+                    Chip(text = "VLC", filled = false)
+                    Spacer(modifier = Modifier.weight(1f))
+                    CircleControl(
+                        onClick = {
+                            controller.toggleMute()
+                            isMuted = controller.isMuted
+                        },
+                        contentDescription = if (isMuted) "Unmute" else "Mute",
+                    ) {
+                        Icon(
+                            imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
 
-            // Center transport
+            if (chromeVisible) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = channel.group?.uppercase() ?: "LIVE TV",
+                    color = Gold,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                )
+                Text(
+                    text = channel.name,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(text = engineLabel.substringBefore(" ·").ifBlank { "VLC" }, filled = false)
+                    Chip(text = "LIVE", filled = true, fillColor = LiveMint)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        // ===== CENTER TRANSPORT =====
+        if (chromeVisible) {
             Row(
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .zIndex(10f),
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(
+                CircleControl(
                     onClick = {
-                        // Rejoin live
                         onReplay()
                         controller.play(url)
                         isPlaying = true
                     },
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(Color.Black.copy(alpha = 0.45f)),
+                    contentDescription = "Rejoin live",
+                    size = 52.dp,
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Live", tint = Color.White)
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
                 }
-                IconButton(
+                CircleControl(
                     onClick = {
                         controller.togglePlayPause()
-                        isPlaying = !isPlaying
+                        isPlaying = controller.isPlaying
                     },
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(36.dp))
-                        .background(Gold.copy(alpha = 0.9f)),
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    size = 72.dp,
+                    background = Gold,
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.Black,
+                        contentDescription = null,
+                        tint = VoidBlack,
                         modifier = Modifier.size(40.dp),
                     )
                 }
             }
+        }
 
-            // Bottom live scores ticker
+        // ===== BOTTOM TICKER (always when chrome visible; matches iOS strip) =====
+        if (chromeVisible) {
             LiveScoresTicker(
                 games = liveGames,
                 currentGameId = currentGameId,
                 onGameTap = onTickerGame,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .zIndex(10f)
+                    .navigationBarsPadding(),
             )
         }
     }
+}
+
+@Composable
+private fun CircleControl(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 44.dp,
+    background: Color = Color.Black.copy(alpha = 0.55f),
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(size),
+        shape = CircleShape,
+        color = background,
+        contentColor = Color.White,
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun Chip(
+    text: String,
+    filled: Boolean,
+    fillColor: Color = Gold,
+) {
+    Text(
+        text = text,
+        color = if (filled) VoidBlack else Color.White,
+        fontWeight = FontWeight.Bold,
+        fontSize = 11.sp,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (filled) fillColor else Color.White.copy(alpha = 0.15f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 @Composable
@@ -207,13 +336,18 @@ private fun LiveScoresTicker(
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f), Color.Black.copy(alpha = 0.92f)),
+                    listOf(
+                        Color.Transparent,
+                        Color.Black.copy(alpha = 0.55f),
+                        Color.Black.copy(alpha = 0.94f),
+                    ),
                 ),
             )
-            .padding(bottom = 10.dp, top = 24.dp),
+            .padding(bottom = 10.dp, top = 20.dp),
     ) {
+        // Optional hero line for current game context
         Text(
-            text = if (live.isEmpty()) "No other live games" else "LIVE · tap to switch",
+            text = if (live.isEmpty()) "No other live games" else "LIVE SCORES · tap to switch",
             color = LiveMint,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp,
@@ -223,22 +357,59 @@ private fun LiveScoresTicker(
             contentPadding = PaddingValues(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // Sport summary chip
+            if (live.isNotEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .width(96.dp)
+                            .height(88.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Panel.copy(alpha = 0.95f))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text("LIVE", color = LiveMint, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text(
+                            "${live.size} games",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                        )
+                    }
+                }
+            }
             items(items = live, key = { it.id }) { game ->
                 val current = game.id == currentGameId
                 Column(
                     modifier = Modifier
-                        .width(148.dp)
+                        .width(156.dp)
+                        .height(88.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (current) Gold.copy(alpha = 0.2f) else Panel.copy(alpha = 0.92f))
+                        .background(
+                            if (current) Gold.copy(alpha = 0.22f) else Panel.copy(alpha = 0.95f),
+                        )
                         .clickable { onGameTap(game) }
                         .padding(10.dp),
                 ) {
-                    Text(
-                        game.league.label,
-                        color = Muted,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            game.league.label,
+                            color = Gold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        Text(
+                            "LIVE",
+                            color = LiveMint,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     Text(
                         game.matchupLabel,
                         color = TextPrimary,
@@ -248,8 +419,14 @@ private fun LiveScoresTicker(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${game.away.displayScore} – ${game.home.displayScore}  ·  ${game.statusLine}",
-                        color = if (current) Gold else LiveMint,
+                        "${game.away.displayScore} – ${game.home.displayScore}",
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        game.statusLine,
+                        color = Muted,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
