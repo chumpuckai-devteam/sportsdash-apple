@@ -194,6 +194,20 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
             }
             state.channelStatus?.let { Text(text = it, color = Muted) }
             state.channelError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+            state.epgStatus?.let { Text(text = it, color = Muted) }
+        }
+        item {
+            Button(
+                onClick = { vm.reloadEpg(force = true) },
+                enabled = state.playlist != null && !state.isLoadingEpg,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Panel,
+                    contentColor = Gold,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (state.isLoadingEpg) "Loading EPG…" else "Reload EPG guide")
+            }
         }
         item {
             Spacer(modifier = Modifier.height(12.dp))

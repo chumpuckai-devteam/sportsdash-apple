@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.samirpatel.sportsdash.core.epg.EpgProgram
+import com.samirpatel.sportsdash.core.epg.EpgRepository
+import com.samirpatel.sportsdash.core.epg.nowPlaying
+import com.samirpatel.sportsdash.core.epg.upNext
 import com.samirpatel.sportsdash.core.iptv.IptvRepository
 import com.samirpatel.sportsdash.core.iptv.describe
 import com.samirpatel.sportsdash.core.matching.ChannelMatch
@@ -17,6 +21,7 @@ import com.samirpatel.sportsdash.core.sports.GameStatus
 import com.samirpatel.sportsdash.core.sports.SportLeague
 import com.samirpatel.sportsdash.core.sports.SportsRepository
 import com.samirpatel.sportsdash.data.PrefsStore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +43,12 @@ data class AppUiState(
     val channelStatus: String? = null,
     val channelError: String? = null,
 
+    /** channelId → programmes (auto bulk + short fill). */
+    val epgByChannelId: Map<String, List<EpgProgram>> = emptyMap(),
+    val isLoadingEpg: Boolean = false,
+    val isAutoFillingEpg: Boolean = false,
+    val epgStatus: String? = null,
+
     val games: List<Game> = emptyList(),
     val selectedLeagueIds: Set<String> = SportLeague.DEFAULTS.map { it.id }.toSet(),
     val scoresFilter: ScoresFilter = ScoresFilter.LIVE,
@@ -46,7 +57,6 @@ data class AppUiState(
     val scoresError: String? = null,
     val scoresUpdatedAtMs: Long? = null,
 
-    /** Stream picker opened from a scoreboard game. */
     val streamPickerGame: Game? = null,
     val streamMatches: List<ChannelMatch> = emptyList(),
 
@@ -54,8 +64,10 @@ data class AppUiState(
     val playUrl: String? = null,
     val engineLabel: String = "VLC",
     val playerMessage: String? = null,
-    /** Optional game context while watching (for ticker / hero). */
     val playingGameId: String? = null,
+
+    /** Player live-scores ticker (persisted). Default on like iOS. */
+    val showScoresTicker: Boolean = true,
 )
 
 class AppViewModel(
@@ -63,10 +75,13 @@ class AppViewModel(
     private val iptv: IptvRepository = IptvRepository(),
     private val sports: SportsRepository = SportsRepository(),
     private val matching: MatchingService = MatchingService(),
+    private val epg: EpgRepository = EpgRepository(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = _state.asStateFlow()
+
+    private var epgJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -75,6 +90,11 @@ class AppViewModel(
                 if (cfg != null && _state.value.channels.isEmpty()) {
                     refreshChannels()
                 }
+            }
+        }
+        viewModelScope.launch {
+            prefs.showScoresTickerFlow.collect { show ->
+                _state.update { it.copy(showScoresTicker = show) }
             }
         }
         refreshScores()
@@ -92,7 +112,14 @@ class AppViewModel(
         )
         viewModelScope.launch {
             prefs.savePlaylist(cfg)
-            _state.update { it.copy(playlist = cfg, channelError = null, channels = emptyList()) }
+            _state.update {
+                it.copy(
+                    playlist = cfg,
+                    channelError = null,
+                    channels = emptyList(),
+                    epgByChannelId = emptyMap(),
+                )
+            }
             refreshChannels()
         }
     }
@@ -105,7 +132,14 @@ class AppViewModel(
         )
         viewModelScope.launch {
             prefs.savePlaylist(cfg)
-            _state.update { it.copy(playlist = cfg, channelError = null, channels = emptyList()) }
+            _state.update {
+                it.copy(
+                    playlist = cfg,
+                    channelError = null,
+                    channels = emptyList(),
+                    epgByChannelId = emptyMap(),
+                )
+            }
             refreshChannels()
         }
     }
@@ -139,6 +173,8 @@ class AppViewModel(
                         channelError = null,
                     )
                 }
+                // Auto EPG — no user tap (product law)
+                reloadEpg(force = true)
             }.onFailure { e ->
                 _state.update {
                     it.copy(
@@ -175,6 +211,58 @@ class AppViewModel(
         }
     }
 
+    fun programsFor(channelId: String): List<EpgProgram> =
+        _state.value.epgByChannelId[channelId].orEmpty()
+
+    fun nowTitle(channelId: String): String? =
+        programsFor(channelId).nowPlaying()?.title
+
+    fun nextTitle(channelId: String): String? =
+        programsFor(channelId).upNext()?.title
+
+    fun reloadEpg(force: Boolean = false) {
+        val channels = _state.value.channels
+        val cfg = _state.value.playlist
+        if (channels.isEmpty()) return
+        if (!force && _state.value.epgByChannelId.isNotEmpty()) return
+
+        epgJob?.cancel()
+        epgJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    isLoadingEpg = true,
+                    isAutoFillingEpg = true,
+                    epgStatus = "Loading guide…",
+                )
+            }
+            val result = epg.loadForChannels(
+                channels = channels,
+                config = cfg,
+                onStatus = { status ->
+                    _state.update { s ->
+                        s.copy(
+                            epgStatus = status,
+                            isAutoFillingEpg = status.contains("Auto-filling", ignoreCase = true) ||
+                                status.contains("Downloading", ignoreCase = true) ||
+                                status.contains("parsing", ignoreCase = true),
+                        )
+                    }
+                },
+                onBatch = { batch ->
+                    _state.update { s -> s.copy(epgByChannelId = batch) }
+                },
+            )
+            _state.update {
+                it.copy(
+                    epgByChannelId = result.programsByChannelId,
+                    isLoadingEpg = false,
+                    isAutoFillingEpg = false,
+                    epgStatus = result.status,
+                )
+            }
+        }
+    }
+
     fun play(channel: IptvChannel, gameId: String? = null) {
         val url = iptv.playbackCandidates(channel.url, preferTs = true).first()
         val kind = StreamContainer.detect(url)
@@ -192,7 +280,6 @@ class AppViewModel(
     }
 
     fun stopPlayback() {
-        // Clear first so UI leaves player immediately even if release races
         _state.update {
             it.copy(
                 playing = null,
@@ -201,6 +288,15 @@ class AppViewModel(
                 playingGameId = null,
             )
         }
+    }
+
+    fun setShowScoresTicker(show: Boolean) {
+        _state.update { it.copy(showScoresTicker = show) }
+        viewModelScope.launch { prefs.setShowScoresTicker(show) }
+    }
+
+    fun toggleScoresTicker() {
+        setShowScoresTicker(!_state.value.showScoresTicker)
     }
 
     // endregion
@@ -279,7 +375,6 @@ class AppViewModel(
 
     fun liveGames(): List<Game> = _state.value.games.filter { it.isLive }
 
-    /** Tap a scoreboard game → open channel picker (or prompt to add playlist). */
     fun openStreamPicker(game: Game) {
         val channels = _state.value.channels
         if (channels.isEmpty()) {
@@ -315,7 +410,6 @@ class AppViewModel(
     }
 
     fun playFromTicker(game: Game) {
-        // Prefer best match if available
         val matches = matching.matchGameToChannels(game, _state.value.channels, limit = 1)
         val best = matches.firstOrNull()
         if (best != null) {

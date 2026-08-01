@@ -1,6 +1,7 @@
 package com.samirpatel.sportsdash.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -14,9 +15,15 @@ private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
 
 class PrefsStore(private val context: Context) {
     private val keyPlaylist = stringPreferencesKey("playlist_json")
+    private val keyShowTicker = booleanPreferencesKey("player_show_scores_ticker")
 
     val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
         prefs[keyPlaylist]?.let { decode(it) }
+    }
+
+    /** Default true — matches iOS showScoresStrip = true. */
+    val showScoresTickerFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[keyShowTicker] ?: true
     }
 
     suspend fun savePlaylist(config: PlaylistConfig) {
@@ -25,6 +32,10 @@ class PrefsStore(private val context: Context) {
 
     suspend fun clearPlaylist() {
         context.dataStore.edit { it.remove(keyPlaylist) }
+    }
+
+    suspend fun setShowScoresTicker(show: Boolean) {
+        context.dataStore.edit { it[keyShowTicker] = show }
     }
 
     private fun encode(c: PlaylistConfig): String = JSONObject().apply {

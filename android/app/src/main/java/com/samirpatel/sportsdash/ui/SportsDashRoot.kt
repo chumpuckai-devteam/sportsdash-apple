@@ -47,12 +47,15 @@ fun SportsDashRoot(vm: AppViewModel) {
             engineLabel = state.engineLabel,
             liveGames = vm.liveGames(),
             currentGameId = state.playingGameId,
+            showScoresTicker = state.showScoresTicker,
+            nowTitle = vm.nowTitle(playing.id),
+            nextTitle = vm.nextTitle(playing.id),
             onClose = { vm.stopPlayback() },
             onTickerGame = { game -> vm.playFromTicker(game) },
             onReplay = {
-                // restart same channel
                 vm.play(playing, gameId = state.playingGameId)
             },
+            onToggleScoresTicker = { vm.toggleScoresTicker() },
         )
         return
     }
@@ -77,7 +80,10 @@ fun SportsDashRoot(vm: AppViewModel) {
                         onClick = {
                             when (tab) {
                                 0 -> vm.refreshScores()
-                                1 -> vm.refreshChannels()
+                                1 -> {
+                                    vm.refreshChannels()
+                                    vm.reloadEpg(force = true)
+                                }
                             }
                         },
                     ) {

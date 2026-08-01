@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
@@ -77,9 +78,13 @@ fun PlayerScreen(
     engineLabel: String,
     liveGames: List<Game>,
     currentGameId: String?,
+    showScoresTicker: Boolean,
+    nowTitle: String?,
+    nextTitle: String?,
     onClose: () -> Unit,
     onTickerGame: (Game) -> Unit,
     onReplay: () -> Unit,
+    onToggleScoresTicker: () -> Unit,
 ) {
     val context = LocalContext.current
     val controller = remember { VlcPlayerController(context) }
@@ -171,6 +176,27 @@ fun PlayerScreen(
                 if (chromeVisible) {
                     Chip(text = "VLC", filled = false)
                     Spacer(modifier = Modifier.weight(1f))
+                    // Scores ticker toggle (iOS sportscourt button)
+                    CircleControl(
+                        onClick = onToggleScoresTicker,
+                        contentDescription = if (showScoresTicker) {
+                            "Hide scores ticker"
+                        } else {
+                            "Show scores ticker"
+                        },
+                        background = if (showScoresTicker) {
+                            Gold.copy(alpha = 0.9f)
+                        } else {
+                            Color.Black.copy(alpha = 0.55f)
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sports,
+                            contentDescription = null,
+                            tint = if (showScoresTicker) VoidBlack else Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                     CircleControl(
                         onClick = {
                             controller.toggleMute()
@@ -207,6 +233,24 @@ fun PlayerScreen(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!nowTitle.isNullOrBlank()) {
+                    Text(
+                        text = "Now · $nowTitle",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (!nextTitle.isNullOrBlank()) {
+                    Text(
+                        text = "Next · $nextTitle",
+                        color = Muted,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Chip(text = engineLabel.substringBefore(" ·").ifBlank { "VLC" }, filled = false)
@@ -259,8 +303,8 @@ fun PlayerScreen(
             }
         }
 
-        // ===== BOTTOM TICKER (always when chrome visible; matches iOS strip) =====
-        if (chromeVisible) {
+        // ===== BOTTOM TICKER (toggleable; iOS sportscourt) =====
+        if (chromeVisible && showScoresTicker) {
             LiveScoresTicker(
                 games = liveGames,
                 currentGameId = currentGameId,
