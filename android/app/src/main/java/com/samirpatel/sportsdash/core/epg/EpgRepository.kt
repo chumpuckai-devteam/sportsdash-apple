@@ -1,5 +1,6 @@
 package com.samirpatel.sportsdash.core.epg
 
+import android.util.Base64
 import android.util.Xml
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
@@ -25,11 +26,9 @@ import kotlin.math.min
 
 /**
  * Auto EPG like iOS:
- * 1. Bulk `xmltv.php?username=&password=` download → stream-parse
+ * 1. Bulk xmltv.php download → stream-parse
  * 2. Map by epg id / slug / name
- * 3. Progressive Xtream `get_short_epg` for remaining gaps
- *
- * No "Fill missing" UX — caller auto-invokes after playlist load.
+ * 3. Progressive Xtream get_short_epg for remaining gaps
  */
 class EpgRepository(
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -62,14 +61,11 @@ class EpgRepository(
 
         var result = linkedMapOf<String, List<EpgProgram>>()
 
-        // 1) Bulk XMLTV
         if (config != null) {
             val urls = bulkXmltvUrls(config)
             for ((index, url) in urls.withIndex()) {
                 onStatus("Downloading guide… (${index + 1}/${urls.size})")
-                val byTvg = runCatching {
-                    downloadAndParseXmltv(url, onStatus)
-                }.getOrNull()
+                val byTvg = runCatching { downloadAndParseXmltv(url, onStatus) }.getOrNull()
                 if (!byTvg.isNullOrEmpty()) {
                     result = LinkedHashMap(mapXmltv(byTvg, channels))
                     onStatus("Guide mapped · ${result.size}/${channels.size} channels")
@@ -82,7 +78,6 @@ class EpgRepository(
             }
         }
 
-        // 2) Short EPG fill for Xtream gaps
         if (config?.type == PlaylistType.XTREAM &&
             config.username.isNotBlank() &&
             config.password.isNotBlank()
@@ -124,19 +119,11 @@ class EpgRepository(
         LoadResult(result.toMap(), status)
     }
 
-    // region Bulk XMLTV
-
     private fun bulkXmltvUrls(config: PlaylistConfig): List<String> {
         val out = ArrayList<String>()
         when (config.type) {
             PlaylistType.XTREAM -> {
-                out.addAll(
-                    xtreamXmltvUrls(
-                        hostField = config.host,
-                        user = config.username,
-                        pass = config.password,
-                    ),
-                )
+                out.addAll(xtreamXmltvUrls(config.host, config.username, config.password))
             }
             PlaylistType.M3U -> {
                 xtreamXmltvUrlsFromAnyUrl(config.m3uUrl)?.let { out.addAll(it) }
@@ -145,14 +132,14 @@ class EpgRepository(
         return out.distinct()
     }
 
+    private fun defaultPort(scheme: String): Int =
+        if (scheme.equals("https", ignoreCase = true)) 443 else 80
+
     private fun xtreamXmltvUrls(hostField: String, user: String, pass: String): List<String> {
         val base = normalizeBase(hostField) ?: return emptyList()
-        val userQ = enc(user)
-        val passQ = enc(pass)
-        val query = "username=$userQ&password=$passQ"
-        val roots = httpsPreferredRoots(base)
+        val query = "username=${enc(user)}&password=${enc(pass)}"
         val out = ArrayList<String>()
-        for (root in roots) {
+        for (root in httpsPreferredRoots(base)) {
             out.add("$root/xmltv.php?$query")
             out.add("$root/xmltv.php?$query&type=m3u_plus")
         }
@@ -164,29 +151,36 @@ class EpgRepository(
         val user = url.queryParameter("username") ?: return null
         val pass = url.queryParameter("password") ?: return null
         if (user.isBlank() || pass.isBlank()) return null
-        val path = url.encodedPath.lowercase()
+        val path = url.encodedPath.lowercase(Locale.US)
         if (!path.contains("get.php") && !path.contains("player_api") &&
-            !path.contains("xmltv") && !raw.lowercase().contains("username=")
+            !path.contains("xmltv") && !raw.lowercase(Locale.US).contains("username=")
         ) {
             return null
         }
-        val base = "${url.scheme}://${url.host}" +
-            if (url.port != defaultPort(url.scheme)) ":${url.port}" else ""
+        val base = buildString {
+            append(url.scheme)
+            append("://")
+            append(url.host)
+            if (url.port != defaultPort(url.scheme)) {
+                append(':')
+                append(url.port)
+            }
+        }
         return xtreamXmltvUrls(base, user, pass)
     }
-
-    private fun defaultPort(scheme: String): Int =
-        if (scheme.equals("https", ignoreCase = true)) 443 else 80
 
     private fun normalizeBase(raw: String): String? {
         var s = raw.trim().trimEnd('/')
         if (s.isEmpty()) return null
         if (!s.contains("://")) s = "https://$s"
         val u = s.toHttpUrlOrNull() ?: return null
-        val host = u.host
-        if (host.isBlank()) return null
+        if (u.host.isBlank()) return null
         val scheme = u.scheme.ifBlank { "https" }
-        return if (u.port != defaultPort(scheme)) "$scheme://$host:${u.port}" else "$scheme://$host"
+        return if (u.port != defaultPort(scheme)) {
+            "$scheme://${u.host}:${u.port}"
+        } else {
+            "$scheme://${u.host}"
+        }
     }
 
     private fun httpsPreferredRoots(base: String): List<String> {
@@ -199,7 +193,10 @@ class EpgRepository(
         return roots.distinct()
     }
 
-    private fun downloadAndParseXmltv(urlString: String, onStatus: (String) -> Unit): Map<String, List<EpgProgram>> {
+    private fun downloadAndParseXmltv(
+        urlString: String,
+        onStatus: (String) -> Unit,
+    ): Map<String, List<EpgProgram>> {
         val req = Request.Builder()
             .url(urlString)
             .header("Accept", "application/xml, text/xml, */*")
@@ -294,40 +291,36 @@ class EpgRepository(
                     }
                     XmlPullParser.END_TAG -> {
                         val name = parser.name.lowercase(Locale.US)
-                        when {
-                            capture != null && name == capture -> {
-                                val v = text.toString().trim()
-                                when (capture) {
-                                    "title" -> title = v
-                                    "category" -> category = v
-                                    "desc" -> desc = v
-                                }
-                                capture = null
+                        if (capture != null && name == capture) {
+                            val v = text.toString().trim()
+                            when (capture) {
+                                "title" -> title = v
+                                "category" -> category = v
+                                "desc" -> desc = v
                             }
-                            name == "programme" && inProgramme -> {
-                                val ch = channelId
-                                val s = startMs
-                                val e = endMs
-                                if (ch != null && s != null && e != null && e > s) {
-                                    // keep if overlaps window
-                                    if (e > windowStart && s < windowEnd) {
-                                        val list = map.getOrPut(ch) { ArrayList() }
-                                        if (list.size < MAX_PER_CHANNEL) {
-                                            list.add(
-                                                EpgProgram(
-                                                    channelKey = ch,
-                                                    title = title?.ifBlank { null } ?: "Program",
-                                                    startMs = s,
-                                                    endMs = e,
-                                                    description = desc,
-                                                    category = category,
-                                                ),
-                                            )
-                                        }
+                            capture = null
+                        } else if (name == "programme" && inProgramme) {
+                            val ch = channelId
+                            val s = startMs
+                            val e = endMs
+                            if (ch != null && s != null && e != null && e > s) {
+                                if (e > windowStart && s < windowEnd) {
+                                    val list = map.getOrPut(ch) { ArrayList() }
+                                    if (list.size < MAX_PER_CHANNEL) {
+                                        list.add(
+                                            EpgProgram(
+                                                channelKey = ch,
+                                                title = title?.ifBlank { null } ?: "Program",
+                                                startMs = s,
+                                                endMs = e,
+                                                description = desc,
+                                                category = category,
+                                            ),
+                                        )
                                     }
                                 }
-                                inProgramme = false
                             }
+                            inProgramme = false
                         }
                     }
                 }
@@ -335,7 +328,6 @@ class EpgRepository(
             }
         }
 
-        // sort each channel
         for ((k, list) in map) {
             list.sortBy { it.startMs }
             map[k] = list
@@ -343,7 +335,6 @@ class EpgRepository(
         return map
     }
 
-    /** XMLTV start/stop: yyyyMMddHHmmss [±HHMM] */
     private fun parseXmltvDate(raw: String?): Long? {
         if (raw.isNullOrBlank()) return null
         val cleaned = raw.trim()
@@ -351,12 +342,10 @@ class EpgRepository(
         if (core.length < 14) return null
         return try {
             val fmt = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-            // Prefer offset if present
             val rest = cleaned.drop(14).trim()
             fmt.timeZone = when {
                 rest.startsWith("+") || rest.startsWith("-") -> {
-                    val off = rest.replace(" ", "")
-                    TimeZone.getTimeZone("GMT$off")
+                    TimeZone.getTimeZone("GMT" + rest.replace(" ", ""))
                 }
                 rest.equals("UTC", true) || rest.equals("Z", true) -> TimeZone.getTimeZone("UTC")
                 else -> TimeZone.getDefault()
@@ -372,7 +361,6 @@ class EpgRepository(
         channels: List<IptvChannel>,
     ): Map<String, List<EpgProgram>> {
         if (byTvg.isEmpty()) return emptyMap()
-        // index keys lowercase
         val index = HashMap<String, List<EpgProgram>>(byTvg.size * 2)
         for ((k, v) in byTvg) {
             index[k] = v
@@ -401,14 +389,12 @@ class EpgRepository(
                     break
                 }
             }
-            // fuzzy: contains name slug in any key
             if (hit == null) {
                 val ns = slug(ch.name)
                 if (ns.length >= 4) {
-                    val entry = index.entries.firstOrNull { (k, _) ->
+                    hit = index.entries.firstOrNull { (k, _) ->
                         k.contains(ns) || ns.contains(k)
-                    }
-                    hit = entry?.value
+                    }?.value
                 }
             }
             if (!hit.isNullOrEmpty()) {
@@ -419,12 +405,7 @@ class EpgRepository(
     }
 
     private fun slug(s: String): String =
-        s.lowercase(Locale.US)
-            .replace(Regex("[^a-z0-9]+"), "")
-
-    // endregion
-
-    // region Short EPG
+        s.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "")
 
     private suspend fun loadXtreamShortBatch(
         channels: List<IptvChannel>,
@@ -467,12 +448,11 @@ class EpgRepository(
                 "&action=get_short_epg&stream_id=$streamId&limit=$limit"
         val body = runCatching { httpGet(url) }.getOrNull() ?: return emptyList()
         if (body.length > 256_000) return emptyList()
-        val listings: JSONArray = try {
+        val listings = try {
             val trimmed = body.trim()
             when {
                 trimmed.startsWith("{") -> {
-                    val obj = JSONObject(trimmed)
-                    obj.optJSONArray("epg_listings") ?: JSONArray()
+                    JSONObject(trimmed).optJSONArray("epg_listings") ?: JSONArray()
                 }
                 trimmed.startsWith("[") -> JSONArray(trimmed)
                 else -> JSONArray()
@@ -517,7 +497,7 @@ class EpgRepository(
     private fun decodeBase64Maybe(s: String?): String? {
         if (s.isNullOrBlank()) return null
         return try {
-            val decoded = android.util.Base64.decode(s, android.util.Base64.DEFAULT)
+            val decoded = Base64.decode(s, Base64.DEFAULT)
             val str = String(decoded, Charsets.UTF_8)
             if (str.isNotBlank()) str else s
         } catch (_: Exception) {
@@ -559,11 +539,8 @@ class EpgRepository(
 
     private fun enc(s: String): String =
         java.net.URLEncoder.encode(s, Charsets.UTF_8.name())
-
-    // endregion
 }
 
-/** Helpers used by Guide UI. */
 fun List<EpgProgram>.nowPlaying(nowMs: Long = System.currentTimeMillis()): EpgProgram? =
     firstOrNull { it.contains(nowMs) }
 
