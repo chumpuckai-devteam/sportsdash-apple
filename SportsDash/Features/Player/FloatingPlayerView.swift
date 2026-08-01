@@ -73,7 +73,7 @@ struct FloatingPlayerView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.black)
 
-            KSPlayerSurface(playback: playback)
+            PlayerSurface(playback: playback)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {

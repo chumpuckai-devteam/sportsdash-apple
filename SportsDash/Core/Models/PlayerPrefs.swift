@@ -22,26 +22,36 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable, Codable, Sendable {
 // MARK: - Primary video player (UHF-style)
 
 enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
-    /// KSPlayer Metal / FFmpeg (KSMEPlayer) — default for IPTV
+    /// Detect TS vs HLS from URL — AV for HLS, hard engine for TS (recommended).
+    case auto
+    /// KSPlayer Metal / FFmpeg (KSMEPlayer)
     case ksPlayer
     /// Apple AVKit / AVPlayer
     case avKit
+    /// libmpv via MPVKit LGPL (spike — opt-in)
+    case mpvKit
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .ksPlayer: return "KSPlayer (Metal) · Default"
+        case .auto: return "Auto · TS→KS · HLS→AV · Default"
+        case .ksPlayer: return "KSPlayer (Metal)"
         case .avKit: return "AVKit (Native)"
+        case .mpvKit: return "MPV (libmpv) · Spike"
         }
     }
 
     var detail: String {
         switch self {
+        case .auto:
+            return "Detects stream type from the URL. MPEG-TS → KSPlayer (FFmpeg); HLS .m3u8 → AVPlayer. Best default for IPTV."
         case .ksPlayer:
-            return "FFmpeg-backed player. Best for live IPTV and TS streams. Recommended."
+            return "Always FFmpeg-backed. Best raw TS; works on many messy HLS feeds too."
         case .avKit:
-            return "Apple’s player. Faster start on clean HLS; often fails on messy panels."
+            return "Always Apple’s player. Fast on clean HLS; often fails on raw TS panels."
+        case .mpvKit:
+            return "Experimental libmpv (MPVKit LGPL). Strong TS path; HLS still routes to AV. Dogfood only."
         }
     }
 }
@@ -160,7 +170,7 @@ enum LaunchTab: String, CaseIterable, Identifiable, Codable, Sendable {
 struct PlayerPrefs: Codable, Sendable, Equatable {
     // Player
     var aspect: PlayerAspectMode = .auto
-    var primaryPlayer: PrimaryVideoPlayer = .ksPlayer
+    var primaryPlayer: PrimaryVideoPlayer = .auto
     var fallbackPlayers: Bool = true
     /// Preferred forward buffer (seconds), 1…15.
     var bufferSeconds: Double = 3
@@ -207,13 +217,17 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         // Decode as String so unknown/legacy values (vlc, auto) don't fail the whole prefs blob.
         if let raw = try c.decodeIfPresent(String.self, forKey: .primaryPlayer) {
             switch raw {
+            case PrimaryVideoPlayer.auto.rawValue:
+                primaryPlayer = .auto
             case PrimaryVideoPlayer.ksPlayer.rawValue, "ffmpeg", "vlc":
                 primaryPlayer = .ksPlayer
             case PrimaryVideoPlayer.avKit.rawValue, "avPlayer":
                 primaryPlayer = .avKit
+            case PrimaryVideoPlayer.mpvKit.rawValue, "mpv":
+                primaryPlayer = .mpvKit
             default:
-                // "auto" and anything else → KS (best IPTV reliability)
-                primaryPlayer = .ksPlayer
+                // Unknown → Auto (TS/HLS router)
+                primaryPlayer = .auto
             }
             fallbackPlayers = try c.decodeIfPresent(Bool.self, forKey: .fallbackPlayers) ?? true
         } else if let legacy = try c.decodeIfPresent(String.self, forKey: .engine) {
@@ -226,11 +240,11 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
                 primaryPlayer = .ksPlayer
                 fallbackPlayers = false
             default: // auto
-                primaryPlayer = .ksPlayer
+                primaryPlayer = .auto
                 fallbackPlayers = true
             }
         } else {
-            primaryPlayer = .ksPlayer
+            primaryPlayer = .auto
             fallbackPlayers = true
         }
     }

@@ -13,7 +13,7 @@ final class StorageService {
     private let playerPrefsKey = "player_prefs_json"
     /// Bump when we need a one-shot prefs migration on existing installs.
     private let playerPrefsMigrationKey = "player_prefs_migration_v"
-    private let playerPrefsMigrationVersion = 2
+    private let playerPrefsMigrationVersion = 3
     private let selectedLeaguesKey = "selected_leagues"
     private let maxLastPlayed = 30
 
@@ -62,11 +62,10 @@ final class StorageService {
             return decoded
         }()
 
-        // One-shot: force KSPlayer as default after VLC experiments left AVKit selected.
+        // One-shot: migrate to Auto router (TS→KS, HLS→AV) after VLC/KS thrash.
         let migrated = defaults.integer(forKey: playerPrefsMigrationKey)
         if migrated < playerPrefsMigrationVersion {
-            prefs.primaryPlayer = .ksPlayer
-            // Keep fallback on so AV can still try if KS fails a stream.
+            prefs.primaryPlayer = .auto
             if migrated < 2 {
                 prefs.fallbackPlayers = true
             }

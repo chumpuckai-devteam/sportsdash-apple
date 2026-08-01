@@ -3,7 +3,10 @@ import Combine
 import Foundation
 import KSPlayer
 
-/// Multi-engine playback via KSPlayer (KSMEPlayer / FFmpeg + optional KSAVPlayer).
+/// Multi-engine playback:
+/// - **Auto (default):** HLS → AVPlayer; TS / unknown → KSPlayer FFmpeg (hard)
+/// - Explicit KS / AV / MPV (spike) overrides
+/// - Fallback tries the other KS backend or format candidates
 @MainActor
 final class PlaybackController: ObservableObject {
     @Published private(set) var isLoading = false
@@ -14,8 +17,13 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var playURL: URL?
     @Published private(set) var options = KSOptions()
     @Published private(set) var engineLabel: String = ""
+    /// True when chrome should host `MPVPlayerSurface` instead of KS.
+    @Published private(set) var usesMPV = false
+    @Published private(set) var detectedContainer: StreamContainer = .unknown
 
     let coordinator = KSVideoPlayer.Coordinator()
+    /// Spike engine — created lazily when primary is MPV (or Auto hard-path chooses MPV later).
+    private(set) var mpvEngine: MPVPlayerController?
 
     private var currentURL: String?
     private var candidateURLs: [String] = []
@@ -23,6 +31,8 @@ final class PlaybackController: ObservableObject {
     private var loadGeneration = 0
     private var prefs = PlayerPrefs()
     private var firstFrameWatch: Task<Void, Never>?
+    private var mpvStateWatch: Task<Void, Never>?
+    private var mpvBag: Set<AnyCancellable> = []
 
     init() {
         attachCoordinatorCallbacks()
@@ -30,13 +40,12 @@ final class PlaybackController: ObservableObject {
 
     func configure(prefs: PlayerPrefs) {
         self.prefs = prefs
-        Self.applyGlobal(prefs)
+        Self.applyGlobal(prefs, forURL: nil)
         engineLabel = prefs.primaryPlayer.label
             + (prefs.fallbackPlayers ? " · fallback on" : "")
     }
 
     func start(url: String) {
-        // Tear down previous surface without wiping KSPlayer callback hooks permanently.
         stopPlayerOnly(clearError: true, clearCallbacks: false)
         attachCoordinatorCallbacks()
 
@@ -56,7 +65,6 @@ final class PlaybackController: ObservableObject {
         Task { @MainActor in
             await configureAudioSession()
             guard gen == self.loadGeneration else { return }
-            Self.applyGlobal(self.prefs)
             self.open(urlString: self.candidateURLs[0], generation: gen)
         }
     }
@@ -65,6 +73,8 @@ final class PlaybackController: ObservableObject {
         loadGeneration += 1
         firstFrameWatch?.cancel()
         firstFrameWatch = nil
+        mpvStateWatch?.cancel()
+        mpvStateWatch = nil
         stopPlayerOnly(clearError: true, clearCallbacks: true)
         currentURL = nil
         candidateURLs = []
@@ -73,9 +83,16 @@ final class PlaybackController: ObservableObject {
         isLoading = false
         isBuffering = false
         isPlaying = false
+        usesMPV = false
     }
 
     func jumpToLive() {
+        if usesMPV, let mpv = mpvEngine {
+            mpv.jumpToLive()
+            banner = "Jumped to live"
+            clearBannerSoon()
+            return
+        }
         if let layer = coordinator.playerLayer {
             let duration = layer.player.duration
             if duration.isFinite, duration > 2 {
@@ -88,19 +105,18 @@ final class PlaybackController: ObservableObject {
                             self?.start(url: url)
                             self?.banner = "Rejoined live stream"
                         }
+                        self?.clearBannerSoon()
                     }
                 }
             } else if let url = currentURL {
                 start(url: url)
                 banner = "Rejoined live stream"
+                clearBannerSoon()
             }
         } else if let url = currentURL {
             start(url: url)
             banner = "Rejoined live stream"
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            if banner != nil { banner = nil }
+            clearBannerSoon()
         }
     }
 
@@ -114,6 +130,11 @@ final class PlaybackController: ObservableObject {
     // MARK: - Transport / PiP / captions
 
     func togglePlayPause() {
+        if usesMPV, let mpv = mpvEngine {
+            mpv.togglePlayPause()
+            isPlaying = mpv.isPlaying
+            return
+        }
         guard let layer = coordinator.playerLayer else { return }
         if layer.state.isPlaying {
             layer.pause()
@@ -127,11 +148,23 @@ final class PlaybackController: ObservableObject {
     }
 
     func pause() {
+        if usesMPV {
+            mpvEngine?.pause()
+            isPlaying = false
+            return
+        }
         coordinator.playerLayer?.pause()
         isPlaying = false
     }
 
     func resumePlay() {
+        if usesMPV {
+            mpvEngine?.play()
+            isPlaying = true
+            isLoading = false
+            isBuffering = false
+            return
+        }
         coordinator.playerLayer?.play()
         isPlaying = true
         isLoading = false
@@ -141,10 +174,7 @@ final class PlaybackController: ObservableObject {
     func toggleMute() {
         setMuted(!isMuted)
         banner = isMuted ? "Muted" : "Unmuted"
-        Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            if banner == "Muted" || banner == "Unmuted" { banner = nil }
-        }
+        clearBannerSoon()
     }
 
     func setMuted(_ muted: Bool) {
@@ -154,22 +184,20 @@ final class PlaybackController: ObservableObject {
             player.isMuted = muted
             player.playbackVolume = muted ? 0 : 1
         }
+        // mpv mute not wired in spike — KS path only
     }
 
     var isMuted: Bool { coordinator.isMuted }
 
-    /// Picture-in-Picture (KSPlayer / AVKit).
     func togglePictureInPicture() {
-        guard let layer = coordinator.playerLayer else {
-            banner = "PiP unavailable"
+        guard !usesMPV, let layer = coordinator.playerLayer else {
+            banner = usesMPV ? "PiP not in MPV spike yet" : "PiP unavailable"
+            clearBannerSoon()
             return
         }
         layer.isPipActive.toggle()
         banner = layer.isPipActive ? "Picture in Picture on" : "Picture in Picture off"
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if banner?.contains("Picture") == true { banner = nil }
-        }
+        clearBannerSoon()
     }
 
     var isPiPActive: Bool {
@@ -182,9 +210,8 @@ final class PlaybackController: ObservableObject {
         var isEnabled: Bool
     }
 
-    /// Embedded subtitle / closed-caption tracks when the stream provides them.
     func subtitleOptions() -> [SubtitleOption] {
-        guard let player = coordinator.playerLayer?.player else { return [] }
+        guard !usesMPV, let player = coordinator.playerLayer?.player else { return [] }
         return player.tracks(mediaType: .subtitle).enumerated().map { idx, track in
             SubtitleOption(
                 id: "\(idx)-\(track.name)",
@@ -195,43 +222,28 @@ final class PlaybackController: ObservableObject {
     }
 
     func selectSubtitle(named name: String?) {
-        guard let player = coordinator.playerLayer?.player else { return }
+        guard !usesMPV, let player = coordinator.playerLayer?.player else { return }
         let tracks = player.tracks(mediaType: .subtitle)
         if let name,
            let track = tracks.first(where: { $0.name == name || "\($0.name)" == name }) {
             selectTrack(player: player, track: track)
             banner = "Subtitles: \(track.name.isEmpty ? "On" : track.name)"
         } else {
-            // Disable all by re-selecting none when possible — pick first disabled pattern.
-            // KSPlayer enables a track via select; toggling off: select empty if available.
-            if let enabled = tracks.first(where: \.isEnabled) {
-                // Re-select same track doesn't disable; best-effort banner.
-                _ = enabled
-            }
             banner = "Subtitles: Off"
         }
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if banner?.hasPrefix("Subtitles") == true { banner = nil }
-        }
+        clearBannerSoon()
     }
 
     func cycleSubtitleTrack() {
-        guard let player = coordinator.playerLayer?.player else {
+        guard !usesMPV, let player = coordinator.playerLayer?.player else {
             banner = "No captions on this stream"
-            Task {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                if banner?.contains("captions") == true { banner = nil }
-            }
+            clearBannerSoon()
             return
         }
         let mediaTracks = player.tracks(mediaType: .subtitle)
         guard !mediaTracks.isEmpty else {
             banner = "No captions on this stream"
-            Task {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                if banner?.contains("captions") == true { banner = nil }
-            }
+            clearBannerSoon()
             return
         }
 
@@ -243,20 +255,15 @@ final class PlaybackController: ObservableObject {
                 let name = track.name
                 banner = "Subtitles: \(name.isEmpty ? "Track \(next + 1)" : name)"
             } else {
-                // Cycle off — re-select first with a note; true off isn't always supported.
                 banner = "Subtitles: cycle complete"
             }
         } else if let first = mediaTracks.first {
             selectTrack(player: player, track: first)
             banner = "Subtitles: \(first.name.isEmpty ? "On" : first.name)"
         }
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if banner?.hasPrefix("Subtitles") == true { banner = nil }
-        }
+        clearBannerSoon()
     }
 
-    /// KSPlayer's `select(track:)` takes `some MediaPlayerTrack`; array elements are `any`.
     private func selectTrack(player: some MediaPlayerProtocol, track: any MediaPlayerTrack) {
         func open<T: MediaPlayerTrack>(_ t: T) {
             player.select(track: t)
@@ -266,7 +273,8 @@ final class PlaybackController: ObservableObject {
 
     // MARK: - Global KSPlayer config
 
-    static func applyGlobal(_ prefs: PlayerPrefs) {
+    /// Configure KS first/second types from prefs + optional URL detection.
+    static func applyGlobal(_ prefs: PlayerPrefs, forURL urlString: String?) {
         KSOptions.isAutoPlay = true
         KSOptions.hardwareDecode = prefs.hardwareDecode
         KSOptions.asynchronousDecompression = prefs.asynchronousDecompression
@@ -276,20 +284,40 @@ final class PlaybackController: ObservableObject {
         KSOptions.isSecondOpen = true
         KSOptions.logLevel = .warning
 
-        // Default / recommended: FFmpeg KS first. Native AV only when user picks AVKit.
-        switch prefs.primaryPlayer {
-        case .ksPlayer:
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSAVPlayer.self : nil
-        case .avKit:
+        let preferAV: Bool = {
+            switch prefs.primaryPlayer {
+            case .avKit:
+                return true
+            case .ksPlayer, .mpvKit:
+                return false
+            case .auto:
+                guard let urlString else {
+                    // No URL yet — TS-first default (IPTV).
+                    return false
+                }
+                switch StreamContainer.detect(urlString) {
+                case .hls: return true
+                case .ts, .unknown: return false
+                }
+            }
+        }()
+
+        if preferAV {
             KSOptions.firstPlayerType = KSAVPlayer.self
             KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSMEPlayer.self : nil
+        } else {
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSAVPlayer.self : nil
         }
+    }
+
+    /// Back-compat for Settings call sites.
+    static func applyGlobal(_ prefs: PlayerPrefs) {
+        applyGlobal(prefs, forURL: nil)
     }
 
     // MARK: - Private
 
-    /// KSPlayer's `resetPlayer()` nils all callbacks — always re-attach after.
     private func attachCoordinatorCallbacks() {
         coordinator.onStateChanged = { [weak self] _, state in
             Task { @MainActor in
@@ -304,20 +332,16 @@ final class PlaybackController: ObservableObject {
         coordinator.onBufferChanged = { [weak self] count, _ in
             Task { @MainActor in
                 guard let self else { return }
-                // First buffer event (count == 0) means still preparing; later counts are rebuffer.
                 if count == 0 {
-                    // Don't force loading spinner if we already have frames.
                     if !self.isPlaying {
                         self.isBuffering = true
                     }
                 } else {
-                    // Rebuffer while playing — show subtle buffering only.
                     self.isBuffering = true
                     self.isLoading = false
                 }
             }
         }
-        // Time updates prove frames are advancing — hide the start overlay.
         coordinator.onPlay = { [weak self] current, _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -332,10 +356,14 @@ final class PlaybackController: ObservableObject {
     private func stopPlayerOnly(clearError: Bool, clearCallbacks: Bool) {
         firstFrameWatch?.cancel()
         firstFrameWatch = nil
+        mpvStateWatch?.cancel()
+        mpvStateWatch = nil
+        mpvBag.removeAll()
+        mpvEngine?.stop()
+
         if clearCallbacks {
             coordinator.resetPlayer()
         } else {
-            // Pause/release layer without discarding our callback closures permanently.
             coordinator.playerLayer?.pause()
             coordinator.playerLayer = nil
         }
@@ -358,7 +386,7 @@ final class PlaybackController: ObservableObject {
     }
 
     private func open(urlString: String, generation: Int) {
-        guard let u = Self.makeURL(urlString) else {
+        guard Self.makeURL(urlString) != nil else {
             error = "Invalid stream URL"
             isLoading = false
             isBuffering = false
@@ -366,19 +394,83 @@ final class PlaybackController: ObservableObject {
         }
 
         currentURL = urlString
-        options = makeOptions()
+        detectedContainer = StreamContainer.detect(urlString)
         isLoading = true
         isBuffering = true
         isPlaying = false
         error = nil
+
+        // Route: explicit MPV, or Auto never uses MPV yet — MPV is opt-in spike.
+        let useMPV = prefs.primaryPlayer == .mpvKit
+            && detectedContainer != .hls // prefer AV/KS for clean HLS even if MPV selected? User asked AV for HLS
+        // If user picked MPV but stream is HLS → use AV via KS path
+        if prefs.primaryPlayer == .mpvKit && detectedContainer == .hls {
+            usesMPV = false
+            openKS(urlString: urlString, generation: generation, forceAV: true)
+            engineLabel = "Auto · HLS → AV (MPV skipped)"
+            return
+        }
+        if useMPV {
+            openMPV(urlString: urlString, generation: generation)
+            return
+        }
+
+        usesMPV = false
+        openKS(urlString: urlString, generation: generation, forceAV: nil)
+    }
+
+    private func openKS(urlString: String, generation: Int, forceAV: Bool?) {
+        guard let u = Self.makeURL(urlString) else { return }
+
+        let preferAV: Bool
+        if let forceAV {
+            preferAV = forceAV
+        } else {
+            switch prefs.primaryPlayer {
+            case .avKit:
+                preferAV = true
+            case .ksPlayer, .mpvKit:
+                preferAV = false
+            case .auto:
+                preferAV = (detectedContainer == .hls)
+            }
+        }
+
+        KSOptions.isAutoPlay = true
+        KSOptions.hardwareDecode = prefs.hardwareDecode
+        KSOptions.asynchronousDecompression = prefs.asynchronousDecompression
+        KSOptions.preferredFrame = prefs.adaptiveFrameRate
+        KSOptions.preferredForwardBufferDuration = prefs.clampedBufferSeconds
+        KSOptions.maxBufferDuration = max(15, prefs.clampedBufferSeconds * 5)
+        KSOptions.isSecondOpen = true
+        KSOptions.logLevel = .warning
+        if preferAV {
+            KSOptions.firstPlayerType = KSAVPlayer.self
+            KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSMEPlayer.self : nil
+        } else {
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = prefs.fallbackPlayers ? KSAVPlayer.self : nil
+        }
+
+        let tag = detectedContainer.shortLabel
+        switch prefs.primaryPlayer {
+        case .auto:
+            engineLabel = "Auto · \(tag) → \(preferAV ? "AV" : "KS")"
+                + (prefs.fallbackPlayers ? " · fallback" : "")
+        case .ksPlayer:
+            engineLabel = "KS · \(tag)" + (prefs.fallbackPlayers ? " · fallback" : "")
+        case .avKit:
+            engineLabel = "AV · \(tag)" + (prefs.fallbackPlayers ? " · fallback" : "")
+        case .mpvKit:
+            engineLabel = preferAV ? "AV · HLS" : "KS · \(tag)"
+        }
+
+        options = makeOptions()
         attachCoordinatorCallbacks()
-        // Assigning playURL rebuilds KSVideoPlayer, which opens the stream.
         playURL = u
 
-        // Failsafe: if callbacks never fire but video is up, clear spinner soon.
         firstFrameWatch?.cancel()
         firstFrameWatch = Task { @MainActor in
-            // Poll coordinator state for a few seconds after open.
             for _ in 0..<40 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard generation == self.loadGeneration else { return }
@@ -392,7 +484,6 @@ final class PlaybackController: ObservableObject {
                     return
                 }
             }
-            // If still "loading" after 10s but no error, hide spinner — video often already visible.
             guard generation == self.loadGeneration, self.isLoading else { return }
             if self.coordinator.playerLayer?.player.isReadyToPlay == true {
                 self.markReady()
@@ -403,6 +494,48 @@ final class PlaybackController: ObservableObject {
             try? await Task.sleep(nanoseconds: 25_000_000_000)
             guard generation == self.loadGeneration, self.isLoading, !self.isPlaying else { return }
             self.handleFail("Stream timed out while loading", generation: generation)
+        }
+    }
+
+    private func openMPV(urlString: String, generation: Int) {
+        usesMPV = true
+        playURL = nil // KS surface unused
+        engineLabel = "MPV · \(detectedContainer.shortLabel) (spike)"
+
+        let engine = mpvEngine ?? MPVPlayerController()
+        mpvEngine = engine
+        engine.configure(
+            userAgent: prefs.userAgent,
+            bufferSeconds: prefs.clampedBufferSeconds,
+            hardwareDecode: prefs.hardwareDecode
+        )
+
+        mpvBag.removeAll()
+        engine.$isLoading.receive(on: RunLoop.main).sink { [weak self] v in
+            self?.isLoading = v
+        }.store(in: &mpvBag)
+        engine.$isBuffering.receive(on: RunLoop.main).sink { [weak self] v in
+            self?.isBuffering = v
+        }.store(in: &mpvBag)
+        engine.$isPlaying.receive(on: RunLoop.main).sink { [weak self] v in
+            if v {
+                self?.markReady()
+            } else if self?.isLoading == false {
+                self?.isPlaying = false
+            }
+        }.store(in: &mpvBag)
+        engine.$error.receive(on: RunLoop.main).sink { [weak self] err in
+            guard let self, let err, !err.isEmpty else { return }
+            self.handleFail(err, generation: generation)
+        }.store(in: &mpvBag)
+
+        engine.start(url: urlString)
+
+        // Timeout
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 25_000_000_000)
+            guard generation == self.loadGeneration, self.isLoading, !self.isPlaying else { return }
+            self.handleFail("Stream timed out while loading (mpv)", generation: generation)
         }
     }
 
@@ -449,7 +582,6 @@ final class PlaybackController: ObservableObject {
             markReady()
             coordinator.playerLayer?.play()
         case .buffering:
-            // Mid-stream rebuffer: don't show "Starting stream…"
             isBuffering = true
             isLoading = false
         case .bufferFinished, .paused:
@@ -476,6 +608,16 @@ final class PlaybackController: ObservableObject {
     private func handleFail(_ message: String, generation: Int) {
         guard generation == loadGeneration else { return }
 
+        // MPV fail → fall back to KS Auto path once if fallback on
+        if usesMPV, prefs.fallbackPlayers, let url = currentURL {
+            banner = "MPV failed — trying KS/AV…"
+            usesMPV = false
+            mpvEngine?.stop()
+            openKS(urlString: candidateURLs[candidateIndex], generation: generation, forceAV: detectedContainer == .hls)
+            clearBannerSoon()
+            return
+        }
+
         let next = candidateIndex + 1
         if next < candidateURLs.count {
             candidateIndex = next
@@ -487,10 +629,7 @@ final class PlaybackController: ObservableObject {
             isBuffering = true
             isPlaying = false
             open(urlString: nextURL, generation: generation)
-            Task {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                if self.banner?.contains("alternate") == true { self.banner = nil }
-            }
+            clearBannerSoon()
             return
         }
 
@@ -518,6 +657,13 @@ final class PlaybackController: ObservableObject {
             return "Format not supported. Enable fallback players or switch primary engine in Settings → Video player."
         }
         return raw
+    }
+
+    private func clearBannerSoon() {
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if banner != nil { banner = nil }
+        }
     }
 
     private static func makeURL(_ string: String) -> URL? {

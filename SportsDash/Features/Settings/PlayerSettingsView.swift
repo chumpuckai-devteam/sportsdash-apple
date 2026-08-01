@@ -69,7 +69,7 @@ struct PlayerSettingsView: View {
             } header: {
                 Text("Primary video player")
             } footer: {
-                Text("KSPlayer is the default — most reliable for live IPTV. Switch to AVKit if you need full-screen video AirPlay (KS usually sends audio only). Android-style Chromecast is a separate feature.")
+                Text("Auto detects MPEG-TS vs HLS from the stream URL: TS → KSPlayer (FFmpeg), HLS → AVPlayer. MPV is an experimental hard path. Enable fallback to try the other engine if the first fails. Full-screen video AirPlay usually needs AV; KS/MPV are often audio-only on AirPlay.")
                     .font(.caption2)
             }
 

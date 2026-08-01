@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1FD1ACA9AE26473DB8062E47 /* StreamContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EFD94717FC24627A16029D9 /* StreamContainer.swift */; };
+		7EC4E8AB78B64D868E0D8405 /* StreamContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EFD94717FC24627A16029D9 /* StreamContainer.swift */; };
+		B4E7928DC831401AB8125F7C /* MPVPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63DD02EA72124CE0925E4B55 /* MPVPlayerController.swift */; };
+		87133E17DB154DFF8443EE72 /* MPVPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63DD02EA72124CE0925E4B55 /* MPVPlayerController.swift */; };
+		1DDFB7773692423E8C253318 /* PlayerSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B4594C99B24138ADA07045 /* PlayerSurface.swift */; };
+		B0479A5E74144B11950B4985 /* PlayerSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B4594C99B24138ADA07045 /* PlayerSurface.swift */; };
 		E3SETUP01A55E7001C0DE02 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */; };
 		E3SETUP01A55E7001C0DE03 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */; };
 		E3CATMNU01A55E7001C0DE02 /* SportsCategoryMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CATMNU01A55E7001C0DE01 /* SportsCategoryMenu.swift */; };
@@ -88,6 +94,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		3EFD94717FC24627A16029D9 /* StreamContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamContainer.swift; sourceTree = "<group>"; };
+		63DD02EA72124CE0925E4B55 /* MPVPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayerController.swift; sourceTree = "<group>"; };
+		50B4594C99B24138ADA07045 /* PlayerSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSurface.swift; sourceTree = "<group>"; };
 		1090AD445B621B9B48C6CF6B /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		10AB69783C0F768691CA6E21 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		1725E83C71D5F9B535FDFEC4 /* IptvChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IptvChannel.swift; sourceTree = "<group>"; };
@@ -433,6 +442,9 @@
 				DEECE22937840316EF2B4CAA /* LiveScoresStrip.swift in Sources */,
 				27AAC46D639F78C9242EECAF /* MatchingService.swift in Sources */,
 				1F21546D2EEECFE4C0609857 /* PlaybackController.swift in Sources */,
+				1DDFB7773692423E8C253318 /* PlayerSurface.swift in Sources */,
+				B4E7928DC831401AB8125F7C /* MPVPlayerController.swift in Sources */,
+				1FD1ACA9AE26473DB8062E47 /* StreamContainer.swift in Sources */,
 				C670A937357141492D03695E /* PlayerLayerView.swift in Sources */,
 				66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */,
 				F04604922EF810D75410544B /* PlayerSettingsView.swift in Sources */,
@@ -477,6 +489,9 @@
 				CEFE40AAAB7F3B0F5DDE01A7 /* LiveScoresStrip.swift in Sources */,
 				C1A3FE24D66331C815B7CF04 /* MatchingService.swift in Sources */,
 				FB4F3600D92DDEA2425C223F /* PlaybackController.swift in Sources */,
+				B0479A5E74144B11950B4985 /* PlayerSurface.swift in Sources */,
+				87133E17DB154DFF8443EE72 /* MPVPlayerController.swift in Sources */,
+				7EC4E8AB78B64D868E0D8405 /* StreamContainer.swift in Sources */,
 				A064A1B0B08FB3E589A312C0 /* PlayerLayerView.swift in Sources */,
 				26636196C15CE3CC16A6D566 /* PlayerPrefs.swift in Sources */,
 				ED5C4D115EB738D9C198EA9C /* PlayerSettingsView.swift in Sources */,

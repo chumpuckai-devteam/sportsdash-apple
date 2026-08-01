@@ -39,7 +39,7 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            KSPlayerSurface(playback: playback)
+            PlayerSurface(playback: playback)
                 .ignoresSafeArea()
                 .onTapGesture { toggleChrome() }
 
@@ -302,7 +302,7 @@ struct PlayerView: View {
 
             HStack(spacing: 6) {
                 badge(appModel.activePlaylist?.name ?? "IPTV", color: SportsColors.gold.opacity(0.85))
-                badge(appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV", color: .white.opacity(0.25))
+                badge(engineChip, color: .white.opacity(0.25))
                 if playback.isPlaying {
                     badge("LIVE", color: SportsColors.live.opacity(0.35))
                 }
@@ -323,7 +323,14 @@ struct PlayerView: View {
     }
 
     private var engineChip: String {
-        appModel.playerPrefs.primaryPlayer == .ksPlayer ? "KS" : "AV"
+        // Prefer live label from controller (includes Auto · TS→KS etc.)
+        let label = playback.engineLabel
+        if label.localizedCaseInsensitiveContains("MPV") { return "MPV" }
+        if label.localizedCaseInsensitiveContains("Auto") {
+            return "Auto/\(playback.detectedContainer.shortLabel)"
+        }
+        if label.localizedCaseInsensitiveContains("AV") { return "AV" }
+        return "KS"
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -389,6 +396,18 @@ struct PlayerView: View {
                 Button("Back") { dismiss() }
                     .buttonStyle(.bordered)
             }
+            if appModel.playerPrefs.primaryPlayer != .auto {
+                Button("Retry with Auto (TS→KS · HLS→AV)") {
+                    var prefs = appModel.playerPrefs
+                    prefs.primaryPlayer = .auto
+                    prefs.fallbackPlayers = true
+                    appModel.setPlayerPrefs(prefs)
+                    playback.configure(prefs: prefs)
+                    playback.start(url: channel.url)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SportsColors.gold)
+            }
             if appModel.playerPrefs.primaryPlayer != .ksPlayer {
                 Button("Retry with KSPlayer (Metal)") {
                     var prefs = appModel.playerPrefs
@@ -400,10 +419,23 @@ struct PlayerView: View {
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
-            } else {
+            }
+            if appModel.playerPrefs.primaryPlayer != .avKit {
                 Button("Retry with AVKit") {
                     var prefs = appModel.playerPrefs
                     prefs.primaryPlayer = .avKit
+                    prefs.fallbackPlayers = true
+                    appModel.setPlayerPrefs(prefs)
+                    playback.configure(prefs: prefs)
+                    playback.start(url: channel.url)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SportsColors.gold)
+            }
+            if appModel.playerPrefs.primaryPlayer != .mpvKit {
+                Button("Retry with MPV (spike)") {
+                    var prefs = appModel.playerPrefs
+                    prefs.primaryPlayer = .mpvKit
                     prefs.fallbackPlayers = true
                     appModel.setPlayerPrefs(prefs)
                     playback.configure(prefs: prefs)
