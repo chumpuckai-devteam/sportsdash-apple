@@ -193,9 +193,9 @@ class AppViewModel(
                         guideWindowStartMs = snappedCurrentHourMs(),
                     )
                 }
-                // EPG: open category first (snappy), bulk full playlist in background
-                loadEpgForOpenCategory(force = true)
+                // EPG: full guide is primary (download once). Short Now/Next is optional bonus.
                 reloadEpgBulkBackground()
+                loadEpgForOpenCategory(force = false)
             }.onFailure { e ->
                 _state.update {
                     it.copy(

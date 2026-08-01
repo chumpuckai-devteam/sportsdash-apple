@@ -173,30 +173,52 @@ private fun GuideBrowseBody(vm: AppViewModel, state: AppUiState) {
 
         when (state.guideLayout) {
             GuideLayout.LIST -> {
-                GuideTimeline(
-                    channels = vm.guideChannels(),
-                    programsFor = { id -> vm.programsFor(id) },
-                    windowStartMs = state.guideWindowStartMs,
-                    onPlay = { ch -> vm.play(ch) },
-                    onShiftHours = { d -> vm.shiftGuideWindowHours(d) },
-                    onResetToNow = { vm.resetGuideWindowToNow() },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    GuideTimeline(
+                        channels = vm.guideChannels(),
+                        programsFor = { id -> vm.programsFor(id) },
+                        windowStartMs = state.guideWindowStartMs,
+                        onPlay = { ch -> vm.play(ch) },
+                        onShiftHours = { d -> vm.shiftGuideWindowHours(d) },
+                        onResetToNow = { vm.resetGuideWindowToNow() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    val catCovered = vm.guideChannels().count { ch ->
+                        !state.epgByChannelId[ch.id].isNullOrEmpty()
+                    }
+                    if (state.isLoadingEpg && catCovered == 0) {
+                        EpgLoadingCard(
+                            title = "Loading full TV guide",
+                            status = state.bulkEpgStatus ?: state.epgStatus,
+                        )
+                    }
+                }
             }
             GuideLayout.GRID -> {
-                val channels = vm.guideChannels()
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 140.dp),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    gridItems(items = channels, key = { it.id }) { ch ->
-                        ChannelGridCard(
-                            channel = ch,
-                            nowTitle = vm.nowTitle(ch.id),
-                            onPlay = { vm.play(ch) },
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val channels = vm.guideChannels()
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 140.dp),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        gridItems(items = channels, key = { it.id }) { ch ->
+                            ChannelGridCard(
+                                channel = ch,
+                                nowTitle = vm.nowTitle(ch.id),
+                                onPlay = { vm.play(ch) },
+                            )
+                        }
+                    }
+                    val catCovered = channels.count { ch ->
+                        !state.epgByChannelId[ch.id].isNullOrEmpty()
+                    }
+                    if (state.isLoadingEpg && catCovered == 0) {
+                        EpgLoadingCard(
+                            title = "Loading full TV guide",
+                            status = state.bulkEpgStatus ?: state.epgStatus,
                         )
                     }
                 }
