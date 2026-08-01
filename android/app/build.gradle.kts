@@ -12,10 +12,14 @@ android {
         applicationId = "com.samirpatel.sportsdash"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1-dogfood"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        // Explicit ABIs so Samsung / arm devices get libVLC .so files
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+        }
     }
 
     buildTypes {
@@ -27,8 +31,10 @@ android {
             )
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // No applicationIdSuffix — same id as release for simple friend sideload.
+            // Reinstall over an older build if signatures match (debug keystore).
             versionNameSuffix = "-debug"
+            isDebuggable = true
         }
     }
 
