@@ -341,11 +341,12 @@ struct PlayerView: View {
             Image(systemName: systemName)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .contentShape(Circle())
                 .sportsGlass(in: Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(.isButton)
     }
 
     private func utilityButton(systemName: String, tint: Color, action: @escaping () -> Void) -> some View {

@@ -89,6 +89,8 @@ extension View {
         #endif
     }
 
+    /// Opaque elevated content panel — never Liquid Glass.
+    /// Use for game cards / channel tiles so hierarchy stays clear over void or video.
     func sportsContentCard(
         radius: CGFloat = SportsMetrics.cardRadius,
         emphasized: Bool = false
@@ -96,31 +98,28 @@ extension View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self
             .background {
-                shape
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        shape.fill(
-                            LinearGradient(
-                                colors: [
-                                    SportsColors.panelElevated.opacity(emphasized ? 0.35 : 0.22),
-                                    SportsColors.panel.opacity(emphasized ? 0.28 : 0.18),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    }
+                // Solid brand panels (PRD content layer) — not material/glass wash.
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            emphasized ? SportsColors.panelElevated : SportsColors.panelElevated.opacity(0.98),
+                            SportsColors.panel,
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
             }
             .overlay {
                 shape.stroke(
                     emphasized
-                        ? SportsColors.live.opacity(0.28)
-                        : Color.white.opacity(0.08),
+                        ? SportsColors.live.opacity(0.35)
+                        : SportsColors.border.opacity(0.55),
                     lineWidth: emphasized ? 1 : 0.5
                 )
             }
             .shadow(
-                color: Color.black.opacity(0.28),
+                color: Color.black.opacity(emphasized ? 0.40 : 0.32),
                 radius: emphasized ? 14 : 10,
                 y: 6
             )

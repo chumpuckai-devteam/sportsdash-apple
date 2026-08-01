@@ -213,7 +213,7 @@ struct LiveScoresStrip: View {
             }
             .padding(10)
             .frame(width: 158, height: 104, alignment: .topLeading)
-            // Opaque content card (material + brand lift) — never Liquid Glass.
+            // Opaque elevated content card — never Liquid Glass over video.
             .sportsContentCard(radius: 12, emphasized: isCurrent)
         }
         .buttonStyle(.plain)
