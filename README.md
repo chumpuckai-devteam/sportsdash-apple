@@ -1,45 +1,46 @@
-# SportsDash (Apple)
+# SportsDash
 
-Native **SwiftUI** app for **iOS** and **Apple TV (tvOS)**.
+Native multi-platform IPTV + scores:
 
-## Open / run
+| Platform | Path | UI | Hard player |
+|----------|------|-----|-------------|
+| **iOS / tvOS** | repo root (`SportsDash/`) | SwiftUI | VLCKit (CocoaPods, LGPL) |
+| **Android** | `android/` | Jetpack Compose | libVLC (`libvlc-all`, LGPL) |
+
+Same product, same GitHub repo. Rename `sportsdash-apple` → `sportsdash` later if you want.
+
+## iOS / Apple TV
 
 ```bash
 cd sportsdash-apple
 git pull origin main
-
-# Quit Xcode first
-rm -rf Pods SportsDash.xcworkspace Podfile.lock
-rm -rf ~/Library/Developer/Xcode/DerivedData/SportsDash-*
-
-brew install xcodegen   # once
+# Quit Xcode
+git checkout -- SportsDash.xcodeproj/project.pbxproj   # if dirty
 xcodegen generate
-open SportsDash.xcodeproj
+pod install
+open SportsDash.xcworkspace   # NOT .xcodeproj
 ```
 
-In Xcode:
-1. Wait for **KSPlayer** package resolve (large FFmpeg binaries — first time can take a while)
-2. **File → Packages → Resolve Package Versions** if needed
-3. Scheme **SportsDash** → your iPhone → Clean (⇧⌘K) → Run
+Scheme **SportsDash** (iPhone) or **SportsDashTV**.  
+Auto player: **TS → VLC · HLS → AVPlayer**.
 
-## Video player (current)
+Details: `docs/vlc-main-engine.md`
 
-| Setting | Engine |
-|---------|--------|
-| **KSPlayer (Metal)** default | FFmpeg via KSPlayer — best for live IPTV |
-| **AVKit** | Native AVPlayer |
-| Fallback | On by default |
+## Android
 
-> **Note:** Path A (official VLCKit) is **parked**. CocoaPods hit Xcode sandbox `rsync` failures; SPM wrappers failed module resolve on device builds. We restored the last **known-good KSPlayer** stack so you can dogfood. VLC will be re-spiked separately.
+```bash
+cd sportsdash-apple
+git pull origin main
+# Android Studio → Open → android/
+```
 
-KSPlayer public package is **GPL** — OK for TestFlight/dogfood; App Store may need their paid LGPL deal (see KSPlayer README).
+Settings → add Xtream or M3U → Channels → play (libVLC).
 
-## Features
-
-Scores, Xtream/M3U, Guide, floating player, movie ratings (OMDb/TMDB), ESPN start-time fix for Upcoming.
+Details: `android/README.md` · `docs/dual-platform.md`
 
 ## Docs
 
-- `docs/movie-ratings.md`
-- `docs/video-player-options.md` (VLC research — parked)
+- `docs/dual-platform.md` — map
+- `docs/vlc-main-engine.md` — Apple VLC
 - `docs/LGPL-NOTICE.md`
+- `docs/epg-auto-full-load.md` — iOS EPG (Android EPG next)
