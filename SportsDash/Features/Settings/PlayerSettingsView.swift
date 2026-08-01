@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Video player settings — mirrors UHF: primary engine, fallback, buffer, KSPlayer toggles.
+/// Video player settings — primary engine (VLC/AV), fallback, buffer, decode.
 struct PlayerSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
 
@@ -69,7 +69,7 @@ struct PlayerSettingsView: View {
             } header: {
                 Text("Primary video player")
             } footer: {
-                Text("Auto detects MPEG-TS vs HLS from the stream URL: TS → KSPlayer (FFmpeg), HLS → AVPlayer. Enable fallback to try the other engine if the first fails. Full-screen video AirPlay usually needs AV; KS is often audio-only on AirPlay. MPV spike is code-ready but not SPM-linked yet.")
+                Text("Auto detects MPEG-TS vs HLS: TS → VLC (libVLC, LGPL); HLS → AVPlayer. VLC is the main hard engine (iOS/tvOS; Android later). Enable fallback to try the other engine once if the first fails. Video AirPlay works best on AV.")
                     .font(.caption2)
             }
 
@@ -125,7 +125,7 @@ struct PlayerSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(SportsColors.muted)
             } header: {
-                Text("KSPlayer (Metal)")
+                Text("Decode")
             }
 
             Section {

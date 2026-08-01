@@ -132,7 +132,10 @@ struct SettingsView: View {
                                     .foregroundStyle(SportsColors.muted)
                             }
                         }
-                        Text("Playback: KSPlayer (FFmpeg) + optional AVKit. Movie scores via OMDb/TMDB when you add keys in General.")
+                        Text("Playback: VLC (libVLC) hard engine + AVPlayer for clean HLS. LGPL — see About. Movie scores via OMDb/TMDB when you add keys in General.")
+                            .font(.caption2)
+                            .foregroundStyle(SportsColors.muted)
+                        Text("This product uses libVLC / VLCKit (© VideoLAN), licensed under LGPLv2.1+. https://www.videolan.org/")
                             .font(.caption2)
                             .foregroundStyle(SportsColors.muted)
                         Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")

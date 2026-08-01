@@ -8,14 +8,10 @@ options:
   groupSortPosition: top
   developmentLanguage: en
 
-# FFmpeg-backed player (same stack used by UHF and other IPTV apps).
-# GPL license — see KSPlayer README. Auto router: TS→KS, HLS→AV.
-# MPVKit LGPL spike code is in-tree behind canImport(Libmpv) but NOT linked
-# until packaging is proven (adding MPVKit SPM broke package resolution on Mac).
-packages:
-  KSPlayer:
-    url: https://github.com/kingslay/KSPlayer.git
-    branch: main
+# Hard IPTV engine = VLCKit via CocoaPods (MobileVLCKit / TVVLCKit) — LGPL.
+# Soft path = native AVPlayer for clean HLS. KSPlayer removed (GPL).
+# After clone: xcodegen generate && pod install && open SportsDash.xcworkspace
+packages: {}
 
 settings:
   base:
@@ -28,18 +24,14 @@ settings:
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
     INFOPLIST_KEY_CFBundleIconName: AppIcon
-    # Static system launch screen (before SwiftUI) — matches void black + logo
     INFOPLIST_KEY_UILaunchScreen_UIColorName: LaunchBackground
     INFOPLIST_KEY_UILaunchScreen_UIImageName: AppLogo
-    # IPTV providers often use HTTP
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
-    # Background audio while locked / switching apps
     INFOPLIST_KEY_UIBackgroundModes: "audio"
-    # Personal Team (Samir Patel) — keeps signing after xcodegen regenerate
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: "2H57Y8GR9D"
-    # Xcode recommended project settings
-    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # Required for CocoaPods embed of large VLC frameworks
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
     STRING_CATALOG_GENERATE_SYMBOLS: YES
     DEAD_CODE_STRIPPING: YES
 
@@ -48,14 +40,9 @@ targets:
     type: application
     platform: iOS
     sources:
-      # Include Assets.xcassets here — XcodeGen auto-adds .xcassets to Resources.
-      # Do NOT exclude **/*.xcassets or the AppIcon never appears in the navigator.
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
-    dependencies:
-      - package: KSPlayer
-        product: KSPlayer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios
@@ -68,7 +55,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
-        # FFmpegKit binary modules
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
       testTargets: []
@@ -80,9 +67,6 @@ targets:
       - path: SportsDash
         excludes:
           - "**/.DS_Store"
-    dependencies:
-      - package: KSPlayer
-        product: KSPlayer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos
@@ -92,6 +76,7 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
       testTargets: []

@@ -1,16 +1,17 @@
 import SwiftUI
 
-/// Chooses KSPlayer vs MPV (spike) surface for the active engine.
+/// Hosts VLC or AVPlayer surface for the active backend.
 struct PlayerSurface: View {
     @ObservedObject var playback: PlaybackController
 
     var body: some View {
         Group {
             #if canImport(UIKit)
-            if playback.usesMPV, let mpv = playback.mpvEngine {
-                MPVPlayerSurface(engine: mpv)
-            } else {
-                KSPlayerSurface(playback: playback)
+            switch playback.activeBackend {
+            case .vlc:
+                VLCPlayerSurface(engine: playback.vlcEngine)
+            case .av:
+                AVPlayerSurface(engine: playback.avEngine)
             }
             #else
             Color.black

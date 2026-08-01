@@ -220,7 +220,7 @@ struct PlayerView: View {
                     }
                     #if os(iOS)
                     // System AirPlay / external display route picker.
-                    // Note: KSPlayer (FFmpeg) usually AirPlays audio only; AVKit can mirror video.
+                    // Note: VLC AirPlay is often audio-focused; AVKit can mirror video better.
                     AirPlayRoutePicker()
                         .frame(width: 28, height: 28)
                         .accessibilityLabel("AirPlay")
@@ -323,14 +323,13 @@ struct PlayerView: View {
     }
 
     private var engineChip: String {
-        // Prefer live label from controller (includes Auto · TS→KS etc.)
         let label = playback.engineLabel
-        if label.localizedCaseInsensitiveContains("MPV") { return "MPV" }
+        if label.localizedCaseInsensitiveContains("VLC") { return "VLC" }
         if label.localizedCaseInsensitiveContains("Auto") {
             return "Auto/\(playback.detectedContainer.shortLabel)"
         }
         if label.localizedCaseInsensitiveContains("AV") { return "AV" }
-        return "KS"
+        return playback.activeBackend == .vlc ? "VLC" : "AV"
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -397,7 +396,7 @@ struct PlayerView: View {
                     .buttonStyle(.bordered)
             }
             if appModel.playerPrefs.primaryPlayer != .auto {
-                Button("Retry with Auto (TS→KS · HLS→AV)") {
+                Button("Retry with Auto (TS→VLC · HLS→AV)") {
                     var prefs = appModel.playerPrefs
                     prefs.primaryPlayer = .auto
                     prefs.fallbackPlayers = true
@@ -408,10 +407,10 @@ struct PlayerView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
             }
-            if appModel.playerPrefs.primaryPlayer != .ksPlayer {
-                Button("Retry with KSPlayer (Metal)") {
+            if appModel.playerPrefs.primaryPlayer != .vlc {
+                Button("Retry with VLC") {
                     var prefs = appModel.playerPrefs
-                    prefs.primaryPlayer = .ksPlayer
+                    prefs.primaryPlayer = .vlc
                     prefs.fallbackPlayers = true
                     appModel.setPlayerPrefs(prefs)
                     playback.configure(prefs: prefs)
@@ -432,20 +431,6 @@ struct PlayerView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
             }
-            #if canImport(Libmpv)
-            if appModel.playerPrefs.primaryPlayer != .mpvKit {
-                Button("Retry with MPV (spike)") {
-                    var prefs = appModel.playerPrefs
-                    prefs.primaryPlayer = .mpvKit
-                    prefs.fallbackPlayers = true
-                    appModel.setPlayerPrefs(prefs)
-                    playback.configure(prefs: prefs)
-                    playback.start(url: channel.url)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SportsColors.gold)
-            }
-            #endif
         }
         .padding()
     }

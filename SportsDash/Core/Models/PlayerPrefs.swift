@@ -22,46 +22,42 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable, Codable, Sendable {
 // MARK: - Primary video player (UHF-style)
 
 enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
-    /// Detect TS vs HLS from URL — AV for HLS, hard engine for TS (recommended).
+    /// Detect TS vs HLS — VLC for TS, AVPlayer for HLS (recommended).
     case auto
-    /// KSPlayer Metal / FFmpeg (KSMEPlayer)
-    case ksPlayer
+    /// libVLC hard engine (MobileVLCKit / TVVLCKit) — main IPTV engine
+    case vlc
     /// Apple AVKit / AVPlayer
     case avKit
-    /// libmpv via MPVKit LGPL — **not linked in this build** (SPM packaging deferred).
-    /// Kept in enum for prefs decode; UI hides until Libmpv is available.
+    /// Legacy decode only → treated as VLC
+    case ksPlayer
     case mpvKit
 
     var id: String { rawValue }
 
-    /// Cases shown in Settings (hides MPV until package is linked).
     static var selectableCases: [PrimaryVideoPlayer] {
-        #if canImport(Libmpv)
-        allCases
-        #else
-        [.auto, .ksPlayer, .avKit]
-        #endif
+        [.auto, .vlc, .avKit]
     }
 
     var label: String {
         switch self {
-        case .auto: return "Auto · TS→KS · HLS→AV · Default"
-        case .ksPlayer: return "KSPlayer (Metal)"
+        case .auto: return "Auto · TS→VLC · HLS→AV · Default"
+        case .vlc: return "VLC (libVLC) · Main"
         case .avKit: return "AVKit (Native)"
-        case .mpvKit: return "MPV (libmpv) · Spike"
+        case .ksPlayer: return "KSPlayer (legacy→VLC)"
+        case .mpvKit: return "MPV (legacy→VLC)"
         }
     }
 
     var detail: String {
         switch self {
         case .auto:
-            return "Detects stream type from the URL. MPEG-TS → KSPlayer (FFmpeg); HLS .m3u8 → AVPlayer. Best default for IPTV."
-        case .ksPlayer:
-            return "Always FFmpeg-backed. Best raw TS; works on many messy HLS feeds too."
+            return "Detects stream type from the URL. MPEG-TS → VLC; HLS .m3u8 → AVPlayer. Best default for IPTV."
+        case .vlc:
+            return "libVLC via MobileVLCKit/TVVLCKit (LGPL). Strong TS/IPTV. Same engine family for Android later."
         case .avKit:
-            return "Always Apple’s player. Fast on clean HLS; often fails on raw TS panels."
-        case .mpvKit:
-            return "Experimental libmpv (MPVKit LGPL). Not linked in this build until SPM packaging is green."
+            return "Apple’s player. Best clean HLS + system AirPlay/PiP; weaker on raw TS."
+        case .ksPlayer, .mpvKit:
+            return "Legacy preference — SportsDash now uses VLC as the hard engine."
         }
     }
 }
@@ -189,7 +185,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
     var asynchronousDecompression: Bool = false
 
     // General
-    var userAgent: String = "VLC/3.0.18 LibVLC/3.0.18"
+    var userAgent: String = "VLC/3.0.21 LibVLC/3.0.21"
     var preferredLiveFormat: LiveStreamFormat = .ts
     var playlistRefresh: PlaylistRefreshInterval = .daily
 
@@ -216,7 +212,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         adaptiveFrameRate = try c.decodeIfPresent(Bool.self, forKey: .adaptiveFrameRate) ?? true
         hardwareDecode = try c.decodeIfPresent(Bool.self, forKey: .hardwareDecode) ?? true
         asynchronousDecompression = try c.decodeIfPresent(Bool.self, forKey: .asynchronousDecompression) ?? false
-        userAgent = try c.decodeIfPresent(String.self, forKey: .userAgent) ?? "VLC/3.0.18 LibVLC/3.0.18"
+        userAgent = try c.decodeIfPresent(String.self, forKey: .userAgent) ?? "VLC/3.0.21 LibVLC/3.0.21"
         preferredLiveFormat = try c.decodeIfPresent(LiveStreamFormat.self, forKey: .preferredLiveFormat) ?? .ts
         playlistRefresh = try c.decodeIfPresent(PlaylistRefreshInterval.self, forKey: .playlistRefresh) ?? .daily
         theme = try c.decodeIfPresent(AppThemeMode.self, forKey: .theme) ?? .dark
@@ -229,14 +225,13 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
             switch raw {
             case PrimaryVideoPlayer.auto.rawValue:
                 primaryPlayer = .auto
-            case PrimaryVideoPlayer.ksPlayer.rawValue, "ffmpeg", "vlc":
-                primaryPlayer = .ksPlayer
+            case PrimaryVideoPlayer.vlc.rawValue, "vlc",
+                 PrimaryVideoPlayer.ksPlayer.rawValue, "ffmpeg",
+                 PrimaryVideoPlayer.mpvKit.rawValue, "mpv":
+                primaryPlayer = .vlc
             case PrimaryVideoPlayer.avKit.rawValue, "avPlayer":
                 primaryPlayer = .avKit
-            case PrimaryVideoPlayer.mpvKit.rawValue, "mpv":
-                primaryPlayer = .mpvKit
             default:
-                // Unknown → Auto (TS/HLS router)
                 primaryPlayer = .auto
             }
             fallbackPlayers = try c.decodeIfPresent(Bool.self, forKey: .fallbackPlayers) ?? true
@@ -246,8 +241,8 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
             case "avPlayer":
                 primaryPlayer = .avKit
                 fallbackPlayers = false
-            case "ffmpeg", "ksPlayer", "vlc":
-                primaryPlayer = .ksPlayer
+            case "ffmpeg", "ksPlayer", "vlc", "mpv":
+                primaryPlayer = .vlc
                 fallbackPlayers = false
             default: // auto
                 primaryPlayer = .auto
@@ -277,7 +272,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         try c.encode(launchTab, forKey: .launchTab)
     }
 
-    /// Clamped buffer for KSOptions.
+    /// Clamped buffer seconds for hard engine caching.
     var clampedBufferSeconds: Double {
         min(15, max(1, bufferSeconds))
     }

@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9C62AB2248724C57AAC1A1C2 /* AVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */; };
+		BAB289F5ADFA47A080608610 /* AVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */; };
+		1DBB170F9EFA4ED28CED588F /* VLCPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */; };
+		67AB255B0CFC44F9832CCAD3 /* VLCPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */; };
 		1FD1ACA9AE26473DB8062E47 /* StreamContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EFD94717FC24627A16029D9 /* StreamContainer.swift */; };
 		7EC4E8AB78B64D868E0D8405 /* StreamContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EFD94717FC24627A16029D9 /* StreamContainer.swift */; };
-		B4E7928DC831401AB8125F7C /* MPVPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63DD02EA72124CE0925E4B55 /* MPVPlayerController.swift */; };
-		87133E17DB154DFF8443EE72 /* MPVPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63DD02EA72124CE0925E4B55 /* MPVPlayerController.swift */; };
 		1DDFB7773692423E8C253318 /* PlayerSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B4594C99B24138ADA07045 /* PlayerSurface.swift */; };
 		B0479A5E74144B11950B4985 /* PlayerSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50B4594C99B24138ADA07045 /* PlayerSurface.swift */; };
 		E3SETUP01A55E7001C0DE02 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */; };
@@ -29,8 +31,6 @@
 		B1C2D3E4F5061728394A5B03 /* MovieRatingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5061728394A5B01 /* MovieRatingsStore.swift */; };
 		A8B1C2D3E4F5061728394A5C /* AirPlayRoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */; };
 		A8B1C2D3E4F5061728394A5D /* AirPlayRoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */; };
-		D4E5F60718293A4B5C6D7E8F /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = B2C3D4E5F60718293A4B5C6D /* KSPlayer */; };
-		E5F60718293A4B5C6D7E8F90 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = C3D4E5F60718293A4B5C6D7E /* KSPlayer */; };
 		04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
 		16B0D1704242DBBB9DF61E57 /* UISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2635CCB93A485DFB19FD12C9 /* UISettingsView.swift */; };
 		1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */; };
@@ -94,8 +94,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerEngine.swift; sourceTree = "<group>"; };
+		E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCPlayerController.swift; sourceTree = "<group>"; };
 		3EFD94717FC24627A16029D9 /* StreamContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamContainer.swift; sourceTree = "<group>"; };
-		63DD02EA72124CE0925E4B55 /* MPVPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayerController.swift; sourceTree = "<group>"; };
 		50B4594C99B24138ADA07045 /* PlayerSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSurface.swift; sourceTree = "<group>"; };
 		1090AD445B621B9B48C6CF6B /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		10AB69783C0F768691CA6E21 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
@@ -144,7 +145,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D4E5F60718293A4B5C6D7E8F /* KSPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -152,7 +152,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E5F60718293A4B5C6D7E8F90 /* KSPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -296,6 +295,8 @@
 				69AB4D64A885E029A394A7FA /* FloatingPlayerView.swift */,
 				7665FEDBFD7B75B70340C89D /* LiveScoresStrip.swift */,
 				2B8E8CB70B9909B421B80422 /* PlaybackController.swift */,
+				1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */,
+				E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */,
 				9A6536F79A69B3125D554008 /* PlayerLayerView.swift */,
 				A8B1C2D3E4F5061728394A5B /* AirPlayRoutePicker.swift */,
 				B1C2D3E4F5061728394A5B01 /* MovieRatingsStore.swift */,
@@ -332,7 +333,6 @@
 			);
 			name = SportsDashTV;
 			packageProductDependencies = (
-				C3D4E5F60718293A4B5C6D7E /* KSPlayer */,
 			);
 			productName = SportsDashTV;
 			productReference = 69622EC9F8240505A1991EBF /* SportsDashTV.app */;
@@ -352,7 +352,6 @@
 			);
 			name = SportsDash;
 			packageProductDependencies = (
-				B2C3D4E5F60718293A4B5C6D /* KSPlayer */,
 			);
 			productName = SportsDash;
 			productReference = 3034744E5A3A79A03FECA0DF /* SportsDash.app */;
@@ -387,7 +386,6 @@
 			mainGroup = 52B211B5B13246F55DA1D583;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1757B28A0A63C78D857DD8F5 /* Products */;
@@ -442,8 +440,9 @@
 				DEECE22937840316EF2B4CAA /* LiveScoresStrip.swift in Sources */,
 				27AAC46D639F78C9242EECAF /* MatchingService.swift in Sources */,
 				1F21546D2EEECFE4C0609857 /* PlaybackController.swift in Sources */,
+				9C62AB2248724C57AAC1A1C2 /* AVPlayerEngine.swift in Sources */,
+				1DBB170F9EFA4ED28CED588F /* VLCPlayerController.swift in Sources */,
 				1DDFB7773692423E8C253318 /* PlayerSurface.swift in Sources */,
-				B4E7928DC831401AB8125F7C /* MPVPlayerController.swift in Sources */,
 				1FD1ACA9AE26473DB8062E47 /* StreamContainer.swift in Sources */,
 				C670A937357141492D03695E /* PlayerLayerView.swift in Sources */,
 				66766AE4CD99A540A6E67976 /* PlayerPrefs.swift in Sources */,
@@ -489,8 +488,9 @@
 				CEFE40AAAB7F3B0F5DDE01A7 /* LiveScoresStrip.swift in Sources */,
 				C1A3FE24D66331C815B7CF04 /* MatchingService.swift in Sources */,
 				FB4F3600D92DDEA2425C223F /* PlaybackController.swift in Sources */,
+				BAB289F5ADFA47A080608610 /* AVPlayerEngine.swift in Sources */,
+				67AB255B0CFC44F9832CCAD3 /* VLCPlayerController.swift in Sources */,
 				B0479A5E74144B11950B4985 /* PlayerSurface.swift in Sources */,
-				87133E17DB154DFF8443EE72 /* MPVPlayerController.swift in Sources */,
 				7EC4E8AB78B64D868E0D8405 /* StreamContainer.swift in Sources */,
 				A064A1B0B08FB3E589A312C0 /* PlayerLayerView.swift in Sources */,
 				26636196C15CE3CC16A6D566 /* PlayerPrefs.swift in Sources */,
@@ -785,27 +785,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
-			requirement = {
-				kind = branch;
-				branch = main;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B2C3D4E5F60718293A4B5C6D /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
-		C3D4E5F60718293A4B5C6D7E /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A1B2C3D4E5F60718293A4B5C /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C571534C6AAADFB57F64A9ED /* Project object */;

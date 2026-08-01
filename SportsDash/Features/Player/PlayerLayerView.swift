@@ -1,26 +1,7 @@
-import KSPlayer
 import SwiftUI
 
-#if canImport(UIKit)
-import UIKit
-
-/// Hosts KSPlayer’s render view (FFmpeg Metal or AVPlayerLayer under the hood).
-struct KSPlayerSurface: View {
-    @ObservedObject var playback: PlaybackController
-
-    var body: some View {
-        Group {
-            if let url = playback.playURL {
-                KSVideoPlayer(
-                    coordinator: playback.coordinator,
-                    url: url,
-                    options: playback.options
-                )
-                .background(Color.black)
-            } else {
-                Color.black
-            }
-        }
-    }
+// KSPlayer surface removed — VLC + AVPlayer are shipping engines.
+// Kept file so pbxproj path stays stable; type alias unused.
+enum PlayerLayerViewRemoved {
+    // Intentionally empty
 }
-#endif

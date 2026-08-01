@@ -27,7 +27,10 @@ Package.resolved
 
 # CocoaPods
 Pods/
+# Workspace is generated/updated by `pod install` — commit skeleton + lock when available
 *.xcworkspace
+!SportsDash.xcworkspace/
+!SportsDash.xcworkspace/**
 !default.xcworkspace
 Carthage/Build/
 
