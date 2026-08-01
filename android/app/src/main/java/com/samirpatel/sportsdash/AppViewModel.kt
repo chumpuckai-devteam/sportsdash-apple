@@ -10,6 +10,10 @@ import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
 import com.samirpatel.sportsdash.core.model.StreamContainer
+import com.samirpatel.sportsdash.core.sports.Game
+import com.samirpatel.sportsdash.core.sports.GameStatus
+import com.samirpatel.sportsdash.core.sports.SportLeague
+import com.samirpatel.sportsdash.core.sports.SportsRepository
 import com.samirpatel.sportsdash.data.PrefsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,22 +21,36 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class ScoresFilter { LIVE, UPCOMING, FINAL }
+
 data class AppUiState(
     val playlist: PlaylistConfig? = null,
     val channels: List<IptvChannel> = emptyList(),
     val groups: List<String> = emptyList(),
     val selectedGroup: String = "All",
-    val isLoading: Boolean = false,
-    val status: String? = null,
-    val error: String? = null,
+    val searchQuery: String = "",
+    val isLoadingChannels: Boolean = false,
+    val channelStatus: String? = null,
+    val channelError: String? = null,
+
+    val games: List<Game> = emptyList(),
+    val selectedLeagueIds: Set<String> = SportLeague.DEFAULTS.map { it.id }.toSet(),
+    val scoresFilter: ScoresFilter = ScoresFilter.LIVE,
+    val isLoadingScores: Boolean = false,
+    val scoresStatus: String? = null,
+    val scoresError: String? = null,
+    val scoresUpdatedAtMs: Long? = null,
+
     val playing: IptvChannel? = null,
     val playUrl: String? = null,
     val engineLabel: String = "VLC",
+    val playerMessage: String? = null,
 )
 
 class AppViewModel(
     private val prefs: PrefsStore,
     private val iptv: IptvRepository = IptvRepository(),
+    private val sports: SportsRepository = SportsRepository(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AppUiState())
@@ -47,19 +65,22 @@ class AppViewModel(
                 }
             }
         }
+        refreshScores()
     }
 
-    fun saveXtream(name: String, host: String, user: String, pass: String) {
+    // region Playlist / Guide
+
+    fun saveXtream(name: String, serverUrl: String, user: String, pass: String) {
         val cfg = PlaylistConfig(
             name = name.ifBlank { "Xtream" },
             type = PlaylistType.XTREAM,
-            host = host.trim(),
+            host = serverUrl.trim(),
             username = user.trim(),
             password = pass,
         )
         viewModelScope.launch {
             prefs.savePlaylist(cfg)
-            _state.update { it.copy(playlist = cfg, error = null) }
+            _state.update { it.copy(playlist = cfg, channelError = null, channels = emptyList()) }
             refreshChannels()
         }
     }
@@ -72,7 +93,7 @@ class AppViewModel(
         )
         viewModelScope.launch {
             prefs.savePlaylist(cfg)
-            _state.update { it.copy(playlist = cfg, error = null) }
+            _state.update { it.copy(playlist = cfg, channelError = null, channels = emptyList()) }
             refreshChannels()
         }
     }
@@ -80,29 +101,38 @@ class AppViewModel(
     fun refreshChannels() {
         val cfg = _state.value.playlist ?: return
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null, status = "Loading ${cfg.describe()}…") }
-            val result = iptv.loadChannels(cfg)
-            result.onSuccess { channels ->
+            _state.update {
+                it.copy(
+                    isLoadingChannels = true,
+                    channelError = null,
+                    channelStatus = "Loading ${cfg.describe()}…",
+                )
+            }
+            iptv.loadChannels(cfg).onSuccess { channels ->
                 val groups = buildList {
                     add("All")
-                    addAll(channels.mapNotNull { it.group }.distinct().sorted())
+                    addAll(
+                        channels.mapNotNull { it.group }
+                            .distinct()
+                            .sortedWith(String.CASE_INSENSITIVE_ORDER),
+                    )
                 }
                 _state.update {
                     it.copy(
                         channels = channels,
                         groups = groups,
                         selectedGroup = if (it.selectedGroup in groups) it.selectedGroup else "All",
-                        isLoading = false,
-                        status = "${channels.size} channels",
-                        error = null,
+                        isLoadingChannels = false,
+                        channelStatus = "${channels.size} channels · ${groups.size - 1} categories",
+                        channelError = null,
                     )
                 }
             }.onFailure { e ->
                 _state.update {
                     it.copy(
-                        isLoading = false,
-                        error = e.message ?: "Load failed",
-                        status = null,
+                        isLoadingChannels = false,
+                        channelError = e.message ?: "Load failed",
+                        channelStatus = null,
                     )
                 }
             }
@@ -113,33 +143,114 @@ class AppViewModel(
         _state.update { it.copy(selectedGroup = group) }
     }
 
+    fun setSearchQuery(q: String) {
+        _state.update { it.copy(searchQuery = q) }
+    }
+
     fun filteredChannels(): List<IptvChannel> {
         val s = _state.value
-        return if (s.selectedGroup == "All") s.channels
+        val base = if (s.selectedGroup == "All") s.channels
         else s.channels.filter { it.group == s.selectedGroup }
+        val q = s.searchQuery.trim()
+        if (q.isEmpty()) return base
+        return base.filter {
+            it.name.contains(q, ignoreCase = true) ||
+                (it.group?.contains(q, ignoreCase = true) == true)
+        }
     }
 
     fun play(channel: IptvChannel) {
-        val candidates = iptv.playbackCandidates(channel.url, preferTs = true)
-        val url = candidates.first()
+        val url = iptv.playbackCandidates(channel.url, preferTs = true).first()
         val kind = StreamContainer.detect(url)
         _state.update {
             it.copy(
                 playing = channel,
                 playUrl = url,
                 engineLabel = "VLC · ${kind.name}",
-                error = null,
+                playerMessage = null,
             )
         }
     }
 
     fun stopPlayback() {
-        _state.update { it.copy(playing = null, playUrl = null) }
+        _state.update { it.copy(playing = null, playUrl = null, playerMessage = null) }
     }
 
-    fun clearError() {
-        _state.update { it.copy(error = null) }
+    // endregion
+
+    // region Scores
+
+    fun refreshScores() {
+        viewModelScope.launch {
+            val leagues = SportLeague.ALL.filter { it.id in _state.value.selectedLeagueIds }
+            if (leagues.isEmpty()) {
+                _state.update {
+                    it.copy(
+                        games = emptyList(),
+                        scoresStatus = "Select leagues in Settings",
+                        isLoadingScores = false,
+                    )
+                }
+                return@launch
+            }
+            _state.update {
+                it.copy(isLoadingScores = true, scoresError = null, scoresStatus = "Updating scores…")
+            }
+            runCatching { sports.fetchGames(leagues) }
+                .onSuccess { games ->
+                    val live = games.count { it.isLive }
+                    val up = games.count { it.isUpcoming }
+                    _state.update {
+                        it.copy(
+                            games = games,
+                            isLoadingScores = false,
+                            scoresUpdatedAtMs = System.currentTimeMillis(),
+                            scoresStatus = "$live live · $up upcoming · ${games.size} total",
+                            scoresError = null,
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(
+                            isLoadingScores = false,
+                            scoresError = e.message ?: "Scores failed",
+                            scoresStatus = null,
+                        )
+                    }
+                }
+        }
     }
+
+    fun setScoresFilter(filter: ScoresFilter) {
+        _state.update { it.copy(scoresFilter = filter) }
+    }
+
+    fun toggleLeague(id: String) {
+        _state.update { s ->
+            val next = s.selectedLeagueIds.toMutableSet()
+            if (!next.add(id)) next.remove(id)
+            s.copy(selectedLeagueIds = next)
+        }
+        refreshScores()
+    }
+
+    fun filteredGames(): List<Game> {
+        val s = _state.value
+        return when (s.scoresFilter) {
+            ScoresFilter.LIVE -> s.games.filter { it.isLive }
+            ScoresFilter.UPCOMING -> s.games.filter { it.isUpcoming }
+            ScoresFilter.FINAL -> s.games.filter { it.isFinal || it.status == GameStatus.FINAL }
+        }
+    }
+
+    fun gamesByLeague(): Map<SportLeague, List<Game>> {
+        return filteredGames()
+            .groupBy { it.league }
+            .toSortedMap(compareBy { it.label })
+    }
+
+    // endregion
 
     companion object {
         fun factory(context: Context): ViewModelProvider.Factory =

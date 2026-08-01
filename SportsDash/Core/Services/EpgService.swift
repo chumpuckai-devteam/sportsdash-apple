@@ -227,7 +227,7 @@ actor EpgService {
         let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
         let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
         let query = "username=\(userQ)&password=\(passQ)"
-        // Prefer https (user example: halfvex) then plain path variants.
+        // Prefer https (user example: Xtream panel) then plain path variants.
         var out: [String] = []
         for root in httpsPreferredRoots(base) {
             out.append("\(root)/xmltv.php?\(query)")
@@ -256,12 +256,12 @@ actor EpgService {
         return xtreamXmltvURLs(hostField: base, user: user, pass: pass)
     }
 
-    /// `305.halfvex.com` | `https://305.halfvex.com/` | `https://host/c/` → scheme+host(+port)
+    /// `your-xtream-host.com` | `https://your-xtream-host.com/` | `https://host/c/` → scheme+host(+port)
     nonisolated private static func normalizeXtreamBase(_ raw: String) -> String? {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
         if !s.contains("://") {
-            s = "https://\(s)" // default https (matches halfvex-style panels)
+            s = "https://\(s)" // default https (matches Xtream-style panels)
         }
         guard var comps = URLComponents(string: s) else { return nil }
         comps.path = ""

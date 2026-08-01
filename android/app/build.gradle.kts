@@ -80,6 +80,9 @@ dependencies {
     // Hard IPTV engine — same libVLC family as iOS MobileVLCKit (LGPL)
     implementation("org.videolan.android:libvlc-all:3.6.0")
 
+    // Team / channel logos
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

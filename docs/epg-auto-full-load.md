@@ -31,7 +31,7 @@ https://{host}/xmltv.php?username={user}&password={pass}
 https://{host}/xmltv.php?username={user}&password={pass}&type=m3u_plus
 ```
 
-Example host style: `https://305.halfvex.com/xmltv.php?username=…&password=…`
+Example host style: `https://your-xtream-host.com/xmltv.php?username=…&password=…`
 
 Also derived when the playlist is saved as M3U `get.php?username=&password=` on the same host.
 HTTPS is preferred; HTTP is tried as fallback.

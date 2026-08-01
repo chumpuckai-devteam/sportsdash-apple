@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 class IptvRepository(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
         .followRedirects(true)
         .build(),
 ) {
@@ -36,7 +36,26 @@ class IptvRepository(
         require(config.username.isNotBlank() && config.password.isNotBlank()) {
             "Username and password required"
         }
-        val playerApi = "$base/player_api.php?username=${enc(config.username)}&password=${enc(config.password)}&action=get_live_streams"
+        val user = enc(config.username)
+        val pass = enc(config.password)
+
+        // Category id → display name (streams often only ship category_id)
+        val categoryNames = linkedMapOf<String, String>()
+        runCatching {
+            val catBody = httpGet(
+                "$base/player_api.php?username=$user&password=$pass&action=get_live_categories",
+            )
+            val cats = JSONArray(catBody)
+            for (i in 0 until cats.length()) {
+                val c = cats.optJSONObject(i) ?: continue
+                val id = c.optString("category_id").ifBlank { c.optInt("category_id").toString() }
+                val name = c.optString("category_name").ifBlank { id }
+                if (id.isNotBlank()) categoryNames[id] = name
+            }
+        }
+
+        val playerApi =
+            "$base/player_api.php?username=$user&password=$pass&action=get_live_streams"
         val body = httpGet(playerApi)
         val arr = JSONArray(body)
         val out = ArrayList<IptvChannel>(arr.length())
@@ -47,10 +66,12 @@ class IptvRepository(
             val name = o.optString("name").ifBlank { "Channel $streamId" }
             val epg = o.optString("epg_channel_id").takeIf { it.isNotBlank() }
             val logo = o.optString("stream_icon").takeIf { it.isNotBlank() }
+            val catId = o.optString("category_id").ifBlank { o.optInt("category_id").toString() }
             val group = o.optString("category_name").takeIf { it.isNotBlank() }
-                ?: o.optString("category_id").takeIf { it.isNotBlank() }
+                ?: categoryNames[catId]
+                ?: catId.takeIf { it.isNotBlank() }
             // Prefer raw TS live path (matches iOS preferredLiveFormat = .ts)
-            val url = "$base/live/${enc(config.username)}/${enc(config.password)}/$streamId"
+            val url = "$base/live/$user/$pass/$streamId"
             out.add(
                 IptvChannel(
                     id = "xtream-$streamId",
@@ -122,7 +143,6 @@ class IptvRepository(
             else -> null
         }
         if (alt != null) list.add(alt)
-        // Xtream without extension: also try .m3u8
         if (url.contains("/live/") && !url.substringAfterLast('/').contains('.')) {
             list.add("$url.m3u8")
             list.add("$url.ts")
@@ -142,17 +162,22 @@ class IptvRepository(
             .get()
             .build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) error("HTTP ${resp.code} for $url")
+            if (!resp.isSuccessful) error("HTTP ${resp.code} for ${url.substringBefore("?")}")
             return resp.body?.string().orEmpty()
         }
     }
 
+    /**
+     * Normalize Xtream server URL → scheme://host[:port]
+     * Accepts bare host, full URL, or player_api.php link.
+     * Prefers https when scheme omitted.
+     */
     private fun normalizeHost(host: String): String {
         var h = host.trim().trimEnd('/')
+        // If user pasted full player_api / get.php URL, keep origin only
         if (!h.startsWith("http://") && !h.startsWith("https://")) {
-            h = "http://$h"
+            h = "https://$h"
         }
-        // Strip path like /player_api.php if pasted
         val u = h.toHttpUrlOrNull() ?: return h
         return buildString {
             append(u.scheme)
@@ -174,6 +199,6 @@ private object StreamHints {
 
 /** Optional auth probe. */
 fun PlaylistConfig.describe(): String = when (type) {
-    PlaylistType.XTREAM -> "$name · Xtream · $host"
+    PlaylistType.XTREAM -> "$name · Xtream"
     PlaylistType.M3U -> "$name · M3U"
 }

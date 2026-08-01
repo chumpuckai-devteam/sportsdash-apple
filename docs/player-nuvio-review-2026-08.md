@@ -142,7 +142,7 @@ For SportsDash IPTV (TS-heavy), that validates **hard demuxer required**. The ch
 
 1. Play Xtream **TS** live ≥ 2 min, no audio desync black screen.  
 2. Play **m3u8** candidate.  
-3. Header/UA injection works on halfvex-class hosts.  
+3. Header/UA injection works on Xtream-class hosts.  
 4. iPhone + Apple TV simulator/device builds.  
 5. License audit: link only LGPL MPVKit (or VLCKit dynamic), attribution in Settings.  
 6. No GPL Nuvio app source copied.
