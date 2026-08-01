@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.samirpatel.sportsdash.AppUiState
 import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
@@ -76,11 +77,12 @@ fun SportsDashRoot(vm: AppViewModel) {
     val state by vm.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
 
-    // Full-screen player overlay
-    if (state.playing != null && state.playUrl != null) {
+    val playing = state.playing
+    val playUrl = state.playUrl
+    if (playing != null && playUrl != null) {
         PlayerScreen(
-            channel = state.playing!!,
-            url = state.playUrl!!,
+            channel = playing,
+            url = playUrl,
             engineLabel = state.engineLabel,
             onClose = { vm.stopPlayback() },
         )
@@ -116,7 +118,7 @@ fun SportsDashRoot(vm: AppViewModel) {
                 NavigationBarItem(
                     selected = tab == 0,
                     onClick = { tab = 0 },
-                    icon = { Icon(Icons.Default.LiveTv, null) },
+                    icon = { Icon(Icons.Default.LiveTv, contentDescription = null) },
                     label = { Text("Channels") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Gold,
@@ -129,7 +131,7 @@ fun SportsDashRoot(vm: AppViewModel) {
                 NavigationBarItem(
                     selected = tab == 1,
                     onClick = { tab = 1 },
-                    icon = { Icon(Icons.Default.Settings, null) },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                     label = { Text("Settings") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Gold,
@@ -142,7 +144,11 @@ fun SportsDashRoot(vm: AppViewModel) {
             }
         },
     ) { padding ->
-        Box(Modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+        ) {
             when (tab) {
                 0 -> ChannelsScreen(vm = vm, state = state)
                 else -> SettingsScreen(vm = vm, state = state)
@@ -152,51 +158,75 @@ fun SportsDashRoot(vm: AppViewModel) {
 }
 
 @Composable
-private fun ChannelsScreen(vm: AppViewModel, state: com.samirpatel.sportsdash.AppUiState) {
-    Column(Modifier.fillMaxSize().background(VoidBlack)) {
-        if (state.playlist == null) {
-            EmptyPlaylistHint(onOpenSettings = { /* user taps Settings tab */ })
-            return
-        }
-        if (state.groups.size > 1) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.groups) { g ->
-                    FilterChip(
-                        selected = state.selectedGroup == g,
-                        onClick = { vm.selectGroup(g) },
-                        label = { Text(g) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Gold,
-                            selectedLabelColor = VoidBlack,
-                            containerColor = Panel,
-                            labelColor = TextPrimary,
-                        ),
+private fun ChannelsScreen(vm: AppViewModel, state: AppUiState) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(VoidBlack),
+    ) {
+        when {
+            state.playlist == null -> {
+                EmptyPlaylistHint()
+            }
+            state.isLoading && state.channels.isEmpty() -> {
+                state.status?.let {
+                    Text(
+                        it,
+                        color = Muted,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = Gold)
+                }
             }
-        }
-        state.status?.let {
-            Text(it, color = Muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-        }
-        state.error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
-        }
-        if (state.isLoading && state.channels.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Gold)
-            }
-            return
-        }
-        val channels = vm.filteredChannels()
-        LazyColumn(
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(channels, key = { it.id }) { ch ->
-                ChannelRow(channel = ch, onPlay = { vm.play(ch) })
+            else -> {
+                if (state.groups.size > 1) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(state.groups) { g ->
+                            FilterChip(
+                                selected = state.selectedGroup == g,
+                                onClick = { vm.selectGroup(g) },
+                                label = { Text(g) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Gold,
+                                    selectedLabelColor = VoidBlack,
+                                    containerColor = Panel,
+                                    labelColor = TextPrimary,
+                                ),
+                            )
+                        }
+                    }
+                }
+                state.status?.let {
+                    Text(
+                        it,
+                        color = Muted,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+                state.error?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+                val channels = vm.filteredChannels()
+                LazyColumn(
+                    contentPadding = PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(channels, key = { it.id }) { ch ->
+                        ChannelRow(channel = ch, onPlay = { vm.play(ch) })
+                    }
+                }
             }
         }
     }
@@ -213,8 +243,17 @@ private fun ChannelRow(channel: IptvChannel, onPlay: () -> Unit) {
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.PlayArrow, null, tint = Gold, modifier = Modifier.size(28.dp))
-        Column(Modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+        Icon(
+            Icons.Default.PlayArrow,
+            contentDescription = null,
+            tint = Gold,
+            modifier = Modifier.size(28.dp),
+        )
+        Column(
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .weight(1f),
+        ) {
             Text(channel.name, color = TextPrimary, fontWeight = FontWeight.SemiBold)
             channel.group?.let {
                 Text(it, color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -224,25 +263,31 @@ private fun ChannelRow(channel: IptvChannel, onPlay: () -> Unit) {
 }
 
 @Composable
-private fun EmptyPlaylistHint(onOpenSettings: () -> Unit) {
+private fun EmptyPlaylistHint() {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("No playlist yet", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
+        Text(
+            "No playlist yet",
+            color = TextPrimary,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             "Open Settings and add your Xtream host + credentials (or an M3U URL). Same panels as iOS SportsDash.",
             color = Muted,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         Text("→ Settings tab", color = Gold, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun SettingsScreen(vm: AppViewModel, state: com.samirpatel.sportsdash.AppUiState) {
+private fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
     var mode by remember { mutableIntStateOf(0) } // 0 xtream, 1 m3u
     var name by remember { mutableStateOf(state.playlist?.name ?: "My IPTV") }
     var host by remember { mutableStateOf(state.playlist?.host ?: "") }
@@ -261,7 +306,10 @@ private fun SettingsScreen(vm: AppViewModel, state: com.samirpatel.sportsdash.Ap
     )
 
     LazyColumn(
-        Modifier.fillMaxSize().background(VoidBlack).padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(VoidBlack)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
@@ -340,7 +388,10 @@ private fun SettingsScreen(vm: AppViewModel, state: com.samirpatel.sportsdash.Ap
             item {
                 Button(
                     onClick = { vm.saveXtream(name, host, user, pass) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = VoidBlack),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Gold,
+                        contentColor = VoidBlack,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Save & load live channels")
@@ -360,7 +411,10 @@ private fun SettingsScreen(vm: AppViewModel, state: com.samirpatel.sportsdash.Ap
             item {
                 Button(
                     onClick = { vm.saveM3u(name, m3u) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = VoidBlack),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Gold,
+                        contentColor = VoidBlack,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Save & load M3U")
@@ -375,7 +429,7 @@ private fun SettingsScreen(vm: AppViewModel, state: com.samirpatel.sportsdash.Ap
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         item {
-            Spacer(Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             Text("About", color = Gold, style = MaterialTheme.typography.titleMedium)
             Text(
                 "SportsDash Android v1 dogfood. Playback uses libVLC (© VideoLAN, LGPLv2.1+). " +
@@ -408,7 +462,11 @@ private fun PlayerScreen(
         onDispose { controller.release() }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    ) {
         AndroidView(
             factory = { ctx ->
                 createVlcVideoLayout(ctx).also { layout ->
@@ -419,7 +477,7 @@ private fun PlayerScreen(
             update = { layout -> controller.attach(layout) },
         )
         Row(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .background(Color.Black.copy(alpha = 0.55f))
@@ -429,7 +487,7 @@ private fun PlayerScreen(
             IconButton(onClick = onClose) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
             }
-            Column(Modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(channel.name, color = Color.White, fontWeight = FontWeight.Bold)
                 Text(engineLabel, color = Gold, style = MaterialTheme.typography.labelSmall)
             }

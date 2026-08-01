@@ -153,15 +153,16 @@ class IptvRepository(
             h = "http://$h"
         }
         // Strip path like /player_api.php if pasted
-        val u = h.toHttpUrlOrNull()
-        return if (u != null) {
-            buildString {
-                append(u.scheme)
-                append("://")
-                append(u.host)
-                if (u.port != u.defaultPort) append(":").append(u.port)
-            }
-        } else h
+        val u = h.toHttpUrlOrNull() ?: return h
+        return buildString {
+            append(u.scheme)
+            append("://")
+            append(u.host)
+            val isDefault =
+                (u.scheme == "http" && u.port == 80) ||
+                    (u.scheme == "https" && u.port == 443)
+            if (!isDefault) append(":").append(u.port)
+        }
     }
 
     private fun enc(s: String): String = java.net.URLEncoder.encode(s, Charsets.UTF_8.name())

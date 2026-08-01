@@ -1,6 +1,5 @@
 package com.samirpatel.sportsdash.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -27,11 +26,9 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun SportsDashTheme(content: @Composable () -> Unit) {
+    // Always dark product chrome for v1 dogfood
     MaterialTheme(
         colorScheme = DarkColors,
         content = content,
     )
-    // Force dark product look regardless of system for v1 dogfood
-    @Suppress("UNUSED_VARIABLE")
-    val _ = isSystemInDarkTheme()
 }
