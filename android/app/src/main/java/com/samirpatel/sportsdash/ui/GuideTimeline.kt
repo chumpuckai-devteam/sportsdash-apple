@@ -3,6 +3,8 @@ package com.samirpatel.sportsdash.ui
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,15 +67,20 @@ private val GuideHours = AppViewModel.GUIDE_HOURS
 /**
  * iOS-style traditional TV guide: channel column + hour timeline.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GuideTimeline(
     channels: List<IptvChannel>,
     programsFor: (String) -> List<EpgProgram>,
     windowStartMs: Long,
     onPlay: (IptvChannel) -> Unit,
+    onLongPressChannel: (IptvChannel) -> Unit = {},
     onShiftHours: (Int) -> Unit,
     onResetToNow: () -> Unit,
+    favoriteIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
+    hours: Int = GuideHours,
+    pxPerHour: Int = PxPerHour,
 ) {
     val hScroll = rememberScrollState()
     val density = LocalDensity.current
@@ -188,7 +195,9 @@ fun GuideTimeline(
                         pxPerHourPx = pxPerHourPx,
                         timelineWidthDp = timelineWidthDp,
                         hScroll = hScroll,
+                        isFavorite = channel.id in favoriteIds,
                         onPlay = { onPlay(channel) },
+                        onLongPress = { onLongPressChannel(channel) },
                     )
                 }
             }
@@ -196,6 +205,7 @@ fun GuideTimeline(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TimelineRow(
     channel: IptvChannel,
@@ -206,7 +216,9 @@ private fun TimelineRow(
     pxPerHourPx: Float,
     timelineWidthDp: Dp,
     hScroll: ScrollState,
+    isFavorite: Boolean,
     onPlay: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     val density = LocalDensity.current
     val minBlockPx = with(density) { 28.dp.toPx() }
@@ -237,7 +249,7 @@ private fun TimelineRow(
                 .width(ChannelColWidth)
                 .fillMaxHeight()
                 .background(Panel)
-                .clickable(onClick = onPlay)
+                .combinedClickable(onClick = onPlay, onLongClick = onLongPress)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -254,7 +266,7 @@ private fun TimelineRow(
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
-                text = channel.name,
+                text = if (isFavorite) "★ ${channel.name}" else channel.name,
                 color = TextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -270,7 +282,7 @@ private fun TimelineRow(
                 .width(timelineWidthDp)
                 .fillMaxHeight()
                 .background(VoidBlack)
-                .clickable(onClick = onPlay),
+                .combinedClickable(onClick = onPlay, onLongClick = onLongPress),
         ) {
             Box(
                 modifier = Modifier

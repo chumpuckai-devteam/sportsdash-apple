@@ -36,6 +36,9 @@ enum class ScoresFilter { LIVE, UPCOMING, FINAL }
 /** LIST = hour timeline (iOS Guide list); GRID = channel cards. */
 enum class GuideLayout { LIST, GRID }
 
+/** Synthetic Guide group — always first when shown. */
+const val FAVORITES_GROUP = "★ Favorites"
+
 fun snappedCurrentHourMs(): Long {
     val cal = Calendar.getInstance()
     cal.set(Calendar.MINUTE, 0)
@@ -85,6 +88,9 @@ data class AppUiState(
     val playingGameId: String? = null,
 
     val showScoresTicker: Boolean = true,
+
+    /** Channel ids starred by user (persisted). */
+    val favoriteChannelIds: Set<String> = emptySet(),
 )
 
 class AppViewModel(
@@ -113,6 +119,11 @@ class AppViewModel(
         viewModelScope.launch {
             prefs.showScoresTickerFlow.collect { show ->
                 _state.update { it.copy(showScoresTicker = show) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.favoriteChannelIdsFlow.collect { ids ->
+                _state.update { it.copy(favoriteChannelIds = ids) }
             }
         }
         refreshScores()
@@ -210,8 +221,10 @@ class AppViewModel(
 
     fun selectGroup(group: String) {
         _state.update { it.copy(selectedGroup = group) }
-        // Category-scoped short EPG so Guide fills without waiting for full 13k bulk
-        loadEpgForOpenCategory(force = false)
+        // Favorites don't need short-EPG of whole playlist; still try open category
+        if (group != FAVORITES_GROUP) {
+            loadEpgForOpenCategory(force = false)
+        }
     }
 
     fun setSearchQuery(q: String) {
@@ -222,12 +235,42 @@ class AppViewModel(
         _state.update { it.copy(guideLayout = layout) }
     }
 
+    fun isFavorite(channelId: String): Boolean =
+        channelId in _state.value.favoriteChannelIds
+
+    fun toggleFavorite(channel: IptvChannel) {
+        val id = channel.id
+        val next = _state.value.favoriteChannelIds.toMutableSet()
+        if (id in next) next.remove(id) else next.add(id)
+        _state.update { it.copy(favoriteChannelIds = next) }
+        viewModelScope.launch { prefs.setFavoriteChannelIds(next) }
+    }
+
+    fun addFavorite(channel: IptvChannel) {
+        if (isFavorite(channel.id)) return
+        val next = _state.value.favoriteChannelIds + channel.id
+        _state.update { it.copy(favoriteChannelIds = next) }
+        viewModelScope.launch { prefs.setFavoriteChannelIds(next) }
+    }
+
+    fun removeFavorite(channel: IptvChannel) {
+        if (!isFavorite(channel.id)) return
+        val next = _state.value.favoriteChannelIds - channel.id
+        _state.update { it.copy(favoriteChannelIds = next) }
+        viewModelScope.launch { prefs.setFavoriteChannelIds(next) }
+    }
+
+    /** Provider categories with Favorites pinned first. */
+    fun guideCategoryGroups(): List<String> {
+        val provider = _state.value.groups
+        return listOf(FAVORITES_GROUP) + provider
+    }
+
     fun shiftGuideWindowHours(deltaHours: Int) {
         _state.update {
             val cal = Calendar.getInstance()
             cal.timeInMillis = it.guideWindowStartMs
             cal.add(Calendar.HOUR_OF_DAY, deltaHours)
-            // snap
             cal.set(Calendar.MINUTE, 0)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
@@ -241,15 +284,11 @@ class AppViewModel(
 
     fun filteredChannels(): List<IptvChannel> {
         val s = _state.value
-        val base = when {
+        return when {
+            s.selectedGroup == FAVORITES_GROUP ->
+                s.channels.filter { it.id in s.favoriteChannelIds }
             s.selectedGroup.isBlank() -> s.channels
             else -> s.channels.filter { it.group == s.selectedGroup }
-        }
-        val q = s.searchQuery.trim()
-        if (q.isEmpty()) return base
-        return base.filter {
-            it.name.contains(q, ignoreCase = true) ||
-                (it.group?.contains(q, ignoreCase = true) == true)
         }
     }
 

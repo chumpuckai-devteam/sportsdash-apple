@@ -95,12 +95,14 @@ fun PlayerScreen(
     // System back must leave the player
     BackHandler(onBack = onClose)
 
+    // URL change = channel switch. Do NOT detach surface here (that caused audio-only).
     DisposableEffect(url) {
-        controller.play(url)
-        isPlaying = true
+        if (url.isNotBlank()) {
+            controller.play(url)
+            isPlaying = true
+        }
         onDispose {
-            controller.stop()
-            controller.detach()
+            // Keep surface; only release when PlayerScreen leaves composition entirely
         }
     }
     DisposableEffect(Unit) {
@@ -117,13 +119,11 @@ fun PlayerScreen(
             factory = { ctx ->
                 createVlcVideoLayout(ctx).also { layout ->
                     controller.attach(layout)
+                    if (url.isNotBlank()) controller.play(url)
                 }
             },
             modifier = Modifier.fillMaxSize(),
             update = { layout ->
-                if (!controller.isPlaying && url.isNotBlank()) {
-                    // keep attached
-                }
                 controller.attach(layout)
             },
         )
@@ -387,9 +387,8 @@ private fun LiveScoresTicker(
                     ),
                 ),
             )
-            .padding(bottom = 10.dp, top = 20.dp),
+            .padding(bottom = 10.dp, top = 16.dp),
     ) {
-        // Optional hero line for current game context
         Text(
             text = if (live.isEmpty()) "No other live games" else "LIVE SCORES · tap to switch",
             color = LiveMint,
@@ -399,15 +398,14 @@ private fun LiveScoresTicker(
         )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Sport summary chip
             if (live.isNotEmpty()) {
                 item {
                     Column(
                         modifier = Modifier
-                            .width(96.dp)
-                            .height(88.dp)
+                            .width(88.dp)
+                            .height(104.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Panel.copy(alpha = 0.95f))
                             .padding(10.dp),
@@ -415,11 +413,12 @@ private fun LiveScoresTicker(
                     ) {
                         Text("LIVE", color = LiveMint, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         Text(
-                            "${live.size} games",
+                            "${live.size}",
                             color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
                         )
+                        Text("games", color = Muted, fontSize = 12.sp)
                     }
                 }
             }
@@ -427,25 +426,28 @@ private fun LiveScoresTicker(
                 val current = game.id == currentGameId
                 Column(
                     modifier = Modifier
-                        .width(156.dp)
-                        .height(88.dp)
+                        .width(188.dp)
+                        .height(104.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (current) Gold.copy(alpha = 0.22f) else Panel.copy(alpha = 0.95f),
                         )
                         .clickable { onGameTap(game) }
-                        .padding(10.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             game.league.label,
                             color = Gold,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
                         )
                         Text(
                             "LIVE",
@@ -454,20 +456,18 @@ private fun LiveScoresTicker(
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Text(
-                        game.matchupLabel,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Spacer(modifier = Modifier.height(6.dp))
+                    // Two-line scoreboard so scores never clip mid-digit
+                    ScoreLine(
+                        left = game.away.rowLabel,
+                        score = game.away.displayScore,
                     )
-                    Text(
-                        "${game.away.displayScore} – ${game.home.displayScore}",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                    Spacer(modifier = Modifier.height(2.dp))
+                    ScoreLine(
+                        left = game.home.rowLabel,
+                        score = game.home.displayScore,
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         game.statusLine,
                         color = Muted,
@@ -478,5 +478,32 @@ private fun LiveScoresTicker(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ScoreLine(left: String, score: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            left,
+            color = TextPrimary,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            score,
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            maxLines = 1,
+        )
     }
 }

@@ -9,6 +9,7 @@ import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
 import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
@@ -16,6 +17,7 @@ private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
 class PrefsStore(private val context: Context) {
     private val keyPlaylist = stringPreferencesKey("playlist_json")
     private val keyShowTicker = booleanPreferencesKey("player_show_scores_ticker")
+    private val keyFavorites = stringPreferencesKey("favorite_channel_ids_json")
 
     val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
         prefs[keyPlaylist]?.let { decode(it) }
@@ -24,6 +26,10 @@ class PrefsStore(private val context: Context) {
     /** Default true — matches iOS showScoresStrip = true. */
     val showScoresTickerFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[keyShowTicker] ?: true
+    }
+
+    val favoriteChannelIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        decodeIdSet(prefs[keyFavorites])
     }
 
     suspend fun savePlaylist(config: PlaylistConfig) {
@@ -36,6 +42,25 @@ class PrefsStore(private val context: Context) {
 
     suspend fun setShowScoresTicker(show: Boolean) {
         context.dataStore.edit { it[keyShowTicker] = show }
+    }
+
+    suspend fun setFavoriteChannelIds(ids: Set<String>) {
+        context.dataStore.edit {
+            it[keyFavorites] = JSONArray(ids.toList()).toString()
+        }
+    }
+
+    private fun decodeIdSet(raw: String?): Set<String> {
+        if (raw.isNullOrBlank()) return emptySet()
+        return runCatching {
+            val arr = JSONArray(raw)
+            buildSet {
+                for (i in 0 until arr.length()) {
+                    val id = arr.optString(i)
+                    if (id.isNotBlank()) add(id)
+                }
+            }
+        }.getOrDefault(emptySet())
     }
 
     private fun encode(c: PlaylistConfig): String = JSONObject().apply {
