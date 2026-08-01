@@ -228,48 +228,48 @@ private fun ScoresScreen(vm: AppViewModel, state: AppUiState) {
             Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
         }
 
-        if (state.isLoadingScores && state.games.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Gold)
-            }
-            return
-        }
-
-        val byLeague = vm.gamesByLeague()
-        if (byLeague.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Sports, null, tint = Muted, modifier = Modifier.size(40.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        when (state.scoresFilter) {
-                            ScoresFilter.LIVE -> "No live games right now"
-                            ScoresFilter.UPCOMING -> "Nothing upcoming for selected leagues"
-                            ScoresFilter.FINAL -> "No finals in current boards"
-                        },
-                        color = Muted,
-                    )
+        when {
+            state.isLoadingScores && state.games.isEmpty() -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Gold)
                 }
             }
-            return
-        }
-
-        LazyColumn(
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            byLeague.forEach { (league, games) ->
-                item(key = "hdr-${league.id}") {
-                    Text(
-                        league.label.uppercase(),
-                        color = Muted,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
+            vm.gamesByLeague().isEmpty() -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Sports, null, tint = Muted, modifier = Modifier.size(40.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            when (state.scoresFilter) {
+                                ScoresFilter.LIVE -> "No live games right now"
+                                ScoresFilter.UPCOMING -> "Nothing upcoming for selected leagues"
+                                ScoresFilter.FINAL -> "No finals in current boards"
+                            },
+                            color = Muted,
+                        )
+                    }
                 }
-                items(games, key = { it.id }) { game ->
-                    GameRow(game)
+            }
+            else -> {
+                val byLeague = vm.gamesByLeague()
+                LazyColumn(
+                    contentPadding = PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    byLeague.forEach { (league, games) ->
+                        item(key = "hdr-${league.id}") {
+                            Text(
+                                league.label.uppercase(),
+                                color = Muted,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                            )
+                        }
+                        items(games, key = { it.id }) { game ->
+                            GameRow(game)
+                        }
+                    }
                 }
             }
         }
