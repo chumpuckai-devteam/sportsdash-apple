@@ -116,7 +116,8 @@ struct GuideView: View {
                         SportsCategoryMenu(
                             title: selectedGroup,
                             selection: $selectedGroup,
-                            options: groupNames
+                            options: groupNames,
+                            onOpen: { showCategoryPicker = true }
                         )
                         #endif
                     }
@@ -174,6 +175,16 @@ struct GuideView: View {
                     onDone: { showCategoryPicker = false }
                 )
                 .background(SportsColors.voidBlack.ignoresSafeArea())
+            }
+            #else
+            .sheet(isPresented: $showCategoryPicker) {
+                SportsCategoryPickerScreen(
+                    selection: $selectedGroup,
+                    options: groupNames,
+                    onDone: { showCategoryPicker = false }
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             #endif
         }

@@ -1,13 +1,15 @@
 import SwiftUI
 
 /// Toolbar / chrome category picker.
-/// - iOS: native `Menu` + `Picker`
-/// - tvOS: caller opens `SportsCategoryPickerScreen` (focus-friendly)
+/// - iOS: button → searchable sheet (long IPTV group lists)
+/// - tvOS: caller opens `SportsCategoryPickerScreen`
 struct SportsCategoryMenu: View {
     let title: String
     @Binding var selection: String
     let options: [String]
     var onOpen: (() -> Void)? = nil
+
+    @State private var showPicker = false
 
     var body: some View {
         #if os(tvOS)
@@ -20,16 +22,19 @@ struct SportsCategoryMenu: View {
         }
         .sportsTVFocusClean()
         #else
-        Menu {
-            Picker("Category", selection: $selection) {
-                ForEach(options, id: \.self) { name in
-                    Text(name).tag(name)
-                }
-            }
+        Button {
+            showPicker = true
         } label: {
             categoryLabel(focused: false)
         }
-        .menuOrder(.fixed)
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showPicker) {
+            SportsCategoryPickerScreen(
+                selection: $selection,
+                options: options,
+                onDone: { showPicker = false }
+            )
+        }
         #endif
     }
 
@@ -65,11 +70,19 @@ struct SportsCategoryMenu: View {
     }
 }
 
-/// Full-screen category list — opaque on tvOS so Guide never shows through.
+/// Category list with search — iOS sheet + tvOS fullScreenCover.
 struct SportsCategoryPickerScreen: View {
     @Binding var selection: String
     let options: [String]
     var onDone: () -> Void
+
+    @State private var query = ""
+
+    private var filtered: [String] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return options }
+        return options.filter { $0.localizedCaseInsensitiveContains(q) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -79,41 +92,64 @@ struct SportsCategoryPickerScreen: View {
 
                 List {
                     Section {
-                        ForEach(options, id: \.self) { name in
-                            Button {
-                                selection = name
-                                onDone()
-                            } label: {
-                                #if os(tvOS)
-                                SportsTVFocused { focused in
-                                    categoryRow(name: name, focused: focused)
+                        if filtered.isEmpty {
+                            Text("No groups match “\(query)”")
+                                .foregroundStyle(SportsColors.muted)
+                                .listRowBackground(SportsColors.panel)
+                        } else {
+                            ForEach(filtered, id: \.self) { name in
+                                Button {
+                                    selection = name
+                                    onDone()
+                                } label: {
+                                    #if os(tvOS)
+                                    SportsTVFocused { focused in
+                                        categoryRow(name: name, focused: focused)
+                                    }
+                                    #else
+                                    categoryRow(name: name, focused: false)
+                                    #endif
                                 }
+                                #if os(tvOS)
+                                .sportsTVFocusClean()
+                                .listRowBackground(Color.clear)
                                 #else
-                                categoryRow(name: name, focused: false)
+                                .buttonStyle(.plain)
+                                .listRowBackground(rowBackground(selected: name == selection))
+                                .listRowSeparatorTint(SportsColors.border.opacity(0.5))
                                 #endif
                             }
-                            #if os(tvOS)
-                            .sportsTVFocusClean()
-                            .listRowBackground(Color.clear)
-                            #else
-                            .buttonStyle(.plain)
-                            .listRowBackground(rowBackground(selected: name == selection))
-                            .listRowSeparatorTint(SportsColors.border.opacity(0.5))
-                            #endif
                         }
                     } header: {
-                        Text("\(options.count) groups")
+                        Text("\(filtered.count) of \(options.count) groups")
                             .foregroundStyle(SportsColors.muted)
                     }
                 }
                 #if os(iOS)
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
+                .searchable(text: $query, prompt: "Search groups")
                 #else
                 .listStyle(.plain)
                 #endif
             }
             .navigationTitle("Category")
+            #if os(tvOS)
+            // Search field for Siri Remote text entry when available
+            .safeAreaInset(edge: .top) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(SportsColors.muted)
+                    TextField("Search groups", text: $query)
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(SportsColors.text)
+                }
+                .padding(14)
+                .background(SportsColors.panelElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+            }
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", action: onDone)

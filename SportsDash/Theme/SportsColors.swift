@@ -180,6 +180,68 @@ struct SportsTVFocused<Content: View>: View {
 enum SportsTVFocusMotion {
     static let animation: Animation = .easeOut(duration: 0.14)
 }
+
+/// Circular toolbar / chrome control — gold fill when focused, no system white lift.
+struct SportsTVIconButton: View {
+    let systemName: String
+    var accessibilityLabelText: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            SportsTVFocused { focused in
+                Image(systemName: systemName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                    .frame(width: SportsTVMetrics.minFocusSize, height: SportsTVMetrics.minFocusSize)
+                    .background {
+                        Circle().fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+                    }
+                    .overlay {
+                        Circle().stroke(
+                            focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
+                            lineWidth: focused ? 2 : 1
+                        )
+                    }
+                    .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                    .animation(SportsTVFocusMotion.animation, value: focused)
+            }
+        }
+        .sportsTVFocusClean()
+        .accessibilityLabel(accessibilityLabelText)
+    }
+}
+
+/// Opaque list row chrome for TV sheets/pickers (selection ≠ focus).
+struct SportsTVListRowLabel<Content: View>: View {
+    var selected: Bool = false
+    @ViewBuilder var content: (_ focused: Bool) -> Content
+
+    var body: some View {
+        SportsTVFocused { focused in
+            content(focused)
+                .frame(maxWidth: .infinity, minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(focused ? SportsColors.gold : (selected ? SportsColors.panelElevated : SportsColors.panel))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            focused
+                                ? SportsColors.goldDim
+                                : (selected ? SportsColors.gold.opacity(0.45) : SportsColors.border.opacity(0.35)),
+                            lineWidth: focused || selected ? 2 : 1
+                        )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+                .animation(SportsTVFocusMotion.animation, value: focused)
+        }
+    }
+}
 #endif
 
 // MARK: - Reusable chrome

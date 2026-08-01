@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E3SETUP01A55E7001C0DE02 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */; };
+		E3SETUP01A55E7001C0DE03 /* SetupChecklistCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */; };
 		E3CATMNU01A55E7001C0DE02 /* SportsCategoryMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CATMNU01A55E7001C0DE01 /* SportsCategoryMenu.swift */; };
 		E3CATMNU01A55E7001C0DE03 /* SportsCategoryMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CATMNU01A55E7001C0DE01 /* SportsCategoryMenu.swift */; };
 		E2PLATFM01A55E7001C0DE02 /* PlatformChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2PLATFM01A55E7001C0DE01 /* PlatformChrome.swift */; };
@@ -125,6 +127,7 @@
 		E1GAMEROW01A55E7001C0DE01 /* GameMatchupRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMatchupRow.swift; sourceTree = "<group>"; };
 		E2PLATFM01A55E7001C0DE01 /* PlatformChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformChrome.swift; sourceTree = "<group>"; };
 		E3CATMNU01A55E7001C0DE01 /* SportsCategoryMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SportsCategoryMenu.swift; sourceTree = "<group>"; };
+		E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -272,6 +275,7 @@
 				392366C226E63D59301D7DA3 /* PlaylistSettingsView.swift */,
 				4027A1E3933491E557B34425 /* ScoresSettingsView.swift */,
 				C7A6BCB9EC0D2945A92382E1 /* SettingsView.swift */,
+				E3SETUP01A55E7001C0DE01 /* SetupChecklistCard.swift */,
 				2635CCB93A485DFB19FD12C9 /* UISettingsView.swift */,
 			);
 			path = Settings;
@@ -441,6 +445,7 @@
 				8F74025F372E461B88DCF5C9 /* ScoresSettingsView.swift in Sources */,
 				F4A2CB8DBFE89EF27DF9F215 /* ScoresView.swift in Sources */,
 				DF15E6090BCA8022DB582613 /* SettingsView.swift in Sources */,
+				E3SETUP01A55E7001C0DE02 /* SetupChecklistCard.swift in Sources */,
 				71E856D992F371C497E6910F /* SportLeague.swift in Sources */,
 				31BBA37D93F235C9385A6CAC /* SportsAPI.swift in Sources */,
 				CFC5670EF072841F02274478 /* SportsColors.swift in Sources */,
@@ -484,6 +489,7 @@
 				DE34895543981AF31B68688B /* ScoresSettingsView.swift in Sources */,
 				E6EE07BF3235FF219AB16929 /* ScoresView.swift in Sources */,
 				29D9824E2CFA113E27CF5BFE /* SettingsView.swift in Sources */,
+				E3SETUP01A55E7001C0DE03 /* SetupChecklistCard.swift in Sources */,
 				54D313710DDC00E7528EDA46 /* SportLeague.swift in Sources */,
 				FAAF35A1A7BA2717DE28EBDC /* SportsAPI.swift in Sources */,
 				351F36947C67E492E0478109 /* SportsColors.swift in Sources */,

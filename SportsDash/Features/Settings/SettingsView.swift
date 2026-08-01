@@ -7,6 +7,16 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                if SetupChecklist.isIncomplete(appModel) {
+                    Section {
+                        SetupChecklistCard()
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Setup")
+                    }
+                }
+
                 Section {
                     NavigationLink {
                         PlaylistSettingsView()
@@ -77,21 +87,21 @@ struct SettingsView: View {
                     NavigationLink {
                         GeneralSettingsView()
                     } label: {
-                        settingsRow(icon: "gearshape", tint: .gray, title: "General")
+                        settingsRow(icon: "gearshape", tint: SportsColors.muted, title: "General")
                     }
                     .listRowBackground(SportsColors.panel)
 
                     NavigationLink {
                         UISettingsView()
                     } label: {
-                        settingsRow(icon: "slider.horizontal.3", tint: .blue, title: "User interface")
+                        settingsRow(icon: "slider.horizontal.3", tint: SportsColors.goldDim, title: "User interface")
                     }
                     .listRowBackground(SportsColors.panel)
 
                     NavigationLink {
                         PlayerSettingsView()
                     } label: {
-                        settingsRow(icon: "play.rectangle", tint: .green, title: "Video player")
+                        settingsRow(icon: "play.rectangle", tint: SportsColors.live, title: "Video player")
                     }
                     .listRowBackground(SportsColors.panel)
 
@@ -102,7 +112,7 @@ struct SettingsView: View {
                     }
                     .listRowBackground(SportsColors.panel)
                 } header: {
-                    Text("Advanced")
+                    Text("App")
                 }
 
                 Section {
