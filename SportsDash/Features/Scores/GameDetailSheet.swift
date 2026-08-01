@@ -36,6 +36,14 @@ struct GameDetailSheet: View {
                         .foregroundStyle(SportsColors.text.opacity(0.9))
                 }
                 ToolbarItem(placement: SportsToolbarPlacement.trailing) {
+                    #if os(tvOS)
+                    SportsTVIconButton(
+                        systemName: "xmark",
+                        accessibilityLabelText: "Close"
+                    ) {
+                        dismiss()
+                    }
+                    #else
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(.body.weight(.semibold))
@@ -43,6 +51,7 @@ struct GameDetailSheet: View {
                             .frame(width: 32, height: 32)
                             .sportsGlass(in: Circle())
                     }
+                    #endif
                 }
             }
             .sportsHiddenNavBarBackground()
@@ -197,7 +206,7 @@ struct GameDetailSheet: View {
                 .sportsSoftSurface(radius: 16)
                 .padding(.horizontal, 16)
             } else {
-                VStack(spacing: 0) {
+                VStack(spacing: 12) {
                     ForEach(Array(matches.enumerated()), id: \.element.id) { index, m in
                         Button {
                             appModel.recordLastPlayed(gameId: game.id)
@@ -207,51 +216,67 @@ struct GameDetailSheet: View {
                                 alternates: matches.filter { $0.channel.id != m.channel.id }
                             )
                         } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: "play.tv.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(SportsColors.gold)
-                                    .frame(width: 36)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(
-                                        ChannelNameCleanup.displayName(
-                                            m.channel.name,
-                                            enabled: appModel.playerPrefs.cleanUpNames
-                                        )
-                                    )
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(SportsColors.text)
-                                    .multilineTextAlignment(.leading)
-                                    if let g = m.channel.group, !g.isEmpty {
-                                        Text(g)
-                                            .font(.caption)
-                                            .foregroundStyle(SportsColors.muted)
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                                Text("WATCH")
-                                    .font(.caption.weight(.black))
-                                    .foregroundStyle(SportsColors.voidBlack)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 7)
-                                    .background(SportsColors.gold.gradient, in: Capsule())
+                            #if os(tvOS)
+                            SportsTVListRowLabel { focused in
+                                streamRowLabel(m, focused: focused)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .contentShape(Rectangle())
+                            #else
+                            streamRowLabel(m, focused: false)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .contentShape(Rectangle())
+                            #endif
                         }
+                        #if os(tvOS)
+                        .sportsTVFocusClean()
+                        #else
                         .buttonStyle(.plain)
-
-                        if index < matches.count - 1 {
-                            Divider()
-                                .background(Color.white.opacity(0.08))
-                                .padding(.leading, 66)
-                        }
+                        #endif
                     }
                 }
+                #if os(tvOS)
+                .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
+                .focusSection()
+                #else
                 .sportsSoftSurface(radius: 18)
                 .padding(.horizontal, 16)
+                #endif
             }
+        }
+    }
+
+    private func streamRowLabel(_ m: ChannelMatch, focused: Bool) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "play.tv.fill")
+                .font(.title3)
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                .frame(width: 36)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(
+                    ChannelNameCleanup.displayName(
+                        m.channel.name,
+                        enabled: appModel.playerPrefs.cleanUpNames
+                    )
+                )
+                .font(.body.weight(.semibold))
+                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                .multilineTextAlignment(.leading)
+                if let g = m.channel.group, !g.isEmpty {
+                    Text(g)
+                        .font(.caption)
+                        .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
+                }
+            }
+            Spacer(minLength: 0)
+            Text("WATCH")
+                .font(.caption.weight(.black))
+                .foregroundStyle(focused ? SportsColors.gold : SportsColors.voidBlack)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    (focused ? SportsColors.voidBlack.opacity(0.9) : SportsColors.gold).gradient,
+                    in: Capsule()
+                )
         }
     }
 

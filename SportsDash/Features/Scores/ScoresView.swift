@@ -24,7 +24,6 @@ struct ScoresView: View {
                                 ProgressView().controlSize(.small).tint(SportsColors.gold)
                             } else {
                                 #if os(tvOS)
-                                // Icon only — Label truncates badly in the TV toolbar ("R…sh")
                                 Image(systemName: "arrow.clockwise")
                                     .font(.body.weight(.semibold))
                                     .foregroundStyle(SportsColors.gold)
@@ -43,6 +42,11 @@ struct ScoresView: View {
                         .environmentObject(appModel)
                         .sportsSheetChrome()
                 }
+                #if os(iOS)
+                .navigationDestination(isPresented: $showLeaguesSettings) {
+                    ScoresSettingsView()
+                }
+                #endif
         }
     }
 
@@ -55,7 +59,7 @@ struct ScoresView: View {
         } else if let err = appModel.scoresError, appModel.games.isEmpty {
             ScrollView {
                 VStack(spacing: 22) {
-                    if SetupChecklist.isIncomplete(appModel) {
+                    if setupIncomplete {
                         SetupChecklistCard()
                             .padding(.horizontal, 16)
                     }
@@ -64,7 +68,7 @@ struct ScoresView: View {
                         systemImage: "wifi.exclamationmark",
                         description: Text(err)
                     )
-                    .frame(maxWidth: .infinity, minHeight: SetupChecklist.isIncomplete(appModel) ? 240 : 400)
+                    .frame(maxWidth: .infinity, minHeight: 320)
                 }
                 .padding(.vertical, 12)
             }
@@ -74,132 +78,122 @@ struct ScoresView: View {
         }
     }
 
+    private var setupIncomplete: Bool {
+        appModel.playlists.isEmpty
+            || appModel.iptvConfig?.isConfigured != true
+            || appModel.channels.isEmpty
+            || appModel.selectedLeagues.isEmpty
+    }
+
     private var scoresContent: some View {
         let showFaves = !appModel.favoriteGames.isEmpty
             && (appModel.dashboardFilter == .all
                 || appModel.dashboardFilter == .live
                 || appModel.dashboardFilter == .upcoming
-                private var scoresContent: some View {
-                        let showFaves = !appModel.favoriteGames.isEmpty
-                            && (appModel.dashboardFilter == .all
-                                || appModel.dashboardFilter == .live
-                                || appModel.dashboardFilter == .upcoming
-                                || appModel.dashboardFilter == .favorites)
-                        let sections: [SportScoreSection] = appModel.dashboardFilter == .favorites
-                            ? []
-                            : Self.buildSections(
-                                games: appModel.filteredGames,
-                                filter: appModel.dashboardFilter,
-                                selectedLeagues: appModel.selectedLeagues
-                            )
+                || appModel.dashboardFilter == .favorites)
+        let sections: [SportScoreSection] = appModel.dashboardFilter == .favorites
+            ? []
+            : Self.buildSections(
+                games: appModel.filteredGames,
+                filter: appModel.dashboardFilter,
+                selectedLeagues: appModel.selectedLeagues
+            )
 
-                        // Sticky chrome: filters + context stay put while list scrolls (iOS UX).
-                        return VStack(spacing: 0) {
-                            filterBar
-                            scoresContextStrip
-                                .padding(.bottom, 4)
-                            Divider().overlay(SportsColors.border.opacity(0.35))
+        return VStack(spacing: 0) {
+            filterBar
+            scoresContextStrip
+                .padding(.bottom, 4)
+            Divider().overlay(SportsColors.border.opacity(0.35))
 
-                            ScrollView {
-                                LazyVStack(alignment: .leading, spacing: 20) {
-                                    if appModel.playlists.isEmpty
-                                        || appModel.iptvConfig?.isConfigured != true
-                                        || appModel.channels.isEmpty
-                                        || appModel.selectedLeagues.isEmpty
-                                    {
-                                        SetupChecklistCard()
-                                            .padding(.horizontal, 16)
-                                            .padding(.top, 8)
-                                    }
-
-                                    if showFaves {
-                                        leagueBlock(
-                                            title: "My teams",
-                                            systemImage: "star.fill",
-                                            goldTitle: true,
-                                            games: appModel.favoriteGames
-                                        )
-                                    }
-
-                                    if sections.isEmpty && !showFaves {
-                                        ContentUnavailableView(
-                                            emptyTitle,
-                                            systemImage: "sportscourt",
-                                            description: Text(emptySubtitle)
-                                        )
-                                        .frame(maxWidth: .infinity, minHeight: 280)
-                                    } else {
-                                        ForEach(sections) { section in
-                                            sportSectionBlock(section)
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 12)
-                                .padding(.bottom, 28)
-                            }
-                            .sportsRefreshable { await appModel.refreshScores() }
-                        }
-                        #if os(iOS)
-                        .navigationDestination(isPresented: $showLeaguesSettings) {
-                            ScoresSettingsView()
-                        }
-                        #endif
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    if setupIncomplete {
+                        SetupChecklistCard()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
                     }
 
-                    @State private var showLeaguesSettings = false
-
-                    /// Leagues summary + updated time + edit entry (P0.2).
-                    private var scoresContextStrip: some View {
-                        let leagues = appModel.selectedLeagues.isEmpty
-                            ? SportLeague.defaults
-                            : appModel.selectedLeagues
-                        let labels = leagues.map(\.label)
-                        let summary: String = {
-                            if labels.isEmpty { return "No leagues selected" }
-                            if labels.count <= 3 { return labels.joined(separator: " · ") }
-                            return labels.prefix(3).joined(separator: " · ") + " +\(labels.count - 3)"
-                        }()
-
-                        return HStack(alignment: .center, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(summary)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(SportsColors.textSecondary)
-                                    .lineLimit(1)
-                                if appModel.isLoadingScores {
-                                    Text("Updating scores…")
-                                        .font(.caption2.weight(.medium))
-                                        .foregroundStyle(SportsColors.gold)
-                                } else if let updated = appModel.lastUpdated {
-                                    Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                                        .font(.caption2.weight(.medium))
-                                        .foregroundStyle(SportsColors.muted)
-                                } else {
-                                    Text("Pull to refresh")
-                                        .font(.caption2.weight(.medium))
-                                        .foregroundStyle(SportsColors.muted)
-                                }
-                            }
-                            Spacer(minLength: 8)
-                            #if os(iOS)
-                            Button {
-                                showLeaguesSettings = true
-                            } label: {
-                                Text("Leagues")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(SportsColors.gold)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .sportsGlass(in: Capsule(style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Edit leagues")
-                            #endif
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(SportsColors.voidBlack.opacity(0.92))
+                    if showFaves {
+                        leagueBlock(
+                            title: "My teams",
+                            systemImage: "star.fill",
+                            goldTitle: true,
+                            games: appModel.favoriteGames
+                        )
                     }
+
+                    if sections.isEmpty && !showFaves {
+                        ContentUnavailableView(
+                            emptyTitle,
+                            systemImage: "sportscourt",
+                            description: Text(emptySubtitle)
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                    } else {
+                        ForEach(sections) { section in
+                            sportSectionBlock(section)
+                        }
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.bottom, 28)
+            }
+            .sportsRefreshable { await appModel.refreshScores() }
+        }
+    }
+
+    /// Leagues summary + updated time + edit entry (P0.2).
+    private var scoresContextStrip: some View {
+        let leagues = appModel.selectedLeagues.isEmpty
+            ? SportLeague.defaults
+            : appModel.selectedLeagues
+        let labels = leagues.map(\.label)
+        let summary: String = {
+            if labels.isEmpty { return "No leagues selected" }
+            if labels.count <= 3 { return labels.joined(separator: " · ") }
+            return labels.prefix(3).joined(separator: " · ") + " +\(labels.count - 3)"
+        }()
+
+        return HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SportsColors.textSecondary)
+                    .lineLimit(1)
+                if appModel.isLoadingScores {
+                    Text("Updating scores…")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(SportsColors.gold)
+                } else if let updated = appModel.lastUpdated {
+                    Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(SportsColors.muted)
+                } else {
+                    Text("Pull to refresh")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(SportsColors.muted)
+                }
+            }
+            Spacer(minLength: 8)
+            #if os(iOS)
+            Button {
+                showLeaguesSettings = true
+            } label: {
+                Text("Leagues")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SportsColors.gold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .sportsGlass(in: Capsule(style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit leagues")
+            #endif
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(SportsColors.voidBlack.opacity(0.92))
+    }
 
     /// Group games by sport → league; on Upcoming, keep empty shelves for selected
     /// leagues so MLB (etc.) never "disappears" when the slate is quiet.

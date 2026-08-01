@@ -91,8 +91,33 @@ struct GuideView: View {
                         )
                         #if os(tvOS)
                         if !groupNames.isEmpty {
-                            Button("Choose category") { showCategoryPicker = true }
-                                .sportsTVFocusClean()
+                            Button {
+                                showCategoryPicker = true
+                            } label: {
+                                SportsTVFocused { focused in
+                                    Text("Choose category")
+                                        .font(.headline.weight(.semibold))
+                                        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                                        .padding(.horizontal, 28)
+                                        .padding(.vertical, 16)
+                                        .frame(minHeight: SportsTVMetrics.minFocusSize)
+                                        .background {
+                                            Capsule(style: .continuous)
+                                                .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+                                        }
+                                        .overlay {
+                                            Capsule(style: .continuous)
+                                                .stroke(
+                                                    focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
+                                                    lineWidth: focused ? 2 : 1
+                                                )
+                                        }
+                                        .clipShape(Capsule(style: .continuous))
+                                        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                                        .animation(SportsTVFocusMotion.animation, value: focused)
+                                }
+                            }
+                            .sportsTVFocusClean()
                         }
                         #endif
                     }
@@ -193,29 +218,12 @@ struct GuideView: View {
     @ViewBuilder
     private var guideSettingsControl: some View {
         #if os(tvOS)
-        Button {
+        SportsTVIconButton(
+            systemName: "ellipsis.circle",
+            accessibilityLabelText: "Guide settings"
+        ) {
             showGuideSettings = true
-        } label: {
-            SportsTVFocused { focused in
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
-                    .frame(width: SportsTVMetrics.minFocusSize, height: SportsTVMetrics.minFocusSize)
-                    .background {
-                        Circle().fill(focused ? SportsColors.gold : SportsColors.panelElevated)
-                    }
-                    .overlay {
-                        Circle().stroke(
-                            focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
-                            lineWidth: focused ? 2 : 1
-                        )
-                    }
-                    .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
-                    .animation(SportsTVFocusMotion.animation, value: focused)
-            }
         }
-        .sportsTVFocusClean()
-        .accessibilityLabel("Guide settings")
         #else
         Menu {
             guideSettingsButtons
@@ -278,68 +286,142 @@ struct GuideView: View {
 
     private var guideSettingsSheet: some View {
         NavigationStack {
-            List {
-                Section {
-                    Button {
-                        Task { await appModel.reloadEpg(force: true) }
-                    } label: {
-                        Label(
-                            appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
-                            systemImage: "arrow.clockwise"
+            ZStack {
+                #if os(tvOS)
+                SportsColors.voidBlack.ignoresSafeArea()
+                #endif
+                List {
+                    Section {
+                        Button {
+                            Task { await appModel.reloadEpg(force: true) }
+                        } label: {
+                            #if os(tvOS)
+                            SportsTVListRowLabel {
+                                Label(
+                                    appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                                    systemImage: "arrow.clockwise"
+                                )
+                                .foregroundStyle($0 ? SportsColors.voidBlack : SportsColors.text)
+                            }
+                            #else
+                            Label(
+                                appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                                systemImage: "arrow.clockwise"
+                            )
+                            #endif
+                        }
+                        .disabled(appModel.isLoadingEpg)
+                        #if os(tvOS)
+                        .sportsTVFocusClean()
+                        .listRowBackground(Color.clear)
+                        #endif
+                    }
+
+                    Section {
+                        ForEach(GuideLayoutMode.allCases) { mode in
+                            Button {
+                                var p = appModel.playerPrefs
+                                p.guideLayout = mode
+                                appModel.setPlayerPrefs(p)
+                                showGuideSettings = false
+                            } label: {
+                                #if os(tvOS)
+                                SportsTVListRowLabel(selected: displayMode == mode) { focused in
+                                    HStack {
+                                        Label(
+                                            mode.label,
+                                            systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
+                                        )
+                                        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                                        Spacer()
+                                        if displayMode == mode {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                                        }
+                                    }
+                                }
+                                #else
+                                HStack {
+                                    Label(
+                                        mode.label,
+                                        systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
+                                    )
+                                    Spacer()
+                                    if displayMode == mode {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(SportsColors.gold)
+                                    }
+                                }
+                                #endif
+                            }
+                            #if os(tvOS)
+                            .sportsTVFocusClean()
+                            .listRowBackground(Color.clear)
+                            #endif
+                        }
+                    } header: {
+                        Text("Layout")
+                    } footer: {
+                        Text(
+                            displayMode == .list
+                                ? "Timeline grid: channel rows × time."
+                                : "Card grid: Now / Next per channel."
                         )
                     }
-                    .disabled(appModel.isLoadingEpg)
-                }
 
-                Section {
-                    ForEach(GuideLayoutMode.allCases) { mode in
+                    Section {
+                        #if os(tvOS)
                         Button {
-                            var p = appModel.playerPrefs
-                            p.guideLayout = mode
-                            appModel.setPlayerPrefs(p)
-                            showGuideSettings = false
+                            moviesOnly.toggle()
                         } label: {
-                            HStack {
-                                Label(
-                                    mode.label,
-                                    systemImage: mode == .list ? "list.bullet.rectangle" : "square.grid.2x2"
-                                )
-                                Spacer()
-                                if displayMode == mode {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(SportsColors.gold)
+                            SportsTVListRowLabel(selected: moviesOnly) { focused in
+                                HStack {
+                                    Label("Movies now", systemImage: moviesOnly ? "film.fill" : "film")
+                                        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                                    Spacer()
+                                    Text(moviesOnly ? "On" : "Off")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.75) : SportsColors.muted)
                                 }
                             }
                         }
+                        .sportsTVFocusClean()
+                        .listRowBackground(Color.clear)
+                        #else
+                        Toggle(isOn: $moviesOnly) {
+                            Label("Movies now", systemImage: "film")
+                        }
+                        .tint(SportsColors.gold)
+                        #endif
+                    } header: {
+                        Text("Filter")
+                    } footer: {
+                        Text("Uses XMLTV categories when present, plus channel/title movie signals.")
                     }
-                } header: {
-                    Text("Layout")
-                } footer: {
-                    Text(
-                        displayMode == .list
-                            ? "Timeline grid: channel rows × time."
-                            : "Card grid: Now / Next per channel."
-                    )
                 }
-
-                Section {
-                    Toggle(isOn: $moviesOnly) {
-                        Label("Movies now", systemImage: "film")
-                    }
-                    .tint(SportsColors.gold)
-                } header: {
-                    Text("Filter")
-                } footer: {
-                    Text("Uses XMLTV categories when present, plus channel/title movie signals.")
-                }
+                #if os(tvOS)
+                .listStyle(.plain)
+                #endif
             }
             .navigationTitle("Guide settings")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    #if os(tvOS)
+                    SportsTVIconButton(
+                        systemName: "xmark",
+                        accessibilityLabelText: "Close"
+                    ) {
+                        showGuideSettings = false
+                    }
+                    #else
                     Button("Close") { showGuideSettings = false }
+                    #endif
                 }
             }
         }
+        #if os(tvOS)
+        .preferredColorScheme(.dark)
+        #endif
     }
 
     // legacy name used by toolbar

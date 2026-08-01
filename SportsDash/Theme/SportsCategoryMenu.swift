@@ -152,10 +152,15 @@ struct SportsCategoryPickerScreen: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    #if os(tvOS)
+                    SportsTVIconButton(
+                        systemName: "xmark",
+                        accessibilityLabelText: "Close",
+                        action: onDone
+                    )
+                    #else
                     Button("Close", action: onDone)
-                        #if os(tvOS)
-                        .sportsTVFocusClean()
-                        #endif
+                    #endif
                 }
             }
         }
