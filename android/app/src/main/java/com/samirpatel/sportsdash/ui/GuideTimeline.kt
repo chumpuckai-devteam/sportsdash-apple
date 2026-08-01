@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,9 +21,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -91,13 +92,13 @@ fun GuideTimeline(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { onShiftHours(-3) }) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Earlier", tint = Gold)
+                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Earlier", tint = Gold)
             }
             IconButton(onClick = onResetToNow) {
-                Icon(Icons.Default.Schedule, contentDescription = "Now", tint = Gold)
+                Icon(Icons.Default.Refresh, contentDescription = "Now", tint = Gold)
             }
             IconButton(onClick = { onShiftHours(3) }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Later", tint = Gold)
+                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Later", tint = Gold)
             }
             Text(
                 text = "Starts ${hourFmt.format(Date(windowStartMs))} · ${GuideHours}h",

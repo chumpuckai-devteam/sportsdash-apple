@@ -34,6 +34,14 @@ enum class ScoresFilter { LIVE, UPCOMING, FINAL }
 /** LIST = hour timeline (iOS Guide list); GRID = channel cards. */
 enum class GuideLayout { LIST, GRID }
 
+fun snappedCurrentHourMs(): Long {
+    val cal = Calendar.getInstance()
+    cal.set(Calendar.MINUTE, 0)
+    cal.set(Calendar.SECOND, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
+}
+
 data class AppUiState(
     val playlist: PlaylistConfig? = null,
     val channels: List<IptvChannel> = emptyList(),
@@ -510,14 +518,6 @@ class AppViewModel(
     companion object {
         const val GUIDE_HOURS = 12
         const val PX_PER_HOUR = 140
-
-        fun snappedCurrentHourMs(): Long {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
-            return cal.timeInMillis
-        }
 
         fun factory(context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
