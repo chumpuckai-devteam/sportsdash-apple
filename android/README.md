@@ -3,7 +3,15 @@
 Compose + **libVLC** (`org.videolan.android:libvlc-all`) dogfood app.  
 Same repo as iOS/tvOS (`sportsdash-apple`). Shared product law: **TS → VLC**, Xtream/M3U, LGPL.
 
-## Open & run
+## JDK / Gradle note
+
+Gradle **8.9** needs a JVM **≤ 22**. Android Studio’s default is sometimes **JDK 25** → import fails.
+
+**Fix:** in the dialog click **Use JVM 21** (or 17).
+
+Or: **Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK → 21** (or 17).
+
+Project is pinned to **Java 17** toolchain in `app/build.gradle.kts`.
 
 ```bash
 # On a machine with Android Studio (Mac/Windows/Linux)
