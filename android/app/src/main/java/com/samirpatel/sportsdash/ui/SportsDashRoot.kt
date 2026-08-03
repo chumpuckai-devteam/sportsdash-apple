@@ -2,8 +2,11 @@ package com.samirpatel.sportsdash.ui
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Refresh
@@ -77,8 +80,11 @@ fun SportsDashRoot(vm: AppViewModel) {
         unselectedTextColor = Muted,
     )
 
+    // Zero default insets — avoids a thin unused top/bottom strip when bars are hidden
+    // in landscape (the "little line" users saw above content).
     Scaffold(
         containerColor = VoidBlack,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (!landscape) {
                 TopAppBar(
@@ -104,12 +110,16 @@ fun SportsDashRoot(vm: AppViewModel) {
                         containerColor = VoidBlack,
                         titleContentColor = Gold,
                     ),
+                    windowInsets = WindowInsets.safeDrawing,
                 )
             }
         },
         bottomBar = {
             if (!landscape) {
-                NavigationBar(containerColor = Panel) {
+                NavigationBar(
+                    containerColor = Panel,
+                    windowInsets = WindowInsets.safeDrawing,
+                ) {
                     NavigationBarItem(
                         selected = tab == 0,
                         onClick = { tab = 0 },
@@ -138,6 +148,7 @@ fun SportsDashRoot(vm: AppViewModel) {
         Box(
             modifier = Modifier
                 .padding(padding)
+                .then(if (landscape) Modifier.statusBarsPadding() else Modifier)
                 .fillMaxSize(),
         ) {
             when (tab) {

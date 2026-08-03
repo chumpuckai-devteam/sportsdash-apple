@@ -1,5 +1,7 @@
 package com.samirpatel.sportsdash.ui
 
+import android.app.Activity
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -45,13 +48,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
 import com.samirpatel.sportsdash.core.player.createVlcVideoLayout
@@ -65,10 +74,10 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 /**
  * Fullscreen player closer to iOS:
- * - Always-reachable **Back** (system back + top-left)
+ * - Always-reachable Back (system back + top-left)
  * - Play / pause, mute, rejoin live
  * - Channel title + engine / LIVE chips
- * - Bottom live scores ticker
+ * - Bottom live scores ticker (compact, scores never clip)
  *
  * VLC uses TextureView so overlays receive taps (SurfaceView was eating the X).
  */
@@ -90,23 +99,38 @@ fun PlayerScreen(
     displayName: String = channel.name,
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val controller = remember { VlcPlayerController(context) }
     var chromeVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
     var isMuted by remember { mutableStateOf(false) }
+    val landscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // System back must leave the player
+    // Immersive fullscreen — kills the thin status-bar hairline in landscape video.
+    DisposableEffect(Unit) {
+        val activity = context as? Activity
+        val window = activity?.window
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
+        insetsController?.let {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            it.hide(WindowInsetsCompat.Type.systemBars())
+            it.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        onDispose {
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
     BackHandler(onBack = onClose)
 
-    // URL change = channel switch. Do NOT detach surface here (that caused audio-only).
     DisposableEffect(url) {
         if (url.isNotBlank()) {
             controller.play(url)
             isPlaying = true
         }
-        onDispose {
-            // Keep surface; only release when PlayerScreen leaves composition entirely
-        }
+        onDispose { }
     }
     DisposableEffect(Unit) {
         onDispose { controller.release() }
@@ -117,7 +141,6 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        // Video layer
         AndroidView(
             factory = { ctx ->
                 createVlcVideoLayout(ctx).also { layout ->
@@ -131,11 +154,13 @@ fun PlayerScreen(
             },
         )
 
-        // Tap middle of video to toggle chrome (does NOT cover top/bottom control bands)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 96.dp, bottom = 168.dp)
+                .padding(
+                    top = if (landscape) 72.dp else 96.dp,
+                    bottom = if (landscape) 96.dp else 148.dp,
+                )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -144,8 +169,6 @@ fun PlayerScreen(
                 },
         )
 
-        // ===== TOP CHROME (always on top of TextureView) =====
-        // Keep Back ALWAYS visible so exit never depends on chrome toggle.
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -153,9 +176,15 @@ fun PlayerScreen(
                 .zIndex(10f)
                 .statusBarsPadding()
                 .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent),
-                    ),
+                    if (chromeVisible) {
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent),
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent),
+                        )
+                    },
                 )
                 .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
@@ -163,7 +192,6 @@ fun PlayerScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Large hit target — primary exit
                 CircleControl(
                     onClick = onClose,
                     contentDescription = "Back",
@@ -190,7 +218,6 @@ fun PlayerScreen(
                             modifier = Modifier.size(18.dp),
                         )
                     }
-                    // Scores ticker toggle (iOS sportscourt button)
                     CircleControl(
                         onClick = onToggleScoresTicker,
                         contentDescription = if (showScoresTicker) {
@@ -230,7 +257,7 @@ fun PlayerScreen(
                 }
             }
 
-            if (chromeVisible) {
+            if (chromeVisible && !landscape) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = channel.group?.uppercase() ?: "LIVE TV",
@@ -271,10 +298,19 @@ fun PlayerScreen(
                     Chip(text = "LIVE", filled = true, fillColor = LiveMint)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+            } else if (chromeVisible) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = displayName,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
 
-        // ===== CENTER TRANSPORT =====
         if (chromeVisible) {
             Row(
                 modifier = Modifier
@@ -317,11 +353,11 @@ fun PlayerScreen(
             }
         }
 
-        // ===== BOTTOM TICKER (toggleable; iOS sportscourt) =====
         if (chromeVisible && showScoresTicker) {
             LiveScoresTicker(
                 games = liveGames,
                 currentGameId = currentGameId,
+                compact = landscape,
                 onGameTap = onTickerGame,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -376,6 +412,7 @@ private fun Chip(
 private fun LiveScoresTicker(
     games: List<Game>,
     currentGameId: String?,
+    compact: Boolean,
     onGameTap: (Game) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -389,6 +426,11 @@ private fun LiveScoresTicker(
             .take(24)
     }
 
+    val cardHeight = if (compact) 64.dp else 76.dp
+    val cardWidth = if (compact) 148.dp else 168.dp
+    val scoreSize = if (compact) 15.sp else 17.sp
+    val abbrSize = if (compact) 11.sp else 12.sp
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -401,38 +443,39 @@ private fun LiveScoresTicker(
                     ),
                 ),
             )
-            .padding(bottom = 10.dp, top = 16.dp),
+            .padding(bottom = 8.dp, top = 12.dp),
     ) {
         Text(
             text = if (live.isEmpty()) "No other live games" else "LIVE SCORES · tap to switch",
             color = LiveMint,
             fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+            fontSize = 10.sp,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
         )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (live.isNotEmpty()) {
                 item {
                     Column(
                         modifier = Modifier
-                            .width(88.dp)
-                            .height(104.dp)
+                            .width(72.dp)
+                            .height(cardHeight)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Panel.copy(alpha = 0.95f))
-                            .padding(10.dp),
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text("LIVE", color = LiveMint, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("LIVE", color = LiveMint, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                         Text(
                             "${live.size}",
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                         )
-                        Text("games", color = Muted, fontSize = 12.sp)
+                        Text("games", color = Muted, fontSize = 10.sp)
                     }
                 }
             }
@@ -440,14 +483,15 @@ private fun LiveScoresTicker(
                 val current = game.id == currentGameId
                 Column(
                     modifier = Modifier
-                        .width(188.dp)
-                        .height(104.dp)
+                        .width(cardWidth)
+                        .height(cardHeight)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (current) Gold.copy(alpha = 0.22f) else Panel.copy(alpha = 0.95f),
                         )
                         .clickable { onGameTap(game) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -457,7 +501,7 @@ private fun LiveScoresTicker(
                         Text(
                             game.league.label,
                             color = Gold,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -466,58 +510,31 @@ private fun LiveScoresTicker(
                         Text(
                             "LIVE",
                             color = LiveMint,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    // Two-line scoreboard so scores never clip mid-digit
-                    ScoreLine(
-                        left = game.away.rowLabel,
-                        score = game.away.displayScore,
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    ScoreLine(
-                        left = game.home.rowLabel,
-                        score = game.home.displayScore,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        game.statusLine,
-                        color = Muted,
-                        fontSize = 11.sp,
+                        text = game.matchupLabel,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = abbrSize,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "${game.away.displayScore}  –  ${game.home.displayScore}",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = scoreSize,
+                        maxLines = 1,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(min = 48.dp),
                     )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ScoreLine(left: String, score: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            left,
-            color = TextPrimary,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            score,
-            color = TextPrimary,
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            maxLines = 1,
-        )
     }
 }
