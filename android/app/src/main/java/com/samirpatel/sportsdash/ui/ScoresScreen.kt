@@ -22,17 +22,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,69 +73,88 @@ private sealed class ScoreRow {
     data class GameItem(val game: Game) : ScoreRow()
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScoresScreen(vm: AppViewModel, state: AppUiState) {
+fun ScoresScreen(
+    vm: AppViewModel,
+    state: AppUiState,
+    landscape: Boolean = false,
+    openMenu: Boolean = false,
+    onMenuConsumed: () -> Unit = {},
+    onOpenMenu: () -> Unit = {},
+    onGoSettings: () -> Unit = {},
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    LaunchedEffect(openMenu) {
+        if (openMenu) {
+            showMenu = true
+            onMenuConsumed()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(VoidBlack),
         ) {
-            SetupBanner(
-                title = if (state.playlist == null) {
-                    "Add IPTV in Settings"
-                } else {
-                    "Watch from Scores"
-                },
-                body = if (state.playlist == null) {
-                    "Tap a game after your playlist is loaded to pick a channel."
-                } else {
-                    "Tap any game, choose a matched IPTV channel, plays in VLC."
-                },
-            )
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Compact action row — no fat banner + sticky filter strip eating landscape
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                item {
-                    ScoreFilterChip(
-                        label = "Live",
-                        selected = state.scoresFilter == ScoresFilter.LIVE,
-                        onClick = { vm.setScoresFilter(ScoresFilter.LIVE) },
-                    )
-                }
-                item {
-                    ScoreFilterChip(
-                        label = "Upcoming",
-                        selected = state.scoresFilter == ScoresFilter.UPCOMING,
-                        onClick = { vm.setScoresFilter(ScoresFilter.UPCOMING) },
-                    )
-                }
-                item {
-                    ScoreFilterChip(
-                        label = "Final",
-                        selected = state.scoresFilter == ScoresFilter.FINAL,
-                        onClick = { vm.setScoresFilter(ScoresFilter.FINAL) },
-                    )
+                ScoreFilterChip(
+                    label = "Live",
+                    selected = state.scoresFilter == ScoresFilter.LIVE,
+                    onClick = { vm.setScoresFilter(ScoresFilter.LIVE) },
+                )
+                ScoreFilterChip(
+                    label = "Up",
+                    selected = state.scoresFilter == ScoresFilter.UPCOMING,
+                    onClick = { vm.setScoresFilter(ScoresFilter.UPCOMING) },
+                )
+                ScoreFilterChip(
+                    label = "Final",
+                    selected = state.scoresFilter == ScoresFilter.FINAL,
+                    onClick = { vm.setScoresFilter(ScoresFilter.FINAL) },
+                )
+                Text(
+                    text = state.scoresStatus ?: "Scores",
+                    color = Muted,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = {
+                    showMenu = true
+                    onOpenMenu()
+                }) {
+                    Icon(Icons.Default.Menu, contentDescription = "Scores menu", tint = Gold)
                 }
             }
 
-            val status = state.scoresStatus
-            if (status != null) {
+            if (!landscape && state.playlist == null) {
                 Text(
-                    text = status,
+                    text = "Add IPTV in Settings to watch from scores.",
                     color = Muted,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 2.dp)
+                        .clickable(onClick = onGoSettings),
                 )
             }
+
             val scoresErr = state.scoresError
             if (scoresErr != null) {
                 Text(
                     text = scoresErr,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
 
@@ -210,6 +239,51 @@ fun ScoresScreen(vm: AppViewModel, state: AppUiState) {
                 onClose = { vm.dismissStreamPicker() },
                 onPlay = { match -> vm.playMatch(match, pickerGame) },
             )
+        }
+
+        if (showMenu) {
+            ModalBottomSheet(
+                onDismissRequest = { showMenu = false },
+                sheetState = sheetState,
+                containerColor = Panel,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 28.dp),
+                ) {
+                    Text("Scores", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Filter", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ScoreFilterChip("Live", state.scoresFilter == ScoresFilter.LIVE) {
+                            vm.setScoresFilter(ScoresFilter.LIVE)
+                        }
+                        ScoreFilterChip("Upcoming", state.scoresFilter == ScoresFilter.UPCOMING) {
+                            vm.setScoresFilter(ScoresFilter.UPCOMING)
+                        }
+                        ScoreFilterChip("Final", state.scoresFilter == ScoresFilter.FINAL) {
+                            vm.setScoresFilter(ScoresFilter.FINAL)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextButton(onClick = {
+                        vm.refreshScores()
+                        showMenu = false
+                    }) { Text("Refresh scores", color = Gold) }
+                    if (state.playlist == null) {
+                        TextButton(onClick = {
+                            showMenu = false
+                            onGoSettings()
+                        }) { Text("Add IPTV in Settings", color = Gold) }
+                    }
+                    TextButton(onClick = { showMenu = false }) {
+                        Text("Done", color = Gold)
+                    }
+                }
+            }
         }
     }
 }
