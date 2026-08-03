@@ -39,18 +39,16 @@
 ### Wave C — later / partial
 | ID | Item | Status |
 |----|------|--------|
-| S-PARITY.C1 | Movies Now + rating chips | **Movies Now filter shipped**; OMDb/TMDB chips **still iOS-only** |
-| S-PARITY.C2 | iOS channel favorites | **still open** (Android has them) |
+| S-PARITY.C1 | Movies Now + rating chips | **Movies Now + OMDb/TMDB chips shipped** (keys in Settings) |
+| S-PARITY.C2 | iOS channel favorites | **shipped** (context menu / long-press + ★ Favorites group) |
 | S-PARITY.C3 | AirPlay / Cast | **blocked** Apple AV / Android Cast later |
 | S-PARITY.C4 | TV (tvOS / Android TV) | **blocked** separate track |
 
 ## Intentional remaining deltas
 
-1. **Movie ratings chips (OMDb/TMDB)** — iOS only until keys + List pitfalls ported to Compose.  
-2. **iOS channel favorites** — Android long-press model not yet on GuideView.  
-3. **Dual engine Auto (HLS→AV)** — Android VLC-only; fine for IPTV dogfood.  
-4. **Liquid Glass / splash polish** — Apple chrome only.  
-5. **tvOS focus vs Android TV** — not phone baseline.
+1. **Dual engine Auto (HLS→AV)** — Android VLC-only; fine for IPTV dogfood.  
+2. **Liquid Glass / splash polish** — Apple chrome only.  
+3. **tvOS focus vs Android TV** — not phone baseline.
 
 ## Dogfood AC (baseline green)
 

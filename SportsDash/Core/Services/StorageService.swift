@@ -9,6 +9,7 @@ final class StorageService {
     private let iptvMetaKey = "iptv_config_meta"
     private let iptvPassAccount = "iptv_xtream_password"
     private let favoritesKey = "favorite_team_ids"
+    private let favoriteChannelsKey = "favorite_channel_ids"
     private let lastPlayedKey = "last_played_game_ids"
     private let playerPrefsKey = "player_prefs_json"
     /// Bump when we need a one-shot prefs migration on existing installs.
@@ -31,6 +32,23 @@ final class StorageService {
         var ids = favoriteTeamIds()
         if ids.contains(teamId) { ids.remove(teamId) } else { ids.insert(teamId) }
         setFavoriteTeamIds(ids)
+    }
+
+    // MARK: - Channel favorites (Android long-press parity)
+
+    func favoriteChannelIds() -> Set<String> {
+        Set(defaults.stringArray(forKey: favoriteChannelsKey) ?? [])
+    }
+
+    func setFavoriteChannelIds(_ ids: Set<String>) {
+        defaults.set(Array(ids), forKey: favoriteChannelsKey)
+    }
+
+    func toggleFavoriteChannel(id: String) {
+        guard !id.isEmpty else { return }
+        var ids = favoriteChannelIds()
+        if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+        setFavoriteChannelIds(ids)
     }
 
     // MARK: - Last played

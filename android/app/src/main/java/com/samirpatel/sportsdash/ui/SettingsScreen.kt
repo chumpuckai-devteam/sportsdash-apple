@@ -212,6 +212,52 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
         item {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
+                text = "Movie ratings (OMDb / TMDB)",
+                color = Gold,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Optional. Same keys as iOS General settings. Leave blank to hide chips.",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            var omdb by remember { mutableStateOf("") }
+            var tmdb by remember { mutableStateOf("") }
+            OutlinedTextField(
+                value = omdb,
+                onValueChange = { omdb = it },
+                label = { Text(if (state.omdbKeyPresent) "OMDb key (saved · paste to replace)" else "OMDb API key") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = fields,
+            )
+            Button(
+                onClick = { vm.setOmdbKey(omdb); omdb = "" },
+                colors = ButtonDefaults.buttonColors(containerColor = Panel, contentColor = Gold),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (state.omdbKeyPresent) "Update OMDb key" else "Save OMDb key") }
+            OutlinedTextField(
+                value = tmdb,
+                onValueChange = { tmdb = it },
+                label = { Text(if (state.tmdbKeyPresent) "TMDB key (saved · paste to replace)" else "TMDB API key") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = fields,
+            )
+            Button(
+                onClick = { vm.setTmdbKey(tmdb); tmdb = "" },
+                colors = ButtonDefaults.buttonColors(containerColor = Panel, contentColor = Gold),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (state.tmdbKeyPresent) "Update TMDB key" else "Save TMDB key") }
+            Text(
+                text = "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
                 text = "Display",
                 color = Gold,
                 style = MaterialTheme.typography.titleMedium,

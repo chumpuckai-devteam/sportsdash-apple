@@ -20,6 +20,8 @@ final class AppModel: ObservableObject {
     @Published var xtreamAccount: XtreamAccountInfo?
     @Published var isLoadingAccount = false
     @Published var favoriteTeamIds: Set<String> = []
+    /// IPTV channel favorites (Guide ★) — Android long-press parity.
+    @Published var favoriteChannelIds: Set<String> = []
     @Published var lastPlayedGameIds: [String] = []
     @Published var playerPrefs = PlayerPrefs()
     @Published var selectedLeagues: [SportLeague] = SportLeague.defaults
@@ -59,6 +61,7 @@ final class AppModel: ObservableObject {
 
     init() {
         favoriteTeamIds = storage.favoriteTeamIds()
+        favoriteChannelIds = storage.favoriteChannelIds()
         lastPlayedGameIds = storage.lastPlayedGameIds()
         playerPrefs = storage.playerPrefs()
         selectedLeagues = storage.selectedLeagues()
@@ -619,6 +622,19 @@ final class AppModel: ObservableObject {
         favoriteTeamIds.contains(game.home.id) || favoriteTeamIds.contains(game.away.id)
     }
 
+    // MARK: - Channel favorites (Guide ★)
+
+    static let favoritesChannelGroup = "★ Favorites"
+
+    func isFavoriteChannel(_ channel: IptvChannel) -> Bool {
+        favoriteChannelIds.contains(channel.id)
+    }
+
+    func toggleFavoriteChannel(_ channel: IptvChannel) {
+        storage.toggleFavoriteChannel(id: channel.id)
+        favoriteChannelIds = storage.favoriteChannelIds()
+    }
+
     func recordLastPlayed(gameId: String) {
         lastPlayedGameIds = storage.recordLastPlayed(gameId: gameId)
     }
@@ -672,7 +688,11 @@ final class AppModel: ObservableObject {
     }
 
     func channels(inGroup name: String) -> [IptvChannel] {
-        channelsByGroup[name] ?? []
+        if name == Self.favoritesChannelGroup {
+            // Preserve playlist order among favorites.
+            return channels.filter { favoriteChannelIds.contains($0.id) }
+        }
+        return channelsByGroup[name] ?? []
     }
 
 }

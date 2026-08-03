@@ -25,6 +25,8 @@ class PrefsStore(private val context: Context) {
     private val keyMoviesNow = booleanPreferencesKey("guide_movies_now")
     private val keyChannelCache = stringPreferencesKey("channel_cache_json")
     private val keyCategoryOrder = stringPreferencesKey("category_order_json")
+    private val keyOmdb = stringPreferencesKey("omdb_api_key")
+    private val keyTmdb = stringPreferencesKey("tmdb_api_key")
 
     val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
         prefs[keyPlaylist]?.let { decodePlaylist(it) }
@@ -48,6 +50,14 @@ class PrefsStore(private val context: Context) {
 
     val moviesNowFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[keyMoviesNow] ?: false
+    }
+
+    val omdbKeyFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[keyOmdb]?.takeIf { it.isNotBlank() }
+    }
+
+    val tmdbKeyFlow: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[keyTmdb]?.takeIf { it.isNotBlank() }
     }
 
     suspend fun savePlaylist(config: PlaylistConfig) {
@@ -84,6 +94,18 @@ class PrefsStore(private val context: Context) {
 
     suspend fun setMoviesNow(enabled: Boolean) {
         context.dataStore.edit { it[keyMoviesNow] = enabled }
+    }
+
+    suspend fun setOmdbKey(key: String) {
+        context.dataStore.edit {
+            if (key.isBlank()) it.remove(keyOmdb) else it[keyOmdb] = key.trim()
+        }
+    }
+
+    suspend fun setTmdbKey(key: String) {
+        context.dataStore.edit {
+            if (key.isBlank()) it.remove(keyTmdb) else it[keyTmdb] = key.trim()
+        }
     }
 
     suspend fun saveChannelCache(channels: List<IptvChannel>, categoryOrder: List<String>) {

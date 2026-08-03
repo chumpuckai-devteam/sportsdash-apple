@@ -78,6 +78,10 @@ fun GuideTimeline(
     onShiftHours: (Int) -> Unit,
     onResetToNow: () -> Unit,
     favoriteIds: Set<String> = emptySet(),
+    displayName: (IptvChannel) -> String = { it.name },
+    ratingFor: (IptvChannel) -> com.samirpatel.sportsdash.core.ratings.MovieRating? = { null },
+    ratingLoadingFor: (IptvChannel) -> Boolean = { false },
+    onRequestRating: (IptvChannel) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val hScroll = rememberScrollState()
@@ -194,6 +198,10 @@ fun GuideTimeline(
                         timelineWidthDp = timelineWidthDp,
                         hScroll = hScroll,
                         isFavorite = channel.id in favoriteIds,
+                        label = displayName(channel),
+                        rating = ratingFor(channel),
+                        ratingLoading = ratingLoadingFor(channel),
+                        onRequestRating = { onRequestRating(channel) },
                         onPlay = { onPlay(channel) },
                         onLongPress = { onLongPressChannel(channel) },
                     )
@@ -215,6 +223,10 @@ private fun TimelineRow(
     timelineWidthDp: Dp,
     hScroll: ScrollState,
     isFavorite: Boolean,
+    label: String,
+    rating: com.samirpatel.sportsdash.core.ratings.MovieRating?,
+    ratingLoading: Boolean,
+    onRequestRating: () -> Unit,
     onPlay: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -263,15 +275,27 @@ private fun TimelineRow(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
             }
-            Text(
-                text = if (isFavorite) "★ ${channel.name}" else channel.name,
-                color = TextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isFavorite) "★ $label" else label,
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val nowTitle = programs.firstOrNull { it.contains(nowMs) }?.title
+                    ?: programs.minByOrNull { kotlin.math.abs(it.startMs - nowMs) }?.title
+                if (!nowTitle.isNullOrBlank()) {
+                    MovieRatingRow(
+                        title = nowTitle,
+                        rating = rating,
+                        loading = ratingLoading,
+                        onRequest = onRequestRating,
+                        compact = true,
+                    )
+                }
+            }
         }
 
         Box(

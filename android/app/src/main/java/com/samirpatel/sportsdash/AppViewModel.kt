@@ -17,6 +17,10 @@ import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
 import com.samirpatel.sportsdash.core.model.StreamContainer
+import com.samirpatel.sportsdash.core.ratings.MovieDetection
+import com.samirpatel.sportsdash.core.ratings.MovieRating
+import com.samirpatel.sportsdash.core.ratings.MovieRatingsRepository
+import com.samirpatel.sportsdash.core.ratings.MovieTitleParser
 import com.samirpatel.sportsdash.core.sports.Game
 import com.samirpatel.sportsdash.core.sports.GameStatus
 import com.samirpatel.sportsdash.core.sports.SportLeague
@@ -102,6 +106,12 @@ data class AppUiState(
      * When set with [playUrl], fullscreen is dismissed but playback continues.
      */
     val floating: Boolean = false,
+
+    /** cacheKey → rating for Guide/Player chips. */
+    val movieRatings: Map<String, MovieRating> = emptyMap(),
+    val movieRatingsLoading: Set<String> = emptySet(),
+    val omdbKeyPresent: Boolean = false,
+    val tmdbKeyPresent: Boolean = false,
 )
 
 class AppViewModel(
@@ -110,10 +120,15 @@ class AppViewModel(
     private val sports: SportsRepository = SportsRepository(),
     private val matching: MatchingService = MatchingService(),
     private val epg: EpgRepository,
+    private val ratingsRepo: MovieRatingsRepository,
 ) : ViewModel() {
-
     private val _state = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = _state.asStateFlow()
+
+    private var omdbKey: String? = null
+    private var tmdbKey: String? = null
+    private val ratingsAttempted = mutableSetOf<String>()
+
 
     private var epgJob: Job? = null
     private var categoryEpgJob: Job? = null
@@ -150,6 +165,18 @@ class AppViewModel(
         viewModelScope.launch {
             prefs.moviesNowFlow.collect { on ->
                 _state.update { it.copy(moviesNow = on) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.omdbKeyFlow.collect { key ->
+                omdbKey = key
+                _state.update { it.copy(omdbKeyPresent = !key.isNullOrBlank()) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.tmdbKeyFlow.collect { key ->
+                tmdbKey = key
+                _state.update { it.copy(tmdbKeyPresent = !key.isNullOrBlank()) }
             }
         }
         refreshScores()
@@ -253,6 +280,7 @@ class AppViewModel(
                 prefs.saveChannelCache(channels, groups)
                 reloadEpgBulkBackground()
                 loadEpgForOpenCategory(force = false)
+                prefetchMovieRatings()
             }.onFailure { e ->
                 _state.update {
                     it.copy(
@@ -271,6 +299,7 @@ class AppViewModel(
         if (group != FAVORITES_GROUP) {
             loadEpgForOpenCategory(force = false)
         }
+        prefetchMovieRatings()
     }
 
     fun setSearchQuery(q: String) {
@@ -329,6 +358,101 @@ class AppViewModel(
     fun setMoviesNow(enabled: Boolean) {
         _state.update { it.copy(moviesNow = enabled) }
         viewModelScope.launch { prefs.setMoviesNow(enabled) }
+        if (enabled) prefetchMovieRatings()
+    }
+
+    fun setOmdbKey(key: String) {
+        viewModelScope.launch {
+            prefs.setOmdbKey(key)
+            ratingsAttempted.clear()
+            prefetchMovieRatings()
+        }
+    }
+
+    fun setTmdbKey(key: String) {
+        viewModelScope.launch {
+            prefs.setTmdbKey(key)
+            ratingsAttempted.clear()
+            prefetchMovieRatings()
+        }
+    }
+
+    fun ratingForTitle(title: String?): MovieRating? {
+        if (title.isNullOrBlank()) return null
+        val key = MovieTitleParser.cacheKey(title)
+        return _state.value.movieRatings[key]
+    }
+
+    fun isRatingLoading(title: String?): Boolean {
+        if (title.isNullOrBlank()) return false
+        return MovieTitleParser.cacheKey(title) in _state.value.movieRatingsLoading
+    }
+
+    fun requestMovieRating(
+        title: String?,
+        category: String? = null,
+        channelGroup: String? = null,
+        channelName: String? = null,
+        forceMovie: Boolean = false,
+    ) {
+        if (title.isNullOrBlank()) return
+        val candidate = MovieDetection.isMovieCandidate(
+            title = title,
+            category = category,
+            channelGroup = channelGroup,
+            channelName = channelName,
+            forceMovie = forceMovie,
+        )
+        if (!candidate) return
+        val key = MovieTitleParser.cacheKey(title)
+        val s = _state.value
+        if (s.movieRatings[key] != null) return
+        if (key in s.movieRatingsLoading) return
+        if (key in ratingsAttempted) return
+        if (omdbKey.isNullOrBlank() && tmdbKey.isNullOrBlank()) return
+
+        ratingsAttempted.add(key)
+        _state.update { it.copy(movieRatingsLoading = it.movieRatingsLoading + key) }
+        viewModelScope.launch {
+            val result = ratingsRepo.rating(
+                rawTitle = title,
+                isMovieHint = true,
+                omdbKey = omdbKey,
+                tmdbKey = tmdbKey,
+            )
+            _state.update { st ->
+                val loading = st.movieRatingsLoading - key
+                if (result != null) {
+                    st.copy(
+                        movieRatings = st.movieRatings + (key to result),
+                        movieRatingsLoading = loading,
+                    )
+                } else {
+                    st.copy(movieRatingsLoading = loading)
+                }
+            }
+        }
+    }
+
+    fun prefetchMovieRatings() {
+        val channels = guideChannels().take(16)
+        for (ch in channels) {
+            val now = programsFor(ch.id).nowOrNearest() ?: continue
+            val group = ch.group ?: _state.value.selectedGroup
+            val force = listOf(now.category, group, ch.name)
+                .filterNotNull()
+                .any {
+                    val l = it.lowercase()
+                    l.contains("movie") || l.contains("cinema") || l.contains("film")
+                }
+            requestMovieRating(
+                title = now.title,
+                category = now.category,
+                channelGroup = group,
+                channelName = ch.name,
+                forceMovie = force,
+            )
+        }
     }
 
     fun displayChannelName(raw: String): String =
@@ -753,9 +877,11 @@ class AppViewModel(
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     val app = context.applicationContext
                     val epgCache = File(app.cacheDir, "epg")
+                    val ratingsCache = File(app.cacheDir, "ratings")
                     return AppViewModel(
                         prefs = PrefsStore(app),
                         epg = EpgRepository(cacheDir = epgCache),
+                        ratingsRepo = MovieRatingsRepository(cacheDir = ratingsCache),
                     ) as T
                 }
             }

@@ -37,7 +37,8 @@ struct GuideView: View {
     }
 
     private var groupNames: [String] {
-        appModel.channelGroupNames
+        // ★ Favorites first (Android parity), then provider order.
+        [AppModel.favoritesChannelGroup] + appModel.channelGroupNames
     }
 
     private var activeChannels: [IptvChannel] {
@@ -564,8 +565,12 @@ struct GuideView: View {
                     windowStart: windowStart,
                     now: nowTick,
                     cleanUpNames: cleanNames,
+                    favoriteChannelIds: appModel.favoriteChannelIds,
                     onPlay: { channel in
                         playerRoute = PlayerRoute(channel: channel, game: nil, alternates: [])
+                    },
+                    onToggleFavorite: { channel in
+                        appModel.toggleFavoriteChannel(channel)
                     }
                 )
             case .grid:
@@ -594,8 +599,12 @@ struct GuideView: View {
                         programs: row.programs,
                         cleanUpNames: cleanNames,
                         categoryName: selectedGroup,
+                        isFavorite: appModel.isFavoriteChannel(row.channel),
                         onPlay: {
                             playerRoute = PlayerRoute(channel: row.channel, game: nil, alternates: [])
+                        },
+                        onToggleFavorite: {
+                            appModel.toggleFavoriteChannel(row.channel)
                         }
                     )
                     .listRowBackground(SportsColors.panel)
@@ -658,7 +667,9 @@ private struct GuideCardRow: View {
     let programs: [EpgProgram]
     var cleanUpNames: Bool = true
     var categoryName: String = ""
+    var isFavorite: Bool = false
     var onPlay: () -> Void
+    var onToggleFavorite: () -> Void = {}
 
     private var now: EpgProgram? {
         programs.first(where: \.isNow) ?? programs.first
@@ -706,6 +717,16 @@ private struct GuideCardRow: View {
             .sportsTVFocusClean()
             #else
             .buttonStyle(.plain)
+            .contextMenu {
+                Button {
+                    onToggleFavorite()
+                } label: {
+                    Label(
+                        isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                        systemImage: isFavorite ? "star.slash" : "star.fill"
+                    )
+                }
+            }
             #endif
 
             VStack(alignment: .leading, spacing: 6) {
@@ -842,7 +863,9 @@ private struct GuideTimelineGrid: View {
     let windowStart: Date
     let now: Date
     var cleanUpNames: Bool = true
+    var favoriteChannelIds: Set<String> = []
     let onPlay: (IptvChannel) -> Void
+    var onToggleFavorite: (IptvChannel) -> Void = { _ in }
 
     @StateObject private var scrollSync = GuideScrollSync()
     /// Always declared so rows can take `focusNamespace:` without mid-list `#if`
@@ -873,8 +896,10 @@ private struct GuideTimelineGrid: View {
                             windowEnd: windowEnd,
                             now: now,
                             cleanUpNames: cleanUpNames,
+                            isFavorite: favoriteChannelIds.contains(row.channel.id),
                             scrollSync: scrollSync,
                             onPlay: onPlay,
+                            onToggleFavorite: { onToggleFavorite(row.channel) },
                             prefersDefault: index == 0,
                             focusNamespace: guideFocusNS
                         )
@@ -944,8 +969,10 @@ private struct GuideTimelineRow: View {
     let windowEnd: Date
     let now: Date
     let cleanUpNames: Bool
+    var isFavorite: Bool = false
     @ObservedObject var scrollSync: GuideScrollSync
     let onPlay: (IptvChannel) -> Void
+    var onToggleFavorite: () -> Void = {}
     /// First visible row prefers default focus when the guide appears.
     var prefersDefault: Bool = false
     /// Optional focus scope for tvOS default-focus (ignored on iOS). Always present so
@@ -1019,6 +1046,16 @@ private struct GuideTimelineRow: View {
         .modifier(GuideDefaultFocusModifier(enabled: prefersDefault, namespace: focusNamespace))
         #else
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                onToggleFavorite()
+            } label: {
+                Label(
+                    isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                    systemImage: isFavorite ? "star.slash" : "star.fill"
+                )
+            }
+        }
         #endif
         .accessibilityLabel(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
         .accessibilityHint("Plays channel")
@@ -1037,7 +1074,7 @@ private struct GuideTimelineRow: View {
                         .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
                 }
 
-            Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
+            Text((isFavorite ? "★ " : "") + ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
                 .lineLimit(2)

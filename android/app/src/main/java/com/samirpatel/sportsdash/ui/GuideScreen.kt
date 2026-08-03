@@ -147,22 +147,36 @@ private fun GuideBrowseBody(
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
+            val channels = vm.guideChannels()
             when (state.guideLayout) {
                 GuideLayout.LIST -> {
-                    GuideTimeline(
-                        channels = vm.guideChannels(),
-                        programsFor = { id -> vm.programsFor(id) },
-                        windowStartMs = state.guideWindowStartMs,
-                        onPlay = { ch -> vm.play(ch) },
-                        onLongPressChannel = { ch -> favoriteTarget = ch },
-                        onShiftHours = { d -> vm.shiftGuideWindowHours(d) },
-                        onResetToNow = { vm.resetGuideWindowToNow() },
-                        favoriteIds = state.favoriteChannelIds,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (channels.isEmpty() && state.selectedGroup == FAVORITES_GROUP) {
+                        EmptyFavoritesHint()
+                    } else {
+                        GuideTimeline(
+                            channels = channels,
+                            programsFor = { id -> vm.programsFor(id) },
+                            windowStartMs = state.guideWindowStartMs,
+                            onPlay = { ch -> vm.play(ch) },
+                            onLongPressChannel = { ch -> favoriteTarget = ch },
+                            onShiftHours = { h -> vm.shiftGuideWindowHours(h) },
+                            onResetToNow = { vm.resetGuideWindowToNow() },
+                            favoriteIds = state.favoriteChannelIds,
+                            displayName = { ch -> vm.displayChannelName(ch.name) },
+                            ratingFor = { ch -> vm.ratingForTitle(vm.nowTitle(ch.id)) },
+                            ratingLoadingFor = { ch -> vm.isRatingLoading(vm.nowTitle(ch.id)) },
+                            onRequestRating = { ch ->
+                                vm.requestMovieRating(
+                                    title = vm.nowTitle(ch.id),
+                                    channelGroup = ch.group,
+                                    channelName = ch.name,
+                                )
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
                 GuideLayout.GRID -> {
-                    val channels = vm.guideChannels()
                     if (channels.isEmpty() && state.selectedGroup == FAVORITES_GROUP) {
                         EmptyFavoritesHint()
                     } else {
@@ -178,9 +192,18 @@ private fun GuideBrowseBody(
                                     channel = ch,
                                     displayName = vm.displayChannelName(ch.name),
                                     nowTitle = vm.nowTitle(ch.id),
+                                    rating = vm.ratingForTitle(vm.nowTitle(ch.id)),
+                                    ratingLoading = vm.isRatingLoading(vm.nowTitle(ch.id)),
                                     isFavorite = ch.id in state.favoriteChannelIds,
                                     onPlay = { vm.play(ch) },
                                     onLongPress = { favoriteTarget = ch },
+                                    onRequestRating = {
+                                        vm.requestMovieRating(
+                                            title = vm.nowTitle(ch.id),
+                                            channelGroup = ch.group,
+                                            channelName = ch.name,
+                                        )
+                                    },
                                 )
                             }
                         }
@@ -416,9 +439,12 @@ private fun ChannelGridCard(
     channel: IptvChannel,
     displayName: String = channel.name,
     nowTitle: String?,
+    rating: com.samirpatel.sportsdash.core.ratings.MovieRating? = null,
+    ratingLoading: Boolean = false,
     isFavorite: Boolean,
     onPlay: () -> Unit,
     onLongPress: () -> Unit,
+    onRequestRating: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -461,7 +487,7 @@ private fun ChannelGridCard(
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            displayName,
+            text = if (isFavorite) "★ $displayName" else displayName,
             color = TextPrimary,
             fontWeight = FontWeight.SemiBold,
             fontSize = 12.sp,
@@ -477,6 +503,15 @@ private fun ChannelGridCard(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
+        if (!nowTitle.isNullOrBlank()) {
+            MovieRatingRow(
+                title = nowTitle,
+                rating = rating,
+                loading = ratingLoading,
+                onRequest = onRequestRating,
+                compact = true,
+            )
+        }
     }
 }
 
