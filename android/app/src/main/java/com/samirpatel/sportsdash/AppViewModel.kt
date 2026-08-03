@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-enum class ScoresFilter { LIVE, UPCOMING, FINAL }
+enum class ScoresFilter { LIVE, UPCOMING, FINAL, FAVORITES }
 
 /** LIST = hour timeline (iOS Guide list); GRID = channel cards. */
 enum class GuideLayout { LIST, GRID }
@@ -91,6 +91,17 @@ data class AppUiState(
 
     /** Channel ids starred by user (persisted). */
     val favoriteChannelIds: Set<String> = emptySet(),
+    /** ESPN team ids starred (iOS favoriteTeamIds parity). */
+    val favoriteTeamIds: Set<String> = emptySet(),
+    val cleanUpNames: Boolean = true,
+    /** Guide filter: movie-like now-playing only. */
+    val moviesNow: Boolean = false,
+
+    /**
+     * Mini-player over tabs (iOS floating player).
+     * When set with [playUrl], fullscreen is dismissed but playback continues.
+     */
+    val floating: Boolean = false,
 )
 
 class AppViewModel(
@@ -124,6 +135,21 @@ class AppViewModel(
         viewModelScope.launch {
             prefs.favoriteChannelIdsFlow.collect { ids ->
                 _state.update { it.copy(favoriteChannelIds = ids) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.favoriteTeamIdsFlow.collect { ids ->
+                _state.update { it.copy(favoriteTeamIds = ids) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.cleanUpNamesFlow.collect { on ->
+                _state.update { it.copy(cleanUpNames = on) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.moviesNowFlow.collect { on ->
+                _state.update { it.copy(moviesNow = on) }
             }
         }
         refreshScores()
@@ -176,20 +202,40 @@ class AppViewModel(
     fun refreshChannels() {
         val cfg = _state.value.playlist ?: return
         viewModelScope.launch {
+            // Paint disk cache first (iOS cold-start parity)
+            if (_state.value.channels.isEmpty()) {
+                prefs.getChannelCache()?.let { (cached, cats) ->
+                    if (cached.isNotEmpty()) {
+                        val previous = _state.value.selectedGroup
+                        val selected = when {
+                            previous.isNotBlank() && (previous == FAVORITES_GROUP || previous in cats) -> previous
+                            cats.isNotEmpty() -> cats.first()
+                            else -> ""
+                        }
+                        _state.update {
+                            it.copy(
+                                channels = cached,
+                                groups = cats,
+                                selectedGroup = selected,
+                                channelStatus = "Cached ${cached.size} channels · refreshing…",
+                            )
+                        }
+                    }
+                }
+            }
             _state.update {
                 it.copy(
                     isLoadingChannels = true,
                     channelError = null,
-                    channelStatus = "Loading ${cfg.describe()}…",
+                    channelStatus = it.channelStatus ?: "Loading ${cfg.describe()}…",
                 )
             }
             iptv.loadChannels(cfg).onSuccess { loaded ->
                 val channels = loaded.channels
-                // Provider order only — no alphabetical sort
                 val groups = loaded.categoryOrder
                 val previous = _state.value.selectedGroup
                 val selected = when {
-                    previous.isNotBlank() && previous in groups -> previous
+                    previous.isNotBlank() && (previous == FAVORITES_GROUP || previous in groups) -> previous
                     groups.isNotEmpty() -> groups.first()
                     else -> ""
                 }
@@ -204,7 +250,7 @@ class AppViewModel(
                         guideWindowStartMs = snappedCurrentHourMs(),
                     )
                 }
-                // EPG: full guide is primary (download once). Short Now/Next is optional bonus.
+                prefs.saveChannelCache(channels, groups)
                 reloadEpgBulkBackground()
                 loadEpgForOpenCategory(force = false)
             }.onFailure { e ->
@@ -260,6 +306,37 @@ class AppViewModel(
         viewModelScope.launch { prefs.setFavoriteChannelIds(next) }
     }
 
+    fun isTeamFavorite(teamId: String): Boolean =
+        teamId in _state.value.favoriteTeamIds
+
+    fun gameHasFavoriteTeam(game: Game): Boolean {
+        val favs = _state.value.favoriteTeamIds
+        return game.home.id in favs || game.away.id in favs
+    }
+
+    fun toggleTeamFavorite(teamId: String) {
+        val next = _state.value.favoriteTeamIds.toMutableSet()
+        if (!next.add(teamId)) next.remove(teamId)
+        _state.update { it.copy(favoriteTeamIds = next) }
+        viewModelScope.launch { prefs.setFavoriteTeamIds(next) }
+    }
+
+    fun setCleanUpNames(enabled: Boolean) {
+        _state.update { it.copy(cleanUpNames = enabled) }
+        viewModelScope.launch { prefs.setCleanUpNames(enabled) }
+    }
+
+    fun setMoviesNow(enabled: Boolean) {
+        _state.update { it.copy(moviesNow = enabled) }
+        viewModelScope.launch { prefs.setMoviesNow(enabled) }
+    }
+
+    fun displayChannelName(raw: String): String =
+        com.samirpatel.sportsdash.core.util.ChannelNameCleanup.displayName(
+            raw,
+            enabled = _state.value.cleanUpNames,
+        )
+
     /** Provider categories with Favorites pinned first. */
     fun guideCategoryGroups(): List<String> {
         val provider = _state.value.groups
@@ -294,7 +371,13 @@ class AppViewModel(
 
     /** Dedupe clones in category (keep richer EPG) — iOS Guide parity. */
     fun guideChannels(): List<IptvChannel> {
-        val channels = filteredChannels()
+        var channels = filteredChannels()
+        if (_state.value.moviesNow) {
+            channels = channels.filter { ch ->
+                val now = programsFor(ch.id).nowOrNearest()
+                isMovieLike(now?.title, now?.category, ch)
+            }
+        }
         val epg = _state.value.epgByChannelId
         val best = LinkedHashMap<String, IptvChannel>()
         for (ch in channels) {
@@ -475,6 +558,7 @@ class AppViewModel(
                 playingGameId = gameId,
                 streamPickerGame = null,
                 streamMatches = emptyList(),
+                floating = false,
             )
         }
     }
@@ -486,8 +570,32 @@ class AppViewModel(
                 playUrl = null,
                 playerMessage = null,
                 playingGameId = null,
+                floating = false,
             )
         }
+    }
+
+    /** Leave fullscreen; keep playing as mini overlay (iOS pop-out). */
+    fun popOutPlayer() {
+        if (_state.value.playing == null || _state.value.playUrl == null) return
+        _state.update { it.copy(floating = true) }
+    }
+
+    fun expandFloatingPlayer() {
+        _state.update { it.copy(floating = false) }
+    }
+
+    fun dismissFloatingPlayer() {
+        stopPlayback()
+    }
+
+    private fun isMovieLike(title: String?, category: String?, channel: IptvChannel): Boolean {
+        val blob = listOfNotNull(title, category, channel.group, channel.name)
+            .joinToString(" ")
+            .lowercase()
+        if (blob.contains("sport") || blob.contains("news") || blob.contains("weather")) return false
+        return blob.contains("movie") || blob.contains("cinema") || blob.contains("film") ||
+            blob.contains("hollywood") || Regex("""\b(19|20)\d{2}\b""").containsMatchIn(blob)
     }
 
     fun setShowScoresTicker(show: Boolean) {
@@ -556,20 +664,40 @@ class AppViewModel(
 
     fun filteredGames(): List<Game> {
         val s = _state.value
-        return when (s.scoresFilter) {
+        val base = when (s.scoresFilter) {
             ScoresFilter.LIVE -> s.games.filter { it.isLive }
             ScoresFilter.UPCOMING -> s.games.filter { it.isUpcoming }
             ScoresFilter.FINAL -> s.games.filter { it.isFinal || it.status == GameStatus.FINAL }
+            ScoresFilter.FAVORITES -> s.games.filter { gameHasFavoriteTeam(it) }
         }
+        // Pin favorite-team games first within Live/Upcoming/Final
+        if (s.scoresFilter != ScoresFilter.FAVORITES && s.favoriteTeamIds.isNotEmpty()) {
+            return base.sortedBy { g -> if (gameHasFavoriteTeam(g)) 0 else 1 }
+        }
+        return base
     }
 
     fun gamesByLeague(): Map<SportLeague, List<Game>> {
-        return filteredGames()
+        val filtered = filteredGames()
+        if (_state.value.scoresFilter == ScoresFilter.FAVORITES) {
+            // Single section of favorite games
+            return filtered
+                .groupBy { it.league }
+                .toSortedMap(compareBy { it.label })
+        }
+        return filtered
             .groupBy { it.league }
             .toSortedMap(compareBy { it.label })
     }
 
-    fun liveGames(): List<Game> = _state.value.games.filter { it.isLive }
+    fun liveGames(): List<Game> {
+        val live = _state.value.games.filter { it.isLive }
+        val favs = _state.value.favoriteTeamIds
+        if (favs.isEmpty()) return live
+        return live.sortedBy { g ->
+            if (g.home.id in favs || g.away.id in favs) 0 else 1
+        }
+    }
 
     fun openStreamPicker(game: Game) {
         val channels = _state.value.channels

@@ -5,9 +5,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,27 +19,47 @@ private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
 class PrefsStore(private val context: Context) {
     private val keyPlaylist = stringPreferencesKey("playlist_json")
     private val keyShowTicker = booleanPreferencesKey("player_show_scores_ticker")
-    private val keyFavorites = stringPreferencesKey("favorite_channel_ids_json")
+    private val keyFavoriteChannels = stringPreferencesKey("favorite_channel_ids_json")
+    private val keyFavoriteTeams = stringPreferencesKey("favorite_team_ids_json")
+    private val keyCleanNames = booleanPreferencesKey("clean_up_channel_names")
+    private val keyMoviesNow = booleanPreferencesKey("guide_movies_now")
+    private val keyChannelCache = stringPreferencesKey("channel_cache_json")
+    private val keyCategoryOrder = stringPreferencesKey("category_order_json")
 
     val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
-        prefs[keyPlaylist]?.let { decode(it) }
+        prefs[keyPlaylist]?.let { decodePlaylist(it) }
     }
 
-    /** Default true — matches iOS showScoresStrip = true. */
     val showScoresTickerFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[keyShowTicker] ?: true
     }
 
     val favoriteChannelIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        decodeIdSet(prefs[keyFavorites])
+        decodeIdSet(prefs[keyFavoriteChannels])
+    }
+
+    val favoriteTeamIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        decodeIdSet(prefs[keyFavoriteTeams])
+    }
+
+    val cleanUpNamesFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[keyCleanNames] ?: true
+    }
+
+    val moviesNowFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[keyMoviesNow] ?: false
     }
 
     suspend fun savePlaylist(config: PlaylistConfig) {
-        context.dataStore.edit { it[keyPlaylist] = encode(config) }
+        context.dataStore.edit { it[keyPlaylist] = encodePlaylist(config) }
     }
 
     suspend fun clearPlaylist() {
-        context.dataStore.edit { it.remove(keyPlaylist) }
+        context.dataStore.edit {
+            it.remove(keyPlaylist)
+            it.remove(keyChannelCache)
+            it.remove(keyCategoryOrder)
+        }
     }
 
     suspend fun setShowScoresTicker(show: Boolean) {
@@ -46,8 +68,83 @@ class PrefsStore(private val context: Context) {
 
     suspend fun setFavoriteChannelIds(ids: Set<String>) {
         context.dataStore.edit {
-            it[keyFavorites] = JSONArray(ids.toList()).toString()
+            it[keyFavoriteChannels] = JSONArray(ids.toList()).toString()
         }
+    }
+
+    suspend fun setFavoriteTeamIds(ids: Set<String>) {
+        context.dataStore.edit {
+            it[keyFavoriteTeams] = JSONArray(ids.toList()).toString()
+        }
+    }
+
+    suspend fun setCleanUpNames(enabled: Boolean) {
+        context.dataStore.edit { it[keyCleanNames] = enabled }
+    }
+
+    suspend fun setMoviesNow(enabled: Boolean) {
+        context.dataStore.edit { it[keyMoviesNow] = enabled }
+    }
+
+    suspend fun saveChannelCache(channels: List<IptvChannel>, categoryOrder: List<String>) {
+        context.dataStore.edit { prefs ->
+            val arr = JSONArray()
+            for (ch in channels.take(20_000)) {
+                arr.put(
+                    JSONObject().apply {
+                        put("id", ch.id)
+                        put("name", ch.name)
+                        put("url", ch.url)
+                        put("group", ch.group)
+                        put("logo", ch.logo)
+                        put("epgChannelId", ch.epgChannelId)
+                        put("streamId", ch.streamId)
+                    },
+                )
+            }
+            prefs[keyChannelCache] = arr.toString()
+            prefs[keyCategoryOrder] = JSONArray(categoryOrder).toString()
+        }
+    }
+
+    suspend fun getChannelCache(): Pair<List<IptvChannel>, List<String>>? {
+        val prefs = context.dataStore.data.first()
+        val raw = prefs[keyChannelCache] ?: return null
+        val channels = runCatching {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    add(
+                        IptvChannel(
+                            id = o.optString("id"),
+                            name = o.optString("name"),
+                            url = o.optString("url"),
+                            group = o.optString("group").takeIf { it.isNotBlank() },
+                            logo = o.optString("logo").takeIf { it.isNotBlank() },
+                            epgChannelId = o.optString("epgChannelId").takeIf { it.isNotBlank() },
+                            streamId = o.optString("streamId").takeIf { it.isNotBlank() },
+                        ),
+                    )
+                }
+            }
+        }.getOrNull() ?: return null
+        if (channels.isEmpty()) return null
+        val cats = decodeStringList(prefs[keyCategoryOrder])
+        return channels to cats
+    }
+
+    private fun decodeStringList(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val s = arr.optString(i)
+                    if (s.isNotBlank()) add(s)
+                }
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun decodeIdSet(raw: String?): Set<String> {
@@ -63,7 +160,7 @@ class PrefsStore(private val context: Context) {
         }.getOrDefault(emptySet())
     }
 
-    private fun encode(c: PlaylistConfig): String = JSONObject().apply {
+    private fun encodePlaylist(c: PlaylistConfig): String = JSONObject().apply {
         put("id", c.id)
         put("name", c.name)
         put("type", c.type.name)
@@ -73,7 +170,7 @@ class PrefsStore(private val context: Context) {
         put("m3uUrl", c.m3uUrl)
     }.toString()
 
-    private fun decode(raw: String): PlaylistConfig? = runCatching {
+    private fun decodePlaylist(raw: String): PlaylistConfig? = runCatching {
         val o = JSONObject(raw)
         PlaylistConfig(
             id = o.optString("id"),

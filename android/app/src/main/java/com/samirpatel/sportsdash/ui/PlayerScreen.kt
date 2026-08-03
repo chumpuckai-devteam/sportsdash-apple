@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -82,9 +83,11 @@ fun PlayerScreen(
     nowTitle: String?,
     nextTitle: String?,
     onClose: () -> Unit,
+    onPopOut: () -> Unit = {},
     onTickerGame: (Game) -> Unit,
     onReplay: () -> Unit,
     onToggleScoresTicker: () -> Unit,
+    displayName: String = channel.name,
 ) {
     val context = LocalContext.current
     val controller = remember { VlcPlayerController(context) }
@@ -176,6 +179,17 @@ fun PlayerScreen(
                 if (chromeVisible) {
                     Chip(text = "VLC", filled = false)
                     Spacer(modifier = Modifier.weight(1f))
+                    CircleControl(
+                        onClick = onPopOut,
+                        contentDescription = "Pop out mini player",
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.OpenInFull,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                     // Scores ticker toggle (iOS sportscourt button)
                     CircleControl(
                         onClick = onToggleScoresTicker,
@@ -226,7 +240,7 @@ fun PlayerScreen(
                     maxLines = 1,
                 )
                 Text(
-                    text = channel.name,
+                    text = displayName,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,

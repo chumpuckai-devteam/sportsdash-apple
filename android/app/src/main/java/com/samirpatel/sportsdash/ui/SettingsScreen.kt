@@ -212,6 +212,34 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
         item {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
+                text = "Display",
+                color = Gold,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Panel)
+                    .clickable { vm.setCleanUpNames(!state.cleanUpNames) }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Clean up channel names",
+                    color = TextPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (state.cleanUpNames) "ON" else "OFF",
+                    color = if (state.cleanUpNames) Gold else Muted,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
                 text = "Score leagues",
                 color = Gold,
                 style = MaterialTheme.typography.titleMedium,

@@ -1,7 +1,9 @@
 package com.samirpatel.sportsdash.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,6 +82,7 @@ fun ScoresScreen(
     landscape: Boolean = false,
     onGoSettings: () -> Unit = {},
 ) {
+    var teamFavGame by remember { mutableStateOf<Game?>(null) }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -108,6 +111,11 @@ fun ScoresScreen(
                     label = "Final",
                     selected = state.scoresFilter == ScoresFilter.FINAL,
                     onClick = { vm.setScoresFilter(ScoresFilter.FINAL) },
+                )
+                ScoreFilterChip(
+                    label = "★ Faves",
+                    selected = state.scoresFilter == ScoresFilter.FAVORITES,
+                    onClick = { vm.setScoresFilter(ScoresFilter.FAVORITES) },
                 )
                 Text(
                     text = state.scoresStatus ?: "Scores",
@@ -201,7 +209,9 @@ fun ScoresScreen(
                                 is ScoreRow.GameItem -> {
                                     GameRow(
                                         game = row.game,
+                                        isFavoriteMatch = vm.gameHasFavoriteTeam(row.game),
                                         onClick = { vm.openStreamPicker(row.game) },
+                                        onLongClick = { teamFavGame = row.game },
                                     )
                                 }
                             }
@@ -221,6 +231,49 @@ fun ScoresScreen(
                 onPlay = { match -> vm.playMatch(match, pickerGame) },
             )
         }
+
+        teamFavGame?.let { g ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { teamFavGame = null },
+                title = { Text("${g.away.rowLabel} @ ${g.home.rowLabel}", color = TextPrimary) },
+                text = {
+                    Text(
+                        "Favorite teams appear first and under ★ Faves.",
+                        color = Muted,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        vm.toggleTeamFavorite(g.home.id)
+                        teamFavGame = null
+                    }) {
+                        Text(
+                            if (vm.isTeamFavorite(g.home.id)) "Unstar ${g.home.rowLabel}"
+                            else "★ Star ${g.home.rowLabel}",
+                            color = Gold,
+                        )
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = {
+                            vm.toggleTeamFavorite(g.away.id)
+                            teamFavGame = null
+                        }) {
+                            Text(
+                                if (vm.isTeamFavorite(g.away.id)) "Unstar ${g.away.rowLabel}"
+                                else "★ ${g.away.rowLabel}",
+                                color = Gold,
+                            )
+                        }
+                        TextButton(onClick = { teamFavGame = null }) {
+                            Text("Cancel", color = Muted)
+                        }
+                    }
+                },
+                containerColor = Panel,
+            )
+        }
     }
 }
 
@@ -228,6 +281,7 @@ private fun emptyFilterMessage(filter: ScoresFilter): String = when (filter) {
     ScoresFilter.LIVE -> "No live games right now"
     ScoresFilter.UPCOMING -> "Nothing upcoming for selected leagues"
     ScoresFilter.FINAL -> "No finals in current boards"
+    ScoresFilter.FAVORITES -> "Star a team (long-press a game) to fill ★ Faves"
 }
 
 private fun flattenScoreRows(
@@ -369,14 +423,20 @@ private fun ScoreFilterChip(label: String, selected: Boolean, onClick: () -> Uni
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GameRow(game: Game, onClick: () -> Unit) {
+private fun GameRow(
+    game: Game,
+    isFavoriteMatch: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Panel)
-            .clickable(onClick = onClick)
+            .background(if (isFavoriteMatch) Gold.copy(alpha = 0.12f) else Panel)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(14.dp),
     ) {
         Row(

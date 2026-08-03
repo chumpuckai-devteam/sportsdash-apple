@@ -124,6 +124,7 @@ private fun GuideBrowseBody(
             onFavorites = { vm.selectGroup(FAVORITES_GROUP) },
             onHourGuide = { vm.setGuideLayout(GuideLayout.LIST) },
             onGrid = { vm.setGuideLayout(GuideLayout.GRID) },
+            onToggleMoviesNow = { vm.setMoviesNow(!state.moviesNow) },
             onMenu = { showMenu = true },
             onGoScores = onGoScores,
         )
@@ -175,6 +176,7 @@ private fun GuideBrowseBody(
                             gridItems(items = channels, key = { it.id }) { ch ->
                                 ChannelGridCard(
                                     channel = ch,
+                                    displayName = vm.displayChannelName(ch.name),
                                     nowTitle = vm.nowTitle(ch.id),
                                     isFavorite = ch.id in state.favoriteChannelIds,
                                     onPlay = { vm.play(ch) },
@@ -264,6 +266,7 @@ private fun GuideActionBar(
     onFavorites: () -> Unit,
     onHourGuide: () -> Unit,
     onGrid: () -> Unit,
+    onToggleMoviesNow: () -> Unit,
     onMenu: () -> Unit,
     onGoScores: () -> Unit,
 ) {
@@ -301,6 +304,12 @@ private fun GuideActionBar(
             label = {
                 Icon(Icons.Default.Apps, contentDescription = "Grid", modifier = Modifier.size(16.dp))
             },
+            colors = chipColors(),
+        )
+        FilterChip(
+            selected = state.moviesNow,
+            onClick = onToggleMoviesNow,
+            label = { Text("Movies", maxLines = 1) },
             colors = chipColors(),
         )
         Text(
@@ -405,6 +414,7 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 @Composable
 private fun ChannelGridCard(
     channel: IptvChannel,
+    displayName: String = channel.name,
     nowTitle: String?,
     isFavorite: Boolean,
     onPlay: () -> Unit,
@@ -451,7 +461,7 @@ private fun ChannelGridCard(
         }
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            channel.name,
+            displayName,
             color = TextPrimary,
             fontWeight = FontWeight.SemiBold,
             fontSize = 12.sp,

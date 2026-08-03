@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -34,10 +35,6 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
-/**
- * Shell: one menu per tab lives **in that tab** (not duplicated in the app bar).
- * Landscape hides top/bottom chrome so content stays visible.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SportsDashRoot(vm: AppViewModel) {
@@ -46,7 +43,8 @@ fun SportsDashRoot(vm: AppViewModel) {
 
     val playing = state.playing
     val playUrl = state.playUrl
-    if (playing != null && playUrl != null) {
+    // Fullscreen only when not floating mini-player
+    if (playing != null && playUrl != null && !state.floating) {
         PlayerScreen(
             channel = playing,
             url = playUrl,
@@ -57,11 +55,13 @@ fun SportsDashRoot(vm: AppViewModel) {
             nowTitle = vm.nowTitle(playing.id),
             nextTitle = vm.nextTitle(playing.id),
             onClose = { vm.stopPlayback() },
+            onPopOut = { vm.popOutPlayer() },
             onTickerGame = { game -> vm.playFromTicker(game) },
             onReplay = {
                 vm.play(playing, gameId = state.playingGameId)
             },
             onToggleScoresTicker = { vm.toggleScoresTicker() },
+            displayName = vm.displayChannelName(playing.name),
         )
         return
     }
@@ -85,7 +85,6 @@ fun SportsDashRoot(vm: AppViewModel) {
                     title = {
                         Text("SportsDash", fontWeight = FontWeight.Bold, color = Gold)
                     },
-                    // Refresh only — ☰ lives on Guide/Scores action bars (no duplicate menus)
                     actions = {
                         IconButton(
                             onClick = {
@@ -156,6 +155,18 @@ fun SportsDashRoot(vm: AppViewModel) {
                     onGoScores = { tab = 0 },
                 )
                 else -> SettingsScreen(vm = vm, state = state)
+            }
+
+            // Floating mini-player over tabs (iOS pop-out parity)
+            if (state.floating && playing != null && playUrl != null) {
+                FloatingPlayerBar(
+                    channel = playing,
+                    url = playUrl,
+                    title = vm.displayChannelName(playing.name),
+                    onExpand = { vm.expandFloatingPlayer() },
+                    onDismiss = { vm.dismissFloatingPlayer() },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
     }
