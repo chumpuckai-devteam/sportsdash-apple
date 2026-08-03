@@ -211,7 +211,6 @@ private fun GuideBrowseBody(
                 }
             }
 
-            val channels = vm.guideChannels()
             val catCovered = channels.count { !state.epgByChannelId[it.id].isNullOrEmpty() }
             if (state.isLoadingEpg && catCovered == 0 &&
                 state.selectedGroup != FAVORITES_GROUP &&
