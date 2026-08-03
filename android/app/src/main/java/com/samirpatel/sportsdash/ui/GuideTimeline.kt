@@ -79,8 +79,6 @@ fun GuideTimeline(
     onResetToNow: () -> Unit,
     favoriteIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
-    hours: Int = GuideHours,
-    pxPerHour: Int = PxPerHour,
 ) {
     val hScroll = rememberScrollState()
     val density = LocalDensity.current
