@@ -73,33 +73,20 @@ private sealed class ScoreRow {
     data class GameItem(val game: Game) : ScoreRow()
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScoresScreen(
     vm: AppViewModel,
     state: AppUiState,
     landscape: Boolean = false,
-    openMenu: Boolean = false,
-    onMenuConsumed: () -> Unit = {},
-    onOpenMenu: () -> Unit = {},
     onGoSettings: () -> Unit = {},
 ) {
-    var showMenu by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    LaunchedEffect(openMenu) {
-        if (openMenu) {
-            showMenu = true
-            onMenuConsumed()
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(VoidBlack),
         ) {
-            // Compact action row — no fat banner + sticky filter strip eating landscape
+            // One action row — no second ☰ (app bar already has refresh)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -113,7 +100,7 @@ fun ScoresScreen(
                     onClick = { vm.setScoresFilter(ScoresFilter.LIVE) },
                 )
                 ScoreFilterChip(
-                    label = "Up",
+                    label = "Upcoming",
                     selected = state.scoresFilter == ScoresFilter.UPCOMING,
                     onClick = { vm.setScoresFilter(ScoresFilter.UPCOMING) },
                 )
@@ -130,12 +117,6 @@ fun ScoresScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = {
-                    showMenu = true
-                    onOpenMenu()
-                }) {
-                    Icon(Icons.Default.Menu, contentDescription = "Scores menu", tint = Gold)
-                }
             }
 
             if (!landscape && state.playlist == null) {
@@ -239,51 +220,6 @@ fun ScoresScreen(
                 onClose = { vm.dismissStreamPicker() },
                 onPlay = { match -> vm.playMatch(match, pickerGame) },
             )
-        }
-
-        if (showMenu) {
-            ModalBottomSheet(
-                onDismissRequest = { showMenu = false },
-                sheetState = sheetState,
-                containerColor = Panel,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 28.dp),
-                ) {
-                    Text("Scores", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Filter", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ScoreFilterChip("Live", state.scoresFilter == ScoresFilter.LIVE) {
-                            vm.setScoresFilter(ScoresFilter.LIVE)
-                        }
-                        ScoreFilterChip("Upcoming", state.scoresFilter == ScoresFilter.UPCOMING) {
-                            vm.setScoresFilter(ScoresFilter.UPCOMING)
-                        }
-                        ScoreFilterChip("Final", state.scoresFilter == ScoresFilter.FINAL) {
-                            vm.setScoresFilter(ScoresFilter.FINAL)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    TextButton(onClick = {
-                        vm.refreshScores()
-                        showMenu = false
-                    }) { Text("Refresh scores", color = Gold) }
-                    if (state.playlist == null) {
-                        TextButton(onClick = {
-                            showMenu = false
-                            onGoSettings()
-                        }) { Text("Add IPTV in Settings", color = Gold) }
-                    }
-                    TextButton(onClick = { showMenu = false }) {
-                        Text("Done", color = Gold)
-                    }
-                }
-            }
         }
     }
 }

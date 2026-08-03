@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sports
@@ -24,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -37,16 +35,14 @@ import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 /**
- * Shell: hide fat chrome in landscape so Guide/Scores content stays visible.
- * Tab content owns its own compact action bar + menus.
+ * Shell: one menu per tab lives **in that tab** (not duplicated in the app bar).
+ * Landscape hides top/bottom chrome so content stays visible.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SportsDashRoot(vm: AppViewModel) {
     val state by vm.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
-    var openGuideMenu by remember { mutableStateOf(false) }
-    var openScoresMenu by remember { mutableStateOf(false) }
 
     val playing = state.playing
     val playUrl = state.playUrl
@@ -83,43 +79,26 @@ fun SportsDashRoot(vm: AppViewModel) {
 
     Scaffold(
         containerColor = VoidBlack,
-        // Portrait only — landscape: content full-bleed (menus inside tab)
         topBar = {
             if (!landscape) {
                 TopAppBar(
                     title = {
                         Text("SportsDash", fontWeight = FontWeight.Bold, color = Gold)
                     },
+                    // Refresh only — ☰ lives on Guide/Scores action bars (no duplicate menus)
                     actions = {
                         IconButton(
                             onClick = {
                                 when (tab) {
-                                    0 -> openScoresMenu = true
-                                    1 -> openGuideMenu = true
-                                    else -> { /* settings */ }
+                                    0 -> vm.refreshScores()
+                                    1 -> {
+                                        vm.refreshChannels()
+                                        vm.reloadEpg(force = true)
+                                    }
                                 }
                             },
                         ) {
-                            Icon(
-                                imageVector = if (tab == 2) Icons.Default.Refresh else Icons.Default.Menu,
-                                contentDescription = if (tab == 2) "Refresh" else "Menu",
-                                tint = Gold,
-                            )
-                        }
-                        if (tab != 2) {
-                            IconButton(
-                                onClick = {
-                                    when (tab) {
-                                        0 -> vm.refreshScores()
-                                        1 -> {
-                                            vm.refreshChannels()
-                                            vm.reloadEpg(force = true)
-                                        }
-                                    }
-                                },
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Gold)
-                            }
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Gold)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -167,18 +146,12 @@ fun SportsDashRoot(vm: AppViewModel) {
                     vm = vm,
                     state = state,
                     landscape = landscape,
-                    openMenu = openScoresMenu,
-                    onMenuConsumed = { openScoresMenu = false },
-                    onOpenMenu = { openScoresMenu = true },
                     onGoSettings = { tab = 2 },
                 )
                 1 -> GuideScreen(
                     vm = vm,
                     state = state,
                     landscape = landscape,
-                    openMenu = openGuideMenu,
-                    onMenuConsumed = { openGuideMenu = false },
-                    onOpenMenu = { openGuideMenu = true },
                     onGoSettings = { tab = 2 },
                     onGoScores = { tab = 0 },
                 )

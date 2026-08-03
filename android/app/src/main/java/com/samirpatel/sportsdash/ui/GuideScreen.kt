@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items as listItems
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
@@ -68,18 +69,14 @@ import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 /**
- * Guide: **no search bar**, **no sticky category strip**.
- * Compact action row + ☰ menu for Favorites / Hour / Grid / categories.
- * Long-press channel → add/remove favorites.
+ * Guide: no search. Main bar = ★ / Hour / Grid + one ☰ categories menu.
+ * Long-press channel → favorites. Sheet is categories only (no duplicate actions).
  */
 @Composable
 fun GuideScreen(
     vm: AppViewModel,
     state: AppUiState,
     landscape: Boolean = false,
-    openMenu: Boolean = false,
-    onMenuConsumed: () -> Unit = {},
-    onOpenMenu: () -> Unit = {},
     onGoSettings: () -> Unit = {},
     onGoScores: () -> Unit = {},
 ) {
@@ -102,9 +99,6 @@ fun GuideScreen(
                 vm = vm,
                 state = state,
                 landscape = landscape,
-                openMenu = openMenu,
-                onMenuConsumed = onMenuConsumed,
-                onOpenMenu = onOpenMenu,
                 onGoScores = onGoScores,
             )
         }
@@ -117,38 +111,23 @@ private fun GuideBrowseBody(
     vm: AppViewModel,
     state: AppUiState,
     landscape: Boolean,
-    openMenu: Boolean,
-    onMenuConsumed: () -> Unit,
-    onOpenMenu: () -> Unit,
     onGoScores: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var favoriteTarget by remember { mutableStateOf<IptvChannel?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    LaunchedEffect(openMenu) {
-        if (openMenu) {
-            showMenu = true
-            onMenuConsumed()
-        }
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
-        // ONE compact action row — nothing else sticky above the grid
         GuideActionBar(
             state = state,
             landscape = landscape,
             onFavorites = { vm.selectGroup(FAVORITES_GROUP) },
             onHourGuide = { vm.setGuideLayout(GuideLayout.LIST) },
             onGrid = { vm.setGuideLayout(GuideLayout.GRID) },
-            onMenu = {
-                showMenu = true
-                onOpenMenu()
-            },
+            onMenu = { showMenu = true },
             onGoScores = onGoScores,
         )
 
-        // Single muted status line (collapses noise)
         val status = listOfNotNull(
             state.selectedGroup.takeIf { it.isNotBlank() },
             if (state.guideLayout == GuideLayout.LIST) "Hour" else "Grid",
@@ -232,11 +211,9 @@ private fun GuideBrowseBody(
             sheetState = sheetState,
             containerColor = Panel,
         ) {
-            GuideMenuSheet(
-                state = state,
+            GuideCategoryMenuSheet(
                 categories = vm.guideCategoryGroups(),
-                favoriteCount = state.favoriteChannelIds.size,
-                onSelectLayout = { vm.setGuideLayout(it) },
+                selectedGroup = state.selectedGroup,
                 onSelectGroup = {
                     vm.selectGroup(it)
                     showMenu = false
@@ -299,12 +276,10 @@ private fun GuideActionBar(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (landscape) {
-            // Landscape: tab jump without bottom bar
             IconButton(onClick = onGoScores) {
                 Icon(Icons.Default.LiveTv, contentDescription = "Guide", tint = Gold)
             }
         }
-        // Quick actions — not a permanent category strip
         FilterChip(
             selected = state.selectedGroup == FAVORITES_GROUP,
             onClick = onFavorites,
@@ -340,70 +315,55 @@ private fun GuideActionBar(
                 .padding(horizontal = 4.dp),
         )
         IconButton(onClick = onMenu) {
-            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Gold)
+            Icon(Icons.Default.Menu, contentDescription = "Categories", tint = Gold)
         }
     }
 }
 
+/** Categories only — actions stay on the main bar. Scrolls to current selection. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GuideMenuSheet(
-    state: AppUiState,
+private fun GuideCategoryMenuSheet(
     categories: List<String>,
-    favoriteCount: Int,
-    onSelectLayout: (GuideLayout) -> Unit,
+    selectedGroup: String,
     onSelectGroup: (String) -> Unit,
     onRefresh: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val selectedIndex = categories.indexOf(selectedGroup).coerceAtLeast(0)
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = selectedIndex,
+    )
+    LaunchedEffect(selectedGroup, categories) {
+        val idx = categories.indexOf(selectedGroup)
+        if (idx >= 0) {
+            listState.scrollToItem(idx)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(bottom = 28.dp),
     ) {
-        Text("Guide", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text("Categories", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text(
-            "Favorites, layout, and categories — no permanent search strip.",
+            "Provider order · current selection stays highlighted",
             color = Muted,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
         )
 
-        Text("ACTIONS", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.selectedGroup == FAVORITES_GROUP,
-                onClick = { onSelectGroup(FAVORITES_GROUP) },
-                label = { Text("★ Favorites ($favoriteCount)") },
-                colors = chipColors(),
-            )
-            FilterChip(
-                selected = state.guideLayout == GuideLayout.LIST,
-                onClick = { onSelectLayout(GuideLayout.LIST) },
-                label = { Text("Hour guide") },
-                colors = chipColors(),
-            )
-            FilterChip(
-                selected = state.guideLayout == GuideLayout.GRID,
-                onClick = { onSelectLayout(GuideLayout.GRID) },
-                label = { Text("Grid") },
-                colors = chipColors(),
-            )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-        Text("CATEGORIES (provider order)", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(6.dp))
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(320.dp),
+                .height(380.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             listItems(items = categories, key = { it }) { group ->
-                val selected = state.selectedGroup == group
+                val selected = selectedGroup == group
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -541,7 +501,7 @@ private fun EmptyGuideHint(onGoSettings: () -> Unit) {
         Text("Guide", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Add Xtream in Settings. Use ☰ for categories, Hour/Grid, and Favorites. " +
+            "Add Xtream in Settings. Use ★ / Hour / Grid on the bar. ☰ opens categories. " +
                 "Long-press a channel to star it.",
             color = Muted,
             textAlign = TextAlign.Center,
