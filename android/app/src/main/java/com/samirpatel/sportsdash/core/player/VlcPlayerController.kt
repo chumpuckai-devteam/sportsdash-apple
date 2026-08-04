@@ -179,7 +179,13 @@ fun createVlcVideoLayout(context: Context): VLCVideoLayout {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
+        // Must not intercept Compose chrome taps
         isClickable = false
         isFocusable = false
+        isFocusableInTouchMode = false
+        importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        // Descendants (TextureView) also should not claim clicks
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        setOnTouchListener { _, _ -> false } // never consume; pass through
     }
 }

@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,16 +15,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
@@ -43,18 +44,18 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,33 +63,25 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import coil.compose.AsyncImage
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
 import com.samirpatel.sportsdash.core.player.createVlcVideoLayout
 import com.samirpatel.sportsdash.core.sports.Game
-import coil.compose.AsyncImage
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.LiveMint
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.systemGestureExclusion
-import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
 
 /**
- * Fullscreen player:
- * - Native system Back / Home / Recents (bars stay visible; no immersive hide)
- * - System Back exits player via BackHandler (no custom back chip)
- * - Play / pause, mute, rejoin live
- * - Channel title + engine / LIVE chips
- * - Top live scores ticker (variant D / NFL-style; logos when available)
- * - Chrome auto-hides after idle; tap video to restore (S-AND.FB.13)
- * - Landscape ticker scrolls: systemGestureExclusion + tap-only video layer (S-AND.FB.10)
- *
- * VLC uses TextureView so overlays receive taps (SurfaceView was eating the X).
+ * Fullscreen player with reliable Compose chrome hit-testing:
+ * - Video + low-z tap catcher
+ * - Chrome/ticker at higher zIndex so buttons always win
+ * - Top stack: status → optional ticker → control row (never under ticker)
+ * - System Back exits; no immersive hide of nav bars
  */
 @Composable
 fun PlayerScreen(
@@ -112,15 +105,16 @@ fun PlayerScreen(
     val view = LocalView.current
     val controller = remember { VlcPlayerController(context) }
     var chromeVisible by remember { mutableStateOf(true) }
-    /** Bumped to restart the idle hide timer while chrome is shown. */
     var chromeIdleEpoch by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(true) }
     var isMuted by remember { mutableStateOf(false) }
     val landscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val tapInteraction = remember { MutableInteractionSource() }
 
     fun noteChromeInteraction() {
-        if (chromeVisible) chromeIdleEpoch++
+        chromeVisible = true
+        chromeIdleEpoch++
     }
 
     fun toggleChrome() {
@@ -132,15 +126,12 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-fade title/controls/ticker after idle (tap video to restore). Back stays reachable.
     LaunchedEffect(chromeVisible, chromeIdleEpoch) {
         if (!chromeVisible) return@LaunchedEffect
         delay(CHROME_IDLE_HIDE_MS)
         chromeVisible = false
     }
 
-    // Keep native system Back / Home / Recents visible (gesture or 3-button).
-    // Edge-to-edge draw only — do NOT immersive-hide bars.
     DisposableEffect(Unit) {
         val activity = context as? Activity
         val window = activity?.window
@@ -156,7 +147,6 @@ fun PlayerScreen(
         }
     }
 
-    // System Back / predictive back → leave player
     BackHandler(onBack = onClose)
 
     DisposableEffect(url) {
@@ -175,58 +165,81 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
+        // 1) Video surface — never sits above chrome
         AndroidView(
             factory = { ctx ->
                 createVlcVideoLayout(ctx).also { layout ->
+                    // Critical: VLC view must not steal Compose taps
+                    layout.isClickable = false
+                    layout.isFocusable = false
+                    layout.isFocusableInTouchMode = false
                     controller.attach(layout)
                     if (url.isNotBlank()) controller.play(url)
                 }
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(0f),
             update = { layout ->
+                layout.isClickable = false
+                layout.isFocusable = false
                 controller.attach(layout)
             },
         )
 
-        // Tap-only video hit target — never claims horizontal drags meant for the ticker.
-        // Landscape bottom reserve clears compact ticker (label + cards + pad).
+        // 2) Full-screen tap catcher BELOW chrome (z=1). Does not cover z>=10 siblings.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(
-                    // Reserve space under top ticker + status
-                    top = if (landscape) 108.dp else 132.dp,
-                    bottom = if (landscape) 96.dp else 120.dp,
+                .zIndex(1f)
+                .clickable(
+                    interactionSource = tapInteraction,
+                    indication = null,
+                    onClick = { toggleChrome() },
                 )
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        toggleChrome()
-                    }
-                },
+                .semantics { contentDescription = "Toggle player controls" },
         )
 
+        // 3) Top chrome stack — ticker + buttons in ONE column so buttons aren't under ticker
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .zIndex(10f)
+                .zIndex(20f)
                 .statusBarsPadding()
                 .background(
-                    if (chromeVisible) {
+                    if (chromeVisible || showScoresTicker) {
                         Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent),
+                            listOf(Color.Black.copy(alpha = 0.88f), Color.Transparent),
                         )
                     } else {
                         Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent),
+                            listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent),
                         )
                     },
                 )
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(bottom = 8.dp),
         ) {
-            // No custom Back — use system Back / Home / Recents.
+            if (showScoresTicker) {
+                LiveScoresTicker(
+                    games = liveGames,
+                    currentGameId = currentGameId,
+                    compact = landscape,
+                    onGameTap = { game ->
+                        noteChromeInteraction()
+                        onTickerGame(game)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .systemGestureExclusion(),
+                )
+            }
+
             if (chromeVisible) {
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -285,67 +298,72 @@ fun PlayerScreen(
                         )
                     }
                 }
-            }
 
-            if (chromeVisible && !landscape) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = channel.group?.uppercase() ?: "LIVE TV",
-                    color = Gold,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                )
-                Text(
-                    text = displayName,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!nowTitle.isNullOrBlank()) {
+                if (!landscape) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                        Text(
+                            text = channel.group?.uppercase() ?: "LIVE TV",
+                            color = Gold,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = displayName,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (!nowTitle.isNullOrBlank()) {
+                            Text(
+                                text = "Now · $nowTitle",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (!nextTitle.isNullOrBlank()) {
+                            Text(
+                                text = "Next · $nextTitle",
+                                color = Muted,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Chip(
+                                text = engineLabel.substringBefore(" ·").ifBlank { "VLC" },
+                                filled = false,
+                            )
+                            Chip(text = "LIVE", filled = true, fillColor = LiveMint)
+                        }
+                    }
+                } else {
                     Text(
-                        text = "Now · $nowTitle",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 13.sp,
+                        text = displayName,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
                     )
                 }
-                if (!nextTitle.isNullOrBlank()) {
-                    Text(
-                        text = "Next · $nextTitle",
-                        color = Muted,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip(text = engineLabel.substringBefore(" ·").ifBlank { "VLC" }, filled = false)
-                    Chip(text = "LIVE", filled = true, fillColor = LiveMint)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            } else if (chromeVisible) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = displayName,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         }
 
+        // 4) Center transport — highest chrome z so never under tap catcher
         if (chromeVisible) {
             Row(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .zIndex(10f),
+                    .zIndex(30f)
+                    .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -357,7 +375,7 @@ fun PlayerScreen(
                         isPlaying = true
                     },
                     contentDescription = "Rejoin live",
-                    size = 52.dp,
+                    size = 56.dp,
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -372,7 +390,7 @@ fun PlayerScreen(
                         isPlaying = controller.isPlaying
                     },
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    size = 72.dp,
+                    size = 76.dp,
                     background = Gold,
                 ) {
                     Icon(
@@ -384,51 +402,35 @@ fun PlayerScreen(
                 }
             }
         }
-
-        // Variant D: sticky multi-game ticker at TOP (NFL-style). Always on when pref
-        // is true — chrome auto-hide must not clear it (S-AND.FB.11).
-        if (showScoresTicker) {
-            LiveScoresTicker(
-                games = liveGames,
-                currentGameId = currentGameId,
-                compact = landscape,
-                onGameTap = { game ->
-                    noteChromeInteraction()
-                    onTickerGame(game)
-                },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(20f)
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .systemGestureExclusion(),
-            )
-        }
     }
 }
 
-/** Idle before hiding title/controls/ticker; tap video restores (task ~3–5s). */
-private const val CHROME_IDLE_HIDE_MS = 4_000L
+private const val CHROME_IDLE_HIDE_MS = 4_500L
 
 @Composable
 private fun CircleControl(
     onClick: () -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 44.dp,
-    background: Color = Color.Black.copy(alpha = 0.55f),
+    size: androidx.compose.ui.unit.Dp = 48.dp,
+    background: Color = Color.Black.copy(alpha = 0.62f),
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.size(size),
-        shape = CircleShape,
-        color = background,
-        contentColor = Color.White,
+    // Explicit clickable + large min size — more reliable than Surface-only over AndroidView
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(background)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            content()
-        }
+        content()
     }
 }
 
@@ -475,16 +477,7 @@ private fun LiveScoresTicker(
         modifier = modifier
             .fillMaxWidth()
             .systemGestureExclusion()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        Color.Black.copy(alpha = 0.82f),
-                        Color.Black.copy(alpha = 0.45f),
-                        Color.Transparent,
-                    ),
-                ),
-            )
-            .padding(top = 4.dp, bottom = 10.dp),
+            .padding(top = 4.dp, bottom = 6.dp),
     ) {
         LazyRow(
             state = listState,
@@ -511,10 +504,11 @@ private fun LiveScoresTicker(
                     modifier = Modifier
                         .height(pillH)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (current) Gold else Panel.copy(alpha = 0.94f),
-                        )
-                        .clickable { onGameTap(game) }
+                        .background(if (current) Gold else Panel.copy(alpha = 0.94f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onGameTap(game) }
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
