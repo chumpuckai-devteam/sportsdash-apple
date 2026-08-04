@@ -135,6 +135,15 @@ android/
     ui/            Compose screens
 ```
 
+## Playlist login persistence
+
+- Xtream host/user/password and M3U URL live in **DataStore** (`sportsdash_prefs`) and are dual-written to:
+  - **SharedPreferences** `sportsdash_secure_backup`
+  - **`filesDir/playlist_config_backup.json`**
+- **APK update-install** (same `applicationId` `com.samirpatel.sportsdash`) keeps private storage — login should load without re-entry.
+- Settings shows saved host/user; **password field stays blank** meaning “keep existing” on Save.
+- **Uninstall** clears app private storage (DataStore + backups). Expected Android behavior.
+
 ## License
 
 libVLC Android — LGPL. See `../docs/LGPL-NOTICE.md`.

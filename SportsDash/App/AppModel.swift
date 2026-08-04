@@ -614,12 +614,19 @@ final class AppModel: ObservableObject {
     }
 
     func toggleFavorite(teamId: String) {
+        guard !teamId.isEmpty else { return }
         storage.toggleFavorite(teamId: teamId)
         favoriteTeamIds = storage.favoriteTeamIds()
     }
 
+    /// Users favorite **teams**, not whole games (S-PARITY.FAV.3).
+    func isTeamFavorite(_ teamId: String) -> Bool {
+        !teamId.isEmpty && favoriteTeamIds.contains(teamId)
+    }
+
+    /// True when either side is a starred team (row chrome / pin sort).
     func isFavorite(_ game: Game) -> Bool {
-        favoriteTeamIds.contains(game.home.id) || favoriteTeamIds.contains(game.away.id)
+        isTeamFavorite(game.home.id) || isTeamFavorite(game.away.id)
     }
 
     // MARK: - Channel favorites (Guide ★)
@@ -661,24 +668,35 @@ final class AppModel: ObservableObject {
         return matching.matchGameToChannels(game, channels: chans)
     }
 
+    /// Live / Upcoming / All — favorite-team games pin first (S-PARITY.FAV.2 / FAV.3).
+    /// No separate "favorite games" filter or sticky list — teams only.
     var filteredGames: [Game] {
+        let base: [Game]
         switch dashboardFilter {
         case .live:
-            return games.filter(\.isLive)
+            base = games.filter(\.isLive)
         case .upcoming:
-            return games.filter(\.isUpcoming)
-        case .favorites:
-            return games.filter {
-                ($0.isLive || $0.isUpcoming) && isFavorite($0)
-            }
+            base = games.filter(\.isUpcoming)
         case .all:
-            return games
+            base = games
         }
+        return Self.pinFavoriteGames(base, favoriteTeamIds: favoriteTeamIds)
     }
 
-    var favoriteGames: [Game] {
-        games.filter {
-            ($0.isLive || $0.isUpcoming) && isFavorite($0)
+    /// Favorites first, then live over not-live, then earlier start (stable secondary).
+    static func pinFavoriteGames(_ games: [Game], favoriteTeamIds: Set<String>) -> [Game] {
+        guard !favoriteTeamIds.isEmpty else {
+            return games.sorted {
+                if $0.isLive != $1.isLive { return $0.isLive && !$1.isLive }
+                return $0.startTime < $1.startTime
+            }
+        }
+        return games.sorted { a, b in
+            let aFav = favoriteTeamIds.contains(a.home.id) || favoriteTeamIds.contains(a.away.id)
+            let bFav = favoriteTeamIds.contains(b.home.id) || favoriteTeamIds.contains(b.away.id)
+            if aFav != bFav { return aFav && !bFav }
+            if a.isLive != b.isLive { return a.isLive && !b.isLive }
+            return a.startTime < b.startTime
         }
     }
 

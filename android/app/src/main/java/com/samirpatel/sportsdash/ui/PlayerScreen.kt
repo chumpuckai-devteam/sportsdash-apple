@@ -39,10 +39,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,6 +81,7 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
  * - Play / pause, mute, rejoin live
  * - Channel title + engine / LIVE chips
  * - Bottom live scores ticker (compact, scores never clip)
+ * - Chrome auto-hides after idle; tap video to restore (S-AND.FB.13)
  *
  * VLC uses TextureView so overlays receive taps (SurfaceView was eating the X).
  */
@@ -102,10 +106,32 @@ fun PlayerScreen(
     val view = LocalView.current
     val controller = remember { VlcPlayerController(context) }
     var chromeVisible by remember { mutableStateOf(true) }
+    /** Bumped to restart the idle hide timer while chrome is shown. */
+    var chromeIdleEpoch by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(true) }
     var isMuted by remember { mutableStateOf(false) }
     val landscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    fun noteChromeInteraction() {
+        if (chromeVisible) chromeIdleEpoch++
+    }
+
+    fun toggleChrome() {
+        if (chromeVisible) {
+            chromeVisible = false
+        } else {
+            chromeVisible = true
+            chromeIdleEpoch++
+        }
+    }
+
+    // Auto-fade title/controls/ticker after idle (tap video to restore). Back stays reachable.
+    LaunchedEffect(chromeVisible, chromeIdleEpoch) {
+        if (!chromeVisible) return@LaunchedEffect
+        delay(CHROME_IDLE_HIDE_MS)
+        chromeVisible = false
+    }
 
     // Immersive fullscreen — kills the thin status-bar hairline in landscape video.
     DisposableEffect(Unit) {
@@ -165,7 +191,7 @@ fun PlayerScreen(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) {
-                    chromeVisible = !chromeVisible
+                    toggleChrome()
                 },
         )
 
@@ -208,7 +234,10 @@ fun PlayerScreen(
                     Chip(text = "VLC", filled = false)
                     Spacer(modifier = Modifier.weight(1f))
                     CircleControl(
-                        onClick = onPopOut,
+                        onClick = {
+                            noteChromeInteraction()
+                            onPopOut()
+                        },
                         contentDescription = "Pop out mini player",
                     ) {
                         Icon(
@@ -219,7 +248,10 @@ fun PlayerScreen(
                         )
                     }
                     CircleControl(
-                        onClick = onToggleScoresTicker,
+                        onClick = {
+                            noteChromeInteraction()
+                            onToggleScoresTicker()
+                        },
                         contentDescription = if (showScoresTicker) {
                             "Hide scores ticker"
                         } else {
@@ -240,6 +272,7 @@ fun PlayerScreen(
                     }
                     CircleControl(
                         onClick = {
+                            noteChromeInteraction()
                             controller.toggleMute()
                             isMuted = controller.isMuted
                         },
@@ -321,6 +354,7 @@ fun PlayerScreen(
             ) {
                 CircleControl(
                     onClick = {
+                        noteChromeInteraction()
                         onReplay()
                         controller.play(url)
                         isPlaying = true
@@ -336,6 +370,7 @@ fun PlayerScreen(
                 }
                 CircleControl(
                     onClick = {
+                        noteChromeInteraction()
                         controller.togglePlayPause()
                         isPlaying = controller.isPlaying
                     },
@@ -358,7 +393,10 @@ fun PlayerScreen(
                 games = liveGames,
                 currentGameId = currentGameId,
                 compact = landscape,
-                onGameTap = onTickerGame,
+                onGameTap = { game ->
+                    noteChromeInteraction()
+                    onTickerGame(game)
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(10f)
@@ -367,6 +405,9 @@ fun PlayerScreen(
         }
     }
 }
+
+/** Idle before hiding title/controls/ticker; tap video restores (task ~3–5s). */
+private const val CHROME_IDLE_HIDE_MS = 4_000L
 
 @Composable
 private fun CircleControl(

@@ -71,8 +71,13 @@ struct TeamMarkView: View {
 
 struct GameMatchupRow: View {
     let game: Game
+    /// True when either side is starred (row chrome / accessibility).
     var isFavorite: Bool = false
-    var onFavorite: (() -> Void)?
+    var isAwayFavorite: Bool = false
+    var isHomeFavorite: Bool = false
+    /// Per-team toggles (Android long-press home/away parity). Nil = indicator-only.
+    var onToggleAwayFavorite: (() -> Void)?
+    var onToggleHomeFavorite: (() -> Void)?
 
     var body: some View {
         Group {
@@ -91,9 +96,12 @@ struct GameMatchupRow: View {
     private var matchup: some View {
         HStack(spacing: 0) {
             // Away
-            HStack(spacing: 8) {
-                favoriteStar
-                teamBlock(team: game.away, alignment: .center)
+            HStack(spacing: 6) {
+                teamBlock(
+                    team: game.away,
+                    isTeamFavorite: isAwayFavorite,
+                    onToggleFavorite: onToggleAwayFavorite
+                )
                 scoreText(game.away.displayScore, dimmed: losing(game.away))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,17 +111,29 @@ struct GameMatchupRow: View {
                 .frame(width: 86)
 
             // Home
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 scoreText(game.home.displayScore, dimmed: losing(game.home))
-                teamBlock(team: game.home, alignment: .center)
+                teamBlock(
+                    team: game.home,
+                    isTeamFavorite: isHomeFavorite,
+                    onToggleFavorite: onToggleHomeFavorite
+                )
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
-    private func teamBlock(team: TeamInfo, alignment: HorizontalAlignment) -> some View {
-        VStack(spacing: 6) {
-            TeamMarkView(team: team, size: 44)
+    private func teamBlock(
+        team: TeamInfo,
+        isTeamFavorite: Bool,
+        onToggleFavorite: (() -> Void)?
+    ) -> some View {
+        VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                TeamMarkView(team: team, size: 44)
+                teamStarBadge(isTeamFavorite: isTeamFavorite, onToggle: onToggleFavorite)
+                    .offset(x: 6, y: -4)
+            }
             Text(team.rowLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.textSecondary)
@@ -122,6 +142,34 @@ struct GameMatchupRow: View {
                 .frame(maxWidth: 72)
         }
         .frame(width: 72)
+    }
+
+    @ViewBuilder
+    private func teamStarBadge(isTeamFavorite: Bool, onToggle: (() -> Void)?) -> some View {
+        let icon = Image(systemName: isTeamFavorite ? "star.fill" : "star")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(isTeamFavorite ? SportsColors.gold : SportsColors.muted.opacity(0.55))
+            .padding(3)
+            .background(
+                Circle()
+                    .fill(SportsColors.voidBlack.opacity(isTeamFavorite ? 0.85 : 0.55))
+            )
+        #if os(tvOS)
+        // Indicator only — nested Button inside row Button traps focus on Apple TV.
+        if isTeamFavorite || onToggle != nil {
+            icon.accessibilityHidden(true)
+        }
+        #else
+        if let onToggle {
+            Button(action: onToggle) {
+                icon
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isTeamFavorite ? "Unstar team" : "Star team")
+        } else if isTeamFavorite {
+            icon.accessibilityHidden(true)
+        }
+        #endif
     }
 
     private var centerStatus: some View {
@@ -145,7 +193,7 @@ struct GameMatchupRow: View {
 
     private var eventLayout: some View {
         HStack(spacing: 12) {
-            favoriteStar
+            eventFavoriteIndicator
             VStack(alignment: .leading, spacing: 4) {
                 Text(game.eventName ?? game.league.label)
                     .font(.subheadline.weight(.semibold))
@@ -163,24 +211,13 @@ struct GameMatchupRow: View {
     }
 
     @ViewBuilder
-    private var favoriteStar: some View {
-        if let onFavorite {
-            #if os(tvOS)
-            // Indicator only — nested Button inside row Button traps focus on Apple TV.
+    private var eventFavoriteIndicator: some View {
+        if isFavorite || onToggleHomeFavorite != nil || onToggleAwayFavorite != nil {
             Image(systemName: isFavorite ? "star.fill" : "star")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(isFavorite ? SportsColors.gold : SportsColors.muted.opacity(0.65))
                 .frame(width: 26, height: 44)
                 .accessibilityHidden(true)
-            #else
-            Button(action: onFavorite) {
-                Image(systemName: isFavorite ? "star.fill" : "star")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(isFavorite ? SportsColors.gold : SportsColors.muted.opacity(0.65))
-                    .frame(width: 26, height: 44)
-            }
-            .buttonStyle(.plain)
-            #endif
         } else {
             Color.clear.frame(width: 4, height: 44)
         }
@@ -214,8 +251,11 @@ struct GameMatchupRow: View {
 struct GameScoreFocusRow: View {
     let game: Game
     var isFavorite: Bool = false
+    var isAwayFavorite: Bool = false
+    var isHomeFavorite: Bool = false
     var onSelect: () -> Void
-    var onFavorite: (() -> Void)?
+    var onToggleAwayFavorite: (() -> Void)?
+    var onToggleHomeFavorite: (() -> Void)?
 
     var body: some View {
         Button(action: onSelect) {
@@ -231,23 +271,70 @@ struct GameScoreFocusRow: View {
         .sportsTVFocusClean()
         #else
         .buttonStyle(.plain)
+        .contextMenu {
+            if game.usesMatchupLayout {
+                if !game.away.id.isEmpty, let onToggleAwayFavorite {
+                    Button {
+                        onToggleAwayFavorite()
+                    } label: {
+                        Label(
+                            isAwayFavorite ? "Unstar \(game.away.rowLabel)" : "★ Star \(game.away.rowLabel)",
+                            systemImage: isAwayFavorite ? "star.slash" : "star.fill"
+                        )
+                    }
+                }
+                if !game.home.id.isEmpty, let onToggleHomeFavorite {
+                    Button {
+                        onToggleHomeFavorite()
+                    } label: {
+                        Label(
+                            isHomeFavorite ? "Unstar \(game.home.rowLabel)" : "★ Star \(game.home.rowLabel)",
+                            systemImage: isHomeFavorite ? "star.slash" : "star.fill"
+                        )
+                    }
+                }
+            } else {
+                // Event rows: star individual team ids when present (never a whole-game fav).
+                if !game.away.id.isEmpty, let onToggleAwayFavorite {
+                    Button(action: onToggleAwayFavorite) {
+                        Label(
+                            isAwayFavorite ? "Unstar \(game.away.rowLabel)" : "★ Star \(game.away.rowLabel)",
+                            systemImage: isAwayFavorite ? "star.slash" : "star.fill"
+                        )
+                    }
+                }
+                if !game.home.id.isEmpty, let onToggleHomeFavorite {
+                    Button(action: onToggleHomeFavorite) {
+                        Label(
+                            isHomeFavorite ? "Unstar \(game.home.rowLabel)" : "★ Star \(game.home.rowLabel)",
+                            systemImage: isHomeFavorite ? "star.slash" : "star.fill"
+                        )
+                    }
+                }
+            }
+        }
         #endif
         .compositingGroup()
-        .accessibilityHint("Opens game details and streams")
+        .accessibilityHint("Opens game details and streams. Long-press to favorite a team.")
     }
 
     @ViewBuilder
     private func scoreLabel(focused: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous)
         #if os(tvOS)
-        let favAction: (() -> Void)? = nil
+        let awayAction: (() -> Void)? = nil
+        let homeAction: (() -> Void)? = nil
         #else
-        let favAction = onFavorite
+        let awayAction = onToggleAwayFavorite
+        let homeAction = onToggleHomeFavorite
         #endif
         GameMatchupRow(
             game: game,
             isFavorite: isFavorite,
-            onFavorite: favAction
+            isAwayFavorite: isAwayFavorite,
+            isHomeFavorite: isHomeFavorite,
+            onToggleAwayFavorite: awayAction,
+            onToggleHomeFavorite: homeAction
         )
         #if os(tvOS)
         .padding(.horizontal, 22)
@@ -255,11 +342,16 @@ struct GameScoreFocusRow: View {
         .frame(minHeight: SportsTVMetrics.scoreRowMinHeight)
         #endif
         .background {
-            shape.fill(focused ? SportsColors.panelElevated : SportsColors.panel.opacity(0.92))
+            // Android gold-tint when match involves a favorite team.
+            let base = focused ? SportsColors.panelElevated : SportsColors.panel.opacity(0.92)
+            let favFill = SportsColors.gold.opacity(focused ? 0.22 : 0.12)
+            shape.fill(isFavorite ? favFill : base)
         }
         .overlay {
             shape.stroke(
-                focused ? SportsColors.gold : SportsColors.border.opacity(0.35),
+                focused
+                    ? SportsColors.gold
+                    : (isFavorite ? SportsColors.gold.opacity(0.45) : SportsColors.border.opacity(0.35)),
                 lineWidth: focused ? 3 : 1
             )
         }

@@ -110,11 +110,15 @@ struct GameDetailSheet: View {
 
                 // Logos + names under scores
                 HStack(alignment: .top) {
-                    teamIdentity(game.away)
-                        .frame(maxWidth: .infinity)
+                    teamIdentity(game.away, isFav: appModel.isTeamFavorite(game.away.id)) {
+                        appModel.toggleFavorite(teamId: game.away.id)
+                    }
+                    .frame(maxWidth: .infinity)
                     Color.clear.frame(width: 100)
-                    teamIdentity(game.home)
-                        .frame(maxWidth: .infinity)
+                    teamIdentity(game.home, isFav: appModel.isTeamFavorite(game.home.id)) {
+                        appModel.toggleFavorite(teamId: game.home.id)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             } else {
                 VStack(spacing: 8) {
@@ -157,9 +161,43 @@ struct GameDetailSheet: View {
         }
     }
 
-    private func teamIdentity(_ team: TeamInfo) -> some View {
+    private func teamIdentity(_ team: TeamInfo, isFav: Bool = false, onToggleFavorite: (() -> Void)? = nil) -> some View {
         VStack(spacing: 8) {
-            TeamMarkView(team: team, size: 56)
+            ZStack(alignment: .topTrailing) {
+                TeamMarkView(team: team, size: 56)
+                #if os(iOS)
+                if let onToggleFavorite, !team.id.isEmpty {
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: isFav ? "star.fill" : "star")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(isFav ? SportsColors.gold : SportsColors.muted)
+                            .padding(6)
+                            .background(Circle().fill(SportsColors.voidBlack.opacity(0.8)))
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: 8, y: -6)
+                    .accessibilityLabel(isFav ? "Unstar \(team.rowLabel)" : "Star \(team.rowLabel)")
+                } else if isFav {
+                    Image(systemName: "star.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(SportsColors.gold)
+                        .padding(6)
+                        .background(Circle().fill(SportsColors.voidBlack.opacity(0.8)))
+                        .offset(x: 8, y: -6)
+                        .accessibilityHidden(true)
+                }
+                #else
+                if isFav {
+                    Image(systemName: "star.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(SportsColors.gold)
+                        .padding(6)
+                        .background(Circle().fill(SportsColors.voidBlack.opacity(0.8)))
+                        .offset(x: 8, y: -6)
+                        .accessibilityHidden(true)
+                }
+                #endif
+            }
             Text(team.rowLabel)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(SportsColors.text)
@@ -169,6 +207,16 @@ struct GameDetailSheet: View {
                 .foregroundStyle(SportsColors.text.opacity(0.75))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+            #if os(iOS)
+            if let onToggleFavorite, !team.id.isEmpty {
+                Button(action: onToggleFavorite) {
+                    Text(isFav ? "Unstar" : "★ Favorite")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(isFav ? SportsColors.gold : SportsColors.muted)
+                }
+                .buttonStyle(.plain)
+            }
+            #endif
         }
     }
 

@@ -65,6 +65,7 @@ fun SportsDashRoot(vm: AppViewModel) {
             },
             onToggleScoresTicker = { vm.toggleScoresTicker() },
             displayName = vm.displayChannelName(playing.name),
+            favoriteTeamIds = state.favoriteTeamIds,
         )
         return
     }

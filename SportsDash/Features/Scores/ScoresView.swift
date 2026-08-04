@@ -117,21 +117,16 @@ struct ScoresView: View {
     }
 
     private var scoresContent: some View {
-        let showFaves = !appModel.favoriteGames.isEmpty
-            && (appModel.dashboardFilter == .all
-                || appModel.dashboardFilter == .live
-                || appModel.dashboardFilter == .upcoming
-                || appModel.dashboardFilter == .favorites)
-        let sections: [SportScoreSection] = appModel.dashboardFilter == .favorites
-            ? []
-            : Self.buildSections(
-                games: appModel.filteredGames,
-                filter: appModel.dashboardFilter,
-                selectedLeagues: appModel.selectedLeagues
-            )
+        // Teams-only favorites (S-PARITY.FAV.3): no separate "My teams" / ★ Faves list.
+        // Starred-team games pin first inside Live / Upcoming / All (FAV.2).
+        let sections: [SportScoreSection] = Self.buildSections(
+            games: appModel.filteredGames,
+            filter: appModel.dashboardFilter,
+            selectedLeagues: appModel.selectedLeagues,
+            favoriteTeamIds: appModel.favoriteTeamIds
+        )
 
         return ScrollView {
-            // Wider gap between sport buckets; leagues stay tighter under sport headers.
             LazyVStack(alignment: .leading, spacing: 28) {
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
@@ -139,16 +134,7 @@ struct ScoresView: View {
                         .padding(.top, 8)
                 }
 
-                if showFaves {
-                    leagueBlock(
-                        title: "My teams",
-                        systemImage: "star.fill",
-                        goldTitle: true,
-                        games: appModel.favoriteGames
-                    )
-                }
-
-                if sections.isEmpty && !showFaves {
+                if sections.isEmpty {
                     ContentUnavailableView(
                         emptyTitle,
                         systemImage: "sportscourt",
@@ -293,9 +279,10 @@ struct ScoresView: View {
     private static func buildSections(
         games: [Game],
         filter: DashboardFilter,
-        selectedLeagues: [SportLeague]
+        selectedLeagues: [SportLeague],
+        favoriteTeamIds: Set<String> = []
     ) -> [SportScoreSection] {
-        var sections = ScoreboardGrouping.sportSections(from: games)
+        var sections = ScoreboardGrouping.sportSections(from: games, favoriteTeamIds: favoriteTeamIds)
         guard filter == .upcoming else { return sections }
 
         let selected = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
@@ -574,14 +561,14 @@ struct ScoresView: View {
                         GameScoreFocusRow(
                             game: game,
                             isFavorite: appModel.isFavorite(game),
+                            isAwayFavorite: appModel.isTeamFavorite(game.away.id),
+                            isHomeFavorite: appModel.isTeamFavorite(game.home.id),
                             onSelect: { selectedGame = game },
-                            onFavorite: {
-                                if !game.home.id.isEmpty {
-                                    appModel.toggleFavorite(teamId: game.home.id)
-                                }
-                                if !game.away.id.isEmpty {
-                                    appModel.toggleFavorite(teamId: game.away.id)
-                                }
+                            onToggleAwayFavorite: {
+                                appModel.toggleFavorite(teamId: game.away.id)
+                            },
+                            onToggleHomeFavorite: {
+                                appModel.toggleFavorite(teamId: game.home.id)
                             }
                         )
                     }
@@ -603,15 +590,12 @@ struct ScoresView: View {
         switch appModel.dashboardFilter {
         case .live: return "No live games"
         case .upcoming: return "No upcoming games"
-        case .favorites: return "No favorite games"
         case .all: return "No games"
         }
     }
 
     private var emptySubtitle: String {
         switch appModel.dashboardFilter {
-        case .favorites:
-            return "Star a team on a matchup to build My teams."
         case .upcoming:
             let leagues = appModel.selectedLeagues.isEmpty
                 ? SportLeague.defaults
@@ -620,9 +604,9 @@ struct ScoresView: View {
             let more = leagues.count > 4 ? " +\(leagues.count - 4) more" : ""
             return "No scheduled games in the next few days for \(labels)\(more). Pull to refresh or adjust leagues in Settings."
         case .live:
-            return "Nothing in progress right now. Check Upcoming or pull to refresh."
+            return "Nothing in progress right now. Check Upcoming or pull to refresh. Star a team on a matchup to pin their games first."
         case .all:
-            return "Pull to refresh or enable more leagues in Settings."
+            return "Pull to refresh or enable more leagues in Settings. Tap ★ on a team logo to favorite that team."
         }
     }
 }
@@ -651,16 +635,14 @@ struct SportScoreSection: Identifiable {
 enum ScoreboardGrouping {
     static let leagueOrder: [SportLeague] = SportLeague.allCases
 
-    static func leagueShelves(from games: [Game]) -> [LeagueShelf] {
+    static func leagueShelves(from games: [Game], favoriteTeamIds: Set<String> = []) -> [LeagueShelf] {
         var buckets: [SportLeague: [Game]] = [:]
         for g in games {
             buckets[g.league, default: []].append(g)
         }
         for k in buckets.keys {
-            buckets[k]?.sort {
-                if $0.isLive != $1.isLive { return $0.isLive && !$1.isLive }
-                return $0.startTime < $1.startTime
-            }
+            // S-PARITY.FAV.2: within each league, favorite-team games pin first.
+            buckets[k] = AppModel.pinFavoriteGames(buckets[k] ?? [], favoriteTeamIds: favoriteTeamIds)
         }
         var shelves: [LeagueShelf] = []
         var lastSport: String?
@@ -684,8 +666,8 @@ enum ScoreboardGrouping {
     }
 
     /// Collapse consecutive league shelves into sport → league sections.
-    static func sportSections(from games: [Game]) -> [SportScoreSection] {
-        let shelves = leagueShelves(from: games)
+    static func sportSections(from games: [Game], favoriteTeamIds: Set<String> = []) -> [SportScoreSection] {
+        let shelves = leagueShelves(from: games, favoriteTeamIds: favoriteTeamIds)
         var sections: [SportScoreSection] = []
         var current: SportScoreSection?
         for shelf in shelves {

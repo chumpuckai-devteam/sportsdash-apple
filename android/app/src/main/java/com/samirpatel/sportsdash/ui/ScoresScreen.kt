@@ -2,6 +2,7 @@ package com.samirpatel.sportsdash.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,39 +18,39 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Sports
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,6 +63,8 @@ import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.ScoresFilter
 import com.samirpatel.sportsdash.core.matching.ChannelMatch
 import com.samirpatel.sportsdash.core.sports.Game
+import com.samirpatel.sportsdash.core.sports.LeagueShelf
+import com.samirpatel.sportsdash.core.sports.SportScoreSection
 import com.samirpatel.sportsdash.core.sports.TeamInfo
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.LiveMint
@@ -71,8 +74,10 @@ import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 private sealed class ScoreRow {
-    data class Header(val title: String, val id: String) : ScoreRow()
-    data class GameItem(val game: Game) : ScoreRow()
+    data class SportHeader(val section: SportScoreSection, val collapsed: Boolean) : ScoreRow()
+    data class LeagueHeader(val shelf: LeagueShelf, val sportKey: String) : ScoreRow()
+    data class GameItem(val game: Game, val rowKey: String) : ScoreRow()
+    data object MyTeamsHeader : ScoreRow()
 }
 
 @Composable
@@ -83,13 +88,24 @@ fun ScoresScreen(
     onGoSettings: () -> Unit = {},
 ) {
     var teamFavGame by remember { mutableStateOf<Game?>(null) }
+    // CSV survives rotation; defaults expanded like iOS @State.
+    var collapsedSportsCsv by rememberSaveable { mutableStateOf("") }
+    val collapsedSports = remember(collapsedSportsCsv) {
+        collapsedSportsCsv.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    fun toggleSport(key: String) {
+        val next = collapsedSports.toMutableSet()
+        if (!next.add(key)) next.remove(key)
+        collapsedSportsCsv = next.sorted().joinToString(",")
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(VoidBlack),
         ) {
-            // One action row — no second ☰ (app bar already has refresh)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -147,7 +163,14 @@ fun ScoresScreen(
                 )
             }
 
-            val byLeague = vm.gamesByLeague()
+            val sections = vm.sportScoreSections()
+            val favoritePin = remember(state.games, state.favoriteTeamIds, state.scoresFilter) {
+                if (state.scoresFilter == ScoresFilter.FAVORITES || state.favoriteTeamIds.isEmpty()) {
+                    emptyList()
+                } else {
+                    vm.filteredGames().filter { vm.gameHasFavoriteTeam(it) }
+                }
+            }
             when {
                 state.isLoadingScores && state.games.isEmpty() -> {
                     Box(
@@ -158,7 +181,7 @@ fun ScoresScreen(
                     }
                 }
 
-                byLeague.isEmpty() -> {
+                sections.isEmpty() && favoritePin.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
@@ -171,18 +194,15 @@ fun ScoresScreen(
                                 modifier = Modifier.size(40.dp),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = emptyFilterMessage(state.scoresFilter),
-                                color = Muted,
-                            )
+                            Text(text = emptyFilterMessage(state.scoresFilter), color = Muted)
                         }
                     }
                 }
 
                 else -> {
-                    val rows = flattenScoreRows(byLeague)
+                    val rows = flattenScoreRows(sections, collapsedSports, favoritePin, favoritesOnly = state.scoresFilter == ScoresFilter.FAVORITES)
                     LazyColumn(
-                        contentPadding = PaddingValues(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -190,30 +210,29 @@ fun ScoresScreen(
                             items = rows,
                             key = { row ->
                                 when (row) {
-                                    is ScoreRow.Header -> "h-${row.id}"
-                                    is ScoreRow.GameItem -> row.game.id
+                                    is ScoreRow.SportHeader -> "sport-${row.section.sportKey}"
+                                    is ScoreRow.LeagueHeader -> "league-${row.sportKey}-${row.shelf.key}"
+                                    is ScoreRow.GameItem -> row.rowKey
+                                    ScoreRow.MyTeamsHeader -> "my-teams"
                                 }
                             },
                         ) { row ->
                             when (row) {
-                                is ScoreRow.Header -> {
-                                    Text(
-                                        text = row.title,
-                                        color = Muted,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                    )
-                                }
-
-                                is ScoreRow.GameItem -> {
-                                    GameRow(
-                                        game = row.game,
-                                        isFavoriteMatch = vm.gameHasFavoriteTeam(row.game),
-                                        onClick = { vm.openStreamPicker(row.game) },
-                                        onLongClick = { teamFavGame = row.game },
-                                    )
-                                }
+                                is ScoreRow.SportHeader -> SportSectionHeader(
+                                    section = row.section,
+                                    collapsed = row.collapsed,
+                                    onToggle = { toggleSport(row.section.sportKey) },
+                                )
+                                is ScoreRow.LeagueHeader -> LeagueSectionHeader(shelf = row.shelf)
+                                is ScoreRow.GameItem -> GameRow(
+                                    game = row.game,
+                                    isFavoriteMatch = vm.gameHasFavoriteTeam(row.game),
+                                    isAwayFavorite = vm.isTeamFavorite(row.game.away.id),
+                                    isHomeFavorite = vm.isTeamFavorite(row.game.home.id),
+                                    onClick = { vm.openStreamPicker(row.game) },
+                                    onLongClick = { teamFavGame = row.game },
+                                )
+                                ScoreRow.MyTeamsHeader -> MyTeamsSectionHeader()
                             }
                         }
                     }
@@ -238,7 +257,7 @@ fun ScoresScreen(
                 title = { Text("${g.away.rowLabel} @ ${g.home.rowLabel}", color = TextPrimary) },
                 text = {
                     Text(
-                        "Favorite teams appear first and under ★ Faves.",
+                        "Favorite teams pin under My teams and sort first in each league.",
                         color = Muted,
                     )
                 },
@@ -285,14 +304,176 @@ private fun emptyFilterMessage(filter: ScoresFilter): String = when (filter) {
 }
 
 private fun flattenScoreRows(
-    byLeague: Map<com.samirpatel.sportsdash.core.sports.SportLeague, List<Game>>,
+    sections: List<SportScoreSection>,
+    collapsedSports: Set<String>,
+    favoritePin: List<Game>,
+    favoritesOnly: Boolean,
 ): List<ScoreRow> {
     val out = ArrayList<ScoreRow>()
-    byLeague.forEach { (league, games) ->
-        out.add(ScoreRow.Header(title = league.label.uppercase(), id = league.id))
-        games.forEach { g -> out.add(ScoreRow.GameItem(g)) }
+    if (favoritesOnly) {
+        out.add(ScoreRow.MyTeamsHeader)
+        for (section in sections) {
+            for (shelf in section.leagues) {
+                out.add(ScoreRow.LeagueHeader(shelf, section.sportKey))
+                for (g in shelf.games) {
+                    out.add(ScoreRow.GameItem(g, rowKey = "favsec-${shelf.key}-${g.id}"))
+                }
+            }
+        }
+        return out
+    }
+    if (favoritePin.isNotEmpty()) {
+        out.add(ScoreRow.MyTeamsHeader)
+        for (g in favoritePin) {
+            out.add(ScoreRow.GameItem(g, rowKey = "fav-${g.id}"))
+        }
+    }
+    for (section in sections) {
+        val collapsed = section.sportKey in collapsedSports
+        out.add(ScoreRow.SportHeader(section, collapsed))
+        if (collapsed) continue
+        for (shelf in section.leagues) {
+            out.add(ScoreRow.LeagueHeader(shelf, section.sportKey))
+            for (g in shelf.games) {
+                out.add(ScoreRow.GameItem(g, rowKey = "g-${section.sportKey}-${shelf.key}-${g.id}"))
+            }
+        }
     }
     return out
+}
+
+@Composable
+private fun MyTeamsSectionHeader() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 2.dp)
+            .semantics { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Star,
+            contentDescription = null,
+            tint = Gold,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = "My teams",
+            color = Gold,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+        )
+    }
+}
+
+@Composable
+private fun SportSectionHeader(
+    section: SportScoreSection,
+    collapsed: Boolean,
+    onToggle: () -> Unit,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .clip(shape)
+            .background(Panel.copy(alpha = 0.72f))
+            .border(
+                width = 1.dp,
+                color = if (collapsed) Muted.copy(alpha = 0.35f) else Gold.copy(alpha = 0.45f),
+                shape = shape,
+            )
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .semantics { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = section.emoji, fontSize = 22.sp)
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = section.sportTitle,
+            color = TextPrimary,
+            fontWeight = FontWeight.Black,
+            fontSize = 18.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (section.liveCount > 0) {
+            Text(
+                text = "${section.liveCount} Live",
+                color = LiveMint,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+        }
+        Text(
+            text = "${section.gameCount}",
+            color = Muted,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(Panel.copy(alpha = 0.95f))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(Gold.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (collapsed) Icons.Default.KeyboardArrowRight else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (collapsed) "Expand ${section.sportTitle}" else "Collapse ${section.sportTitle}",
+                tint = Gold,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LeagueSectionHeader(shelf: LeagueShelf) {
+    val live = shelf.games.count { it.isLive }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, start = 4.dp, end = 4.dp)
+            .semantics { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = shelf.title.uppercase(),
+            color = Muted,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            letterSpacing = 0.6.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (live > 0) {
+            Text(
+                text = "$live Live",
+                color = LiveMint,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+            )
+        } else {
+            Text(
+                text = "${shelf.games.size}",
+                color = Muted,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+            )
+        }
+    }
 }
 
 @Composable
@@ -322,11 +503,7 @@ private fun StreamPickerDialog(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Watch stream",
-                            color = Gold,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Text(text = "Watch stream", color = Gold, fontWeight = FontWeight.Bold)
                         Text(
                             text = "${game.matchupLabel} · ${game.league.label}",
                             color = TextPrimary,
@@ -339,29 +516,19 @@ private fun StreamPickerDialog(
                         )
                     }
                     IconButton(onClick = onClose) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Muted,
-                        )
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Muted)
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 when {
-                    !hasPlaylist -> {
-                        Text(
-                            text = "Add Xtream or M3U under Settings, then tap this game again.",
-                            color = Muted,
-                        )
-                    }
-
-                    matches.isEmpty() -> {
-                        Text(
-                            text = "No strong IPTV matches. Open Guide and pick a sports channel manually.",
-                            color = Muted,
-                        )
-                    }
-
+                    !hasPlaylist -> Text(
+                        text = "Add Xtream or M3U under Settings, then tap this game again.",
+                        color = Muted,
+                    )
+                    matches.isEmpty() -> Text(
+                        text = "No strong IPTV matches. Open Guide and pick a sports channel manually.",
+                        color = Muted,
+                    )
                     else -> {
                         Text(
                             text = "${matches.size} matched channels — tap to play",
@@ -380,11 +547,7 @@ private fun StreamPickerDialog(
                                     .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Gold,
-                                )
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Gold)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -428,6 +591,8 @@ private fun ScoreFilterChip(label: String, selected: Boolean, onClick: () -> Uni
 private fun GameRow(
     game: Game,
     isFavoriteMatch: Boolean,
+    isAwayFavorite: Boolean = false,
+    isHomeFavorite: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -443,11 +608,7 @@ private fun GameRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TeamCell(
-                team = game.away,
-                modifier = Modifier.weight(1f),
-                alignEnd = false,
-            )
+            TeamCell(team = game.away, modifier = Modifier.weight(1f), alignEnd = false, starred = isAwayFavorite)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(horizontal = 8.dp),
@@ -476,11 +637,7 @@ private fun GameRow(
                     )
                 }
             }
-            TeamCell(
-                team = game.home,
-                modifier = Modifier.weight(1f),
-                alignEnd = true,
-            )
+            TeamCell(team = game.home, modifier = Modifier.weight(1f), alignEnd = true, starred = isHomeFavorite)
         }
         if (game.broadcasts.isNotEmpty()) {
             Text(
@@ -498,6 +655,7 @@ private fun TeamCell(
     team: TeamInfo,
     modifier: Modifier,
     alignEnd: Boolean,
+    starred: Boolean = false,
 ) {
     Row(
         modifier = modifier,
@@ -508,21 +666,23 @@ private fun TeamCell(
             TeamLogo(url = team.logoUrl, abbrev = team.abbreviation)
             Spacer(modifier = Modifier.width(8.dp))
         }
-        Column(
-            horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
-        ) {
-            Text(
-                text = team.rowLabel,
-                color = TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = team.abbreviation,
-                color = Muted,
-                fontSize = 11.sp,
-            )
+        Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (starred && alignEnd) {
+                    Text("★", color = Gold, fontSize = 11.sp, modifier = Modifier.padding(end = 2.dp))
+                }
+                Text(
+                    text = team.rowLabel,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (starred && !alignEnd) {
+                    Text("★", color = Gold, fontSize = 11.sp, modifier = Modifier.padding(start = 2.dp))
+                }
+            }
+            Text(text = team.abbreviation, color = Muted, fontSize = 11.sp)
         }
         if (alignEnd) {
             Spacer(modifier = Modifier.width(8.dp))
@@ -537,25 +697,15 @@ private fun TeamLogo(url: String?, abbrev: String) {
         AsyncImage(
             model = url,
             contentDescription = abbrev,
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Fit,
         )
     } else {
         Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(VoidBlack),
+            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(VoidBlack),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = abbrev.take(3),
-                color = Gold,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Text(text = abbrev.take(3), color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

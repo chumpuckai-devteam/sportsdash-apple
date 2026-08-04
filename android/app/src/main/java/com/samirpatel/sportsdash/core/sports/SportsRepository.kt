@@ -128,8 +128,8 @@ class SportsRepository(
                     val team = row.optJSONObject("team") ?: JSONObject()
                     val scoreRaw = row.opt("score")
                     val score = when (scoreRaw) {
-                        is Int -> scoreRaw
-                        is String -> scoreRaw.toIntOrNull()
+                        is Number -> scoreRaw.toInt()
+                        is String -> scoreRaw.trim().toIntOrNull()
                         else -> null
                     }
                     val info = TeamInfo(

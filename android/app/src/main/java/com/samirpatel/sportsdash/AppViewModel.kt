@@ -23,7 +23,9 @@ import com.samirpatel.sportsdash.core.ratings.MovieRatingsRepository
 import com.samirpatel.sportsdash.core.ratings.MovieTitleParser
 import com.samirpatel.sportsdash.core.sports.Game
 import com.samirpatel.sportsdash.core.sports.GameStatus
+import com.samirpatel.sportsdash.core.sports.ScoreboardGrouping
 import com.samirpatel.sportsdash.core.sports.SportLeague
+import com.samirpatel.sportsdash.core.sports.SportScoreSection
 import com.samirpatel.sportsdash.core.sports.SportsRepository
 import com.samirpatel.sportsdash.data.PrefsStore
 import java.io.File
@@ -35,7 +37,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-enum class ScoresFilter { LIVE, UPCOMING, FINAL, FAVORITES }
+enum class ScoresFilter { LIVE, UPCOMING, FINAL }
 
 /** LIST = hour timeline (iOS Guide list); GRID = channel cards. */
 enum class GuideLayout { LIST, GRID }
@@ -137,15 +139,13 @@ class AppViewModel(
         // Cold-start: restore playlist ASAP so Settings/Guide don't look "logged out"
         // after an APK update while DataStore is still warming up.
         viewModelScope.launch {
-            val peeked = prefs.peekPlaylist()
+            val peeked = runCatching { prefs.peekPlaylist() }.getOrNull()
             if (peeked != null && _state.value.playlist == null) {
                 _state.update { it.copy(playlist = peeked) }
                 if (_state.value.channels.isEmpty()) {
                     refreshChannels()
                 }
             }
-        }
-        viewModelScope.launch {
             prefs.playlistFlow.collect { cfg ->
                 _state.update { it.copy(playlist = cfg) }
                 if (cfg != null && _state.value.channels.isEmpty()) {
@@ -154,6 +154,11 @@ class AppViewModel(
             }
         }
         viewModelScope.launch {
+            // Cold-start ticker preference before first player open (FB.11).
+            runCatching {
+                val peeked = prefs.peekShowScoresTicker()
+                _state.update { it.copy(showScoresTicker = peeked) }
+            }
             prefs.showScoresTickerFlow.collect { show ->
                 _state.update { it.copy(showScoresTicker = show) }
             }
@@ -202,6 +207,15 @@ class AppViewModel(
                 existing.type == PlaylistType.XTREAM &&
                 existing.password.isNotBlank() -> existing.password
             else -> pass
+        }
+        if (resolvedPass.isBlank()) {
+            _state.update {
+                it.copy(
+                    channelError =
+                        "Password required (or leave blank only when one is already saved)",
+                )
+            }
+            return
         }
         val cfg = PlaylistConfig(
             id = existing?.id?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString(),
@@ -747,7 +761,12 @@ class AppViewModel(
 
     fun setShowScoresTicker(show: Boolean) {
         _state.update { it.copy(showScoresTicker = show) }
-        viewModelScope.launch { prefs.setShowScoresTicker(show) }
+        viewModelScope.launch {
+            // Survive leaving player / process death (FB.11).
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                runCatching { prefs.setShowScoresTicker(show) }
+            }
+        }
     }
 
     fun toggleScoresTicker() {
@@ -815,35 +834,48 @@ class AppViewModel(
             ScoresFilter.LIVE -> s.games.filter { it.isLive }
             ScoresFilter.UPCOMING -> s.games.filter { it.isUpcoming }
             ScoresFilter.FINAL -> s.games.filter { it.isFinal || it.status == GameStatus.FINAL }
-            ScoresFilter.FAVORITES -> s.games.filter { gameHasFavoriteTeam(it) }
         }
-        // Pin favorite-team games first within Live/Upcoming/Final
-        if (s.scoresFilter != ScoresFilter.FAVORITES && s.favoriteTeamIds.isNotEmpty()) {
-            return base.sortedBy { g -> if (gameHasFavoriteTeam(g)) 0 else 1 }
-        }
-        return base
+        // Pin favorite-team games first (teams only — S-PARITY.FAV.2 / FAV.3).
+        return pinFavoriteGames(base)
     }
 
     fun gamesByLeague(): Map<SportLeague, List<Game>> {
         val filtered = filteredGames()
-        if (_state.value.scoresFilter == ScoresFilter.FAVORITES) {
-            // Single section of favorite games
-            return filtered
-                .groupBy { it.league }
-                .toSortedMap(compareBy { it.label })
+        val buckets = filtered.groupBy { it.league }
+        val ordered = linkedMapOf<SportLeague, List<Game>>()
+        val leagueOrder = try {
+            SportLeague.ALL + buckets.keys.filter { it !in SportLeague.ALL }.sortedBy { it.label }
+        } catch (_: Throwable) {
+            buckets.keys.sortedBy { it.label }
         }
-        return filtered
-            .groupBy { it.league }
-            .toSortedMap(compareBy { it.label })
+        for (league in leagueOrder) {
+            val list = buckets[league] ?: continue
+            if (list.isEmpty() || league in ordered) continue
+            ordered[league] = pinFavoriteGames(list)
+        }
+        return ordered
+    }
+
+    /** Sport → league shelves for collapsible Scores dashboard (iOS parity). */
+    fun sportScoreSections(): List<SportScoreSection> {
+        return ScoreboardGrouping.sportSections(filteredGames())
     }
 
     fun liveGames(): List<Game> {
-        val live = _state.value.games.filter { it.isLive }
+        return pinFavoriteGames(_state.value.games.filter { it.isLive })
+    }
+
+    /** Favorites first, then earlier start. */
+    private fun pinFavoriteGames(games: List<Game>): List<Game> {
         val favs = _state.value.favoriteTeamIds
-        if (favs.isEmpty()) return live
-        return live.sortedBy { g ->
-            if (g.home.id in favs || g.away.id in favs) 0 else 1
+        if (favs.isEmpty()) {
+            return games.sortedBy { it.startTimeMs }
         }
+        return games.sortedWith(
+            compareBy<Game> { g ->
+                if (g.home.id in favs || g.away.id in favs) 0 else 1
+            }.thenBy { it.startTimeMs },
+        )
     }
 
     fun openStreamPicker(game: Game) {

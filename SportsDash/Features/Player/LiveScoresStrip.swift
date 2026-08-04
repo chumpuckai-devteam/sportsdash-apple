@@ -32,7 +32,7 @@ struct LiveScoresStrip: View {
 
     /// Same sport → league sections as the scores dashboard, live-only.
     private var sportSections: [SportScoreSection] {
-        ScoreboardGrouping.sportSections(from: liveOrdered)
+        ScoreboardGrouping.sportSections(from: liveOrdered, favoriteTeamIds: favoriteTeamIds)
     }
 
     var body: some View {
@@ -242,6 +242,10 @@ struct LiveScoresStrip: View {
             let aLp = lastPlayedRank(a.id)
             let bLp = lastPlayedRank(b.id)
             if aLp != bLp { return aLp < bLp }
+            // Nice-to-have: prefer favorite-team games in the player ticker.
+            let aFav = isFav(a) ? 0 : 1
+            let bFav = isFav(b) ? 0 : 1
+            if aFav != bFav { return aFav < bFav }
             return a.startTime < b.startTime
         }
     }

@@ -9,7 +9,7 @@
 |------|----------|
 | Nav | Scores · Guide · Settings |
 | Hard player | VLC / libVLC, TS-first |
-| Scores | ESPN Live / Upcoming / Final / **★ Faves** (favorite teams) |
+| Scores | ESPN Live / Upcoming / Final (Android) · Live / Upcoming / All (iOS); favorite **teams** pin first |
 | Watch from Scores | Tap game → match channels → play |
 | Guide | Hour timeline + Grid; provider category order; EPG download-once |
 | Guide favorites | Star **channels** (Android long-press; iOS optional follow-up) |
@@ -23,8 +23,8 @@
 ### Wave A — must (shipped this sprint)
 | ID | Item | Status |
 |----|------|--------|
-| S-PARITY.A1 | Android favorite teams + ★ Faves | **shipped** |
-| S-PARITY.A2 | Scores filter Live/Upcoming/Final/FAVES | **shipped** |
+| S-PARITY.A1 | Android favorite teams + pin-first | **shipped** (★ Faves filter removed — FAV.3 teams-only) |
+| S-PARITY.A2 | Scores filter Live/Upcoming/Final | **shipped** (no separate Faves chip) |
 | S-PARITY.A3 | Guide timeline checklist | **shipped** (doc + dogfood AC) |
 | S-PARITY.A4 | This matrix doc | **shipped** |
 
@@ -53,8 +53,8 @@
 ## Dogfood AC (baseline green)
 
 - [ ] Load Xtream; 2nd launch paints cached channels quickly  
-- [ ] Long-press Scores game → star home/away team → ★ Faves filter works  
-- [ ] Favorite-team games sort first under Live  
+- [ ] Long-press Scores game → star home/away team → those games pin first under Live/Upcoming  
+- [ ] Favorite-team games sort first under Live (no separate ★ Faves filter)  
 - [ ] Guide: Hour/Grid, Movies filter, category ☰, channel ★ favorites  
 - [ ] Play → pop-out mini bar over tabs → expand → close  
 - [ ] Clean names ON strips HD/4K noise  

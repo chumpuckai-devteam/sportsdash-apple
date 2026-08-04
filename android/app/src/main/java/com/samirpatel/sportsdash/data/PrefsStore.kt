@@ -1,6 +1,7 @@
 package com.samirpatel.sportsdash.data
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -8,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
+import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -18,12 +20,14 @@ import org.json.JSONObject
 private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
 
 /**
- * App prefs. Playlist credentials are dual-written:
+ * App prefs. Playlist credentials are multi-written for APK-update resilience:
  * 1) DataStore (primary)
- * 2) SharedPreferences backup (survives some DataStore edge cases on update)
+ * 2) SharedPreferences backup (`sportsdash_secure_backup`)
+ * 3) filesDir JSON backup (atomic rewrite)
  *
- * Both live in app private storage and are kept across APK updates
- * (same applicationId). Uninstall still wipes them.
+ * Scores ticker is dual-written to SharedPreferences as well (FB.11).
+ * All live in app private storage — kept across APK updates (same applicationId).
+ * Uninstall still wipes them.
  */
 class PrefsStore(private val context: Context) {
     private val keyPlaylist = stringPreferencesKey("playlist_json")
@@ -41,12 +45,20 @@ class PrefsStore(private val context: Context) {
         context.getSharedPreferences(BACKUP_PREFS, Context.MODE_PRIVATE)
     }
 
+    private val playlistBackupFile: File
+        get() = File(context.filesDir, PLAYLIST_BACKUP_NAME)
+
     val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
-        prefs[keyPlaylist]?.let { decodePlaylist(it) } ?: readPlaylistBackup()
+        // Read-only — never edit() inside DataStore collectors (deadlock risk).
+        resolvePlaylistReadOnly(prefs[keyPlaylist])
     }.distinctUntilChanged()
 
     val showScoresTickerFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[keyShowTicker] ?: true
+        prefs[keyShowTicker]
+            ?: backupPrefs.getBoolean(BACKUP_TICKER_KEY, true).takeIf {
+                backupPrefs.contains(BACKUP_TICKER_KEY)
+            }
+            ?: true
     }
 
     val favoriteChannelIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
@@ -73,22 +85,17 @@ class PrefsStore(private val context: Context) {
         prefs[keyTmdb]?.takeIf { it.isNotBlank() }
     }
 
-    /** One-shot read for cold start before flows emit. */
-    suspend fun peekPlaylist(): PlaylistConfig? {
-        val fromDs = context.dataStore.data.first()[keyPlaylist]?.let { decodePlaylist(it) }
-        if (fromDs != null) return fromDs
-        val backup = readPlaylistBackup()
-        if (backup != null) {
-            // Heal DataStore from backup after update/migration
-            savePlaylist(backup)
-        }
-        return backup
-    }
-
     suspend fun savePlaylist(config: PlaylistConfig) {
         val encoded = encodePlaylist(config)
         context.dataStore.edit { it[keyPlaylist] = encoded }
-        backupPrefs.edit().putString(BACKUP_PLAYLIST_KEY, encoded).apply()
+        writePlaylistBackups(encoded)
+    }
+
+    /** One-shot read for cold start before flows emit. */
+    suspend fun peekPlaylist(): PlaylistConfig? {
+        reconcilePlaylistBackup()
+        val raw = context.dataStore.data.first()[keyPlaylist]
+        return resolvePlaylistReadOnly(raw)
     }
 
     suspend fun clearPlaylist() {
@@ -97,11 +104,30 @@ class PrefsStore(private val context: Context) {
             it.remove(keyChannelCache)
             it.remove(keyCategoryOrder)
         }
-        backupPrefs.edit().remove(BACKUP_PLAYLIST_KEY).apply()
+        runCatching {
+            backupPrefs.edit().remove(BACKUP_PLAYLIST_KEY).apply()
+            if (playlistBackupFile.exists()) playlistBackupFile.delete()
+        }.onFailure { Log.w(TAG, "Failed to clear playlist backups", it) }
     }
 
     suspend fun setShowScoresTicker(show: Boolean) {
+        // SP commit first — process death right after toggle still sticks (S-AND.FB.11).
+        val spOk = backupPrefs.edit().putBoolean(BACKUP_TICKER_KEY, show).commit()
+        if (!spOk) Log.w(TAG, "SP commit failed player_show_scores_ticker=$show")
         context.dataStore.edit { it[keyShowTicker] = show }
+        Log.d(TAG, "setShowScoresTicker show=$show spOk=$spOk")
+    }
+
+    /** Cold-start read before DataStore flow warms (player open). */
+    suspend fun peekShowScoresTicker(): Boolean {
+        val fromDs = runCatching {
+            context.dataStore.data.first()[keyShowTicker]
+        }.getOrNull()
+        if (fromDs != null) return fromDs
+        if (backupPrefs.contains(BACKUP_TICKER_KEY)) {
+            return backupPrefs.getBoolean(BACKUP_TICKER_KEY, true)
+        }
+        return true
     }
 
     suspend fun setFavoriteChannelIds(ids: Set<String>) {
@@ -184,9 +210,63 @@ class PrefsStore(private val context: Context) {
         return channels to cats
     }
 
-    private fun readPlaylistBackup(): PlaylistConfig? {
-        val raw = backupPrefs.getString(BACKUP_PLAYLIST_KEY, null) ?: return null
-        return decodePlaylist(raw)
+    /**
+     * Heal DataStore from backups when primary is empty/unusable; seed backups when healthy.
+     * Not safe inside a DataStore flow collector.
+     */
+    suspend fun reconcilePlaylistBackup() {
+        val prefs = context.dataStore.data.first()
+        val storeRaw = prefs[keyPlaylist]
+        val fromStore = storeRaw?.let { decodePlaylist(it) }
+        if (fromStore != null && playlistLooksUsable(fromStore)) {
+            writePlaylistBackups(encodePlaylist(fromStore))
+            return
+        }
+        val backupRaw = readAnyPlaylistBackupRaw() ?: return
+        val fromBackup = decodePlaylist(backupRaw) ?: return
+        if (!playlistLooksUsable(fromBackup)) return
+        Log.i(TAG, "Restoring playlist into DataStore from backup")
+        context.dataStore.edit { it[keyPlaylist] = backupRaw }
+        writePlaylistBackups(backupRaw)
+    }
+
+    private fun resolvePlaylistReadOnly(dataStoreRaw: String?): PlaylistConfig? {
+        val fromStore = dataStoreRaw?.let { decodePlaylist(it) }
+        if (fromStore != null && playlistLooksUsable(fromStore)) return fromStore
+        val backupRaw = readAnyPlaylistBackupRaw() ?: return fromStore
+        val fromBackup = decodePlaylist(backupRaw) ?: return fromStore
+        if (!playlistLooksUsable(fromBackup)) return fromStore
+        return fromBackup
+    }
+
+    private fun playlistLooksUsable(c: PlaylistConfig): Boolean = when (c.type) {
+        PlaylistType.XTREAM ->
+            c.host.isNotBlank() && c.username.isNotBlank() && c.password.isNotBlank()
+        PlaylistType.M3U -> c.m3uUrl.isNotBlank()
+    }
+
+    private fun writePlaylistBackups(encoded: String) {
+        runCatching {
+            backupPrefs.edit().putString(BACKUP_PLAYLIST_KEY, encoded).apply()
+        }.onFailure { Log.w(TAG, "Failed SharedPreferences playlist backup", it) }
+        runCatching {
+            val tmp = File(context.filesDir, "$PLAYLIST_BACKUP_NAME.tmp")
+            tmp.writeText(encoded, Charsets.UTF_8)
+            if (!tmp.renameTo(playlistBackupFile)) {
+                playlistBackupFile.writeText(encoded, Charsets.UTF_8)
+                tmp.delete()
+            }
+        }.onFailure { Log.w(TAG, "Failed filesDir playlist backup", it) }
+    }
+
+    private fun readAnyPlaylistBackupRaw(): String? {
+        val fromSp = backupPrefs.getString(BACKUP_PLAYLIST_KEY, null)?.takeIf { it.isNotBlank() }
+        if (fromSp != null) return fromSp
+        return runCatching {
+            val file = playlistBackupFile
+            if (!file.isFile || file.length() == 0L) return null
+            file.readText(Charsets.UTF_8).takeIf { it.isNotBlank() }
+        }.onFailure { Log.w(TAG, "Failed reading filesDir playlist backup", it) }.getOrNull()
     }
 
     private fun decodeStringList(raw: String?): List<String> {
@@ -235,11 +315,14 @@ class PrefsStore(private val context: Context) {
             username = o.optString("username"),
             password = o.optString("password"),
             m3uUrl = o.optString("m3uUrl"),
-        ).takeIf { it.host.isNotBlank() || it.m3uUrl.isNotBlank() }
+        )
     }.getOrNull()
 
     companion object {
+        private const val TAG = "PrefsStore"
         private const val BACKUP_PREFS = "sportsdash_secure_backup"
         private const val BACKUP_PLAYLIST_KEY = "playlist_json"
+        private const val BACKUP_TICKER_KEY = "player_show_scores_ticker"
+        private const val PLAYLIST_BACKUP_NAME = "playlist_config_backup.json"
     }
 }

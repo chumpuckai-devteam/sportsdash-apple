@@ -117,3 +117,107 @@ data class Game(
         }
     }
 }
+
+/** League shelf under a sport bucket (iOS LeagueShelf parity). */
+data class LeagueShelf(
+    val key: String,
+    val title: String,
+    val sportKey: String,
+    val sportTitle: String,
+    val games: List<Game>,
+)
+
+/** Sport bucket for collapsible Scores dashboard (iOS SportScoreSection parity). */
+data class SportScoreSection(
+    val sportKey: String,
+    val sportTitle: String,
+    val emoji: String,
+    val leagues: List<LeagueShelf>,
+) {
+    val gameCount: Int get() = leagues.sumOf { it.games.size }
+    val liveCount: Int get() = leagues.sumOf { shelf -> shelf.games.count { it.isLive } }
+}
+
+/** Group games sport → league in stable [SportLeague.ALL] order (iOS ScoreboardGrouping). */
+object ScoreboardGrouping {
+    fun sportEmoji(sportPath: String): String = when (sportPath) {
+        "football" -> "🏈"
+        "basketball" -> "🏀"
+        "baseball" -> "⚾"
+        "hockey" -> "🏒"
+        "soccer" -> "⚽"
+        "tennis" -> "🎾"
+        "golf" -> "⛳"
+        "racing" -> "🏎️"
+        "mma" -> "🥊"
+        "rugby" -> "🏉"
+        else -> "🏟️"
+    }
+
+    fun sportSections(games: List<Game>): List<SportScoreSection> {
+        if (games.isEmpty()) return emptyList()
+        val buckets = games.groupBy { it.league }
+        val shelves = ArrayList<LeagueShelf>()
+        for (league in SportLeague.ALL) {
+            val list = buckets[league] ?: continue
+            if (list.isEmpty()) continue
+            val sorted = list.sortedWith(
+                compareByDescending<Game> { it.isLive }.thenBy { it.startTimeMs },
+            )
+            shelves.add(
+                LeagueShelf(
+                    key = league.id,
+                    title = league.label,
+                    sportKey = league.sportPath,
+                    sportTitle = league.section,
+                    games = sorted,
+                ),
+            )
+        }
+        for ((league, list) in buckets) {
+            if (shelves.any { it.key == league.id } || list.isEmpty()) continue
+            val sorted = list.sortedWith(
+                compareByDescending<Game> { it.isLive }.thenBy { it.startTimeMs },
+            )
+            shelves.add(
+                LeagueShelf(
+                    key = league.id,
+                    title = league.label,
+                    sportKey = league.sportPath,
+                    sportTitle = league.section,
+                    games = sorted,
+                ),
+            )
+        }
+        val sections = ArrayList<SportScoreSection>()
+        var currentKey: String? = null
+        var currentTitle = ""
+        var currentEmoji = "🏟️"
+        var currentLeagues = ArrayList<LeagueShelf>()
+        fun flush() {
+            val key = currentKey
+            if (key != null && currentLeagues.isNotEmpty()) {
+                sections.add(
+                    SportScoreSection(
+                        sportKey = key,
+                        sportTitle = currentTitle,
+                        emoji = currentEmoji,
+                        leagues = currentLeagues.toList(),
+                    ),
+                )
+            }
+        }
+        for (shelf in shelves) {
+            if (currentKey != shelf.sportKey) {
+                flush()
+                currentKey = shelf.sportKey
+                currentTitle = shelf.sportTitle
+                currentEmoji = sportEmoji(shelf.sportKey)
+                currentLeagues = ArrayList()
+            }
+            currentLeagues.add(shelf)
+        }
+        flush()
+        return sections
+    }
+}

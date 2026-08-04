@@ -54,20 +54,21 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var m3u by remember { mutableStateOf("") }
-    var hydrated by remember { mutableStateOf(false) }
+    // Which playlist id we last copied into the form (re-hydrate when id changes).
+    var hydratedPlaylistId by remember { mutableStateOf<String?>(null) }
 
-    // When playlist loads from disk (after update / cold start), fill the form once.
+    // When playlist loads from disk (after update / cold start), fill the form once per id.
     // Password stays blank intentionally — blank save keeps existing password.
-    LaunchedEffect(state.playlist?.id, state.playlist?.host, state.playlist?.username) {
+    LaunchedEffect(state.playlist?.id, state.playlist?.host, state.playlist?.username, state.playlist?.m3uUrl) {
         val pl = state.playlist ?: return@LaunchedEffect
-        if (hydrated) return@LaunchedEffect
+        if (hydratedPlaylistId == pl.id) return@LaunchedEffect
         name = pl.name.ifBlank { "My IPTV" }
         serverUrl = pl.host
         user = pl.username
         m3u = pl.m3uUrl
         mode = if (pl.type == PlaylistType.M3U) 1 else 0
         pass = ""
-        hydrated = true
+        hydratedPlaylistId = pl.id
     }
 
     val fields = OutlinedTextFieldDefaults.colors(
@@ -369,7 +370,10 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
             )
             Text(
                 text = "SportsDash Android — Scores (ESPN) + IPTV Guide (libVLC / LGPL). " +
-                    "Tabs: Scores · Guide · Settings. https://www.videolan.org/",
+                    "Tabs: Scores · Guide · Settings. https://www.videolan.org/\n\n" +
+                    "Playlist login is stored on-device (DataStore + private backups) and survives " +
+                    "app updates with the same package id. Uninstalling SportsDash clears login " +
+                    "and all local data.",
                 color = Muted,
                 style = MaterialTheme.typography.bodySmall,
             )

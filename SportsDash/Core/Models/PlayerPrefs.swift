@@ -304,7 +304,9 @@ enum ChannelNameCleanup {
 // MARK: - Dashboard filter
 
 enum DashboardFilter: String, CaseIterable, Identifiable, Sendable {
-    case live, upcoming, favorites, all
+    /// Live / Upcoming / All only — no separate favorite-games filter (S-PARITY.FAV.3).
+    /// Favorite **teams** pin first inside each filter (S-PARITY.FAV.2).
+    case live, upcoming, all
 
     var id: String { rawValue }
 
@@ -312,7 +314,6 @@ enum DashboardFilter: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .live: return "LIVE"
         case .upcoming: return "UPCOMING"
-        case .favorites: return "★ FAVES"
         case .all: return "ALL"
         }
     }
