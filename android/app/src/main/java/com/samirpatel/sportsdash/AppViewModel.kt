@@ -26,6 +26,7 @@ import com.samirpatel.sportsdash.core.sports.GameStatus
 import com.samirpatel.sportsdash.core.sports.ScoreboardGrouping
 import com.samirpatel.sportsdash.core.sports.SportLeague
 import com.samirpatel.sportsdash.core.sports.SportScoreSection
+import com.samirpatel.sportsdash.core.sports.TeamInfo
 import com.samirpatel.sportsdash.core.sports.SportsRepository
 import com.samirpatel.sportsdash.data.PrefsStore
 import java.io.File
@@ -863,6 +864,33 @@ class AppViewModel(
 
     fun liveGames(): List<Game> {
         return pinFavoriteGames(_state.value.games.filter { it.isLive })
+    }
+
+    /**
+     * Variant A "My Games": games involving a starred team under the active filter.
+     * Shown above the full collapsible board (not a separate favorite-games product).
+     */
+    fun myGamesPin(): List<Game> {
+        val favs = _state.value.favoriteTeamIds
+        if (favs.isEmpty()) return emptyList()
+        return pinFavoriteGames(filteredGames().filter { gameHasFavoriteTeam(it) })
+    }
+
+    /** Horizontal favorite-team rail with ESPN logos when present. */
+    fun favoriteTeamsRail(): List<TeamInfo> {
+        val ids = _state.value.favoriteTeamIds
+        if (ids.isEmpty()) return emptyList()
+        val byId = linkedMapOf<String, TeamInfo>()
+        for (g in _state.value.games) {
+            if (g.home.id in ids) byId.putIfAbsent(g.home.id, g.home)
+            if (g.away.id in ids) byId.putIfAbsent(g.away.id, g.away)
+        }
+        // Stable order: known ids first, then any extras
+        val ordered = ArrayList<TeamInfo>()
+        for (id in ids) {
+            byId[id]?.let { ordered.add(it) }
+        }
+        return ordered
     }
 
     /** Favorites first, then earlier start. */

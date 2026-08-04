@@ -47,6 +47,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -61,11 +62,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
 import com.samirpatel.sportsdash.core.player.createVlcVideoLayout
 import com.samirpatel.sportsdash.core.sports.Game
+import coil.compose.AsyncImage
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.LiveMint
 import com.samirpatel.sportsdash.ui.theme.Muted
@@ -83,7 +84,7 @@ import androidx.compose.ui.input.pointer.pointerInput
  * - System Back exits player via BackHandler (no custom back chip)
  * - Play / pause, mute, rejoin live
  * - Channel title + engine / LIVE chips
- * - Bottom live scores ticker (compact, scores never clip)
+ * - Top live scores ticker (variant D / NFL-style; logos when available)
  * - Chrome auto-hides after idle; tap video to restore (S-AND.FB.13)
  * - Landscape ticker scrolls: systemGestureExclusion + tap-only video layer (S-AND.FB.10)
  *
@@ -193,8 +194,9 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
-                    top = if (landscape) 72.dp else 96.dp,
-                    bottom = if (landscape) 148.dp else 160.dp,
+                    // Reserve space under top ticker + status
+                    top = if (landscape) 108.dp else 132.dp,
+                    bottom = if (landscape) 96.dp else 120.dp,
                 )
                 .pointerInput(Unit) {
                     detectTapGestures {
@@ -383,7 +385,9 @@ fun PlayerScreen(
             }
         }
 
-        if (showScoresTicker) { // S-AND.FB.11: pref only; chrome auto-hide must not clear ticker
+        // Variant D: sticky multi-game ticker at TOP (NFL-style). Always on when pref
+        // is true — chrome auto-hide must not clear it (S-AND.FB.11).
+        if (showScoresTicker) {
             LiveScoresTicker(
                 games = liveGames,
                 currentGameId = currentGameId,
@@ -393,13 +397,11 @@ fun PlayerScreen(
                     onTickerGame(game)
                 },
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(Alignment.TopCenter)
                     .zIndex(20f)
                     .fillMaxWidth()
-                    // Immersive landscape parks the strip in the home/back gesture zone —
-                    // exclude so horizontal LazyRow swipes reach Compose (S-AND.FB.10).
-                    .systemGestureExclusion()
-                    .navigationBarsPadding(),
+                    .statusBarsPadding()
+                    .systemGestureExclusion(),
             )
         }
     }
@@ -466,11 +468,8 @@ private fun LiveScoresTicker(
             .take(24)
     }
 
-    val cardHeight = if (compact) 78.dp else 88.dp
-    val cardWidth = if (compact) 152.dp else 168.dp
-    val scoreSize = if (compact) 15.sp else 17.sp
-    val abbrSize = if (compact) 11.sp else 12.sp
     val listState = rememberLazyListState()
+    val pillH = if (compact) 44.dp else 48.dp
 
     Column(
         modifier = modifier
@@ -479,133 +478,95 @@ private fun LiveScoresTicker(
             .background(
                 Brush.verticalGradient(
                     listOf(
+                        Color.Black.copy(alpha = 0.82f),
+                        Color.Black.copy(alpha = 0.45f),
                         Color.Transparent,
-                        Color.Black.copy(alpha = 0.55f),
-                        Color.Black.copy(alpha = 0.94f),
                     ),
                 ),
             )
-            .padding(bottom = 8.dp, top = 12.dp),
+            .padding(top = 4.dp, bottom = 10.dp),
     ) {
-        Text(
-            text = if (live.isEmpty()) "No other live games" else "LIVE SCORES · tap to switch",
-            color = LiveMint,
-            fontWeight = FontWeight.Bold,
-            fontSize = 10.sp,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
-        )
         LazyRow(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
                 .systemGestureExclusion(),
-            contentPadding = PaddingValues(horizontal = 12.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             userScrollEnabled = true,
         ) {
-            if (live.isNotEmpty()) {
+            if (live.isEmpty()) {
                 item {
-                    Column(
-                        modifier = Modifier
-                            .width(72.dp)
-                            .height(cardHeight)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Panel.copy(alpha = 0.95f))
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text("LIVE", color = LiveMint, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                        Text(
-                            "${live.size}",
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                        )
-                        Text("games", color = Muted, fontSize = 10.sp)
-                    }
+                    Text(
+                        text = "No other live games",
+                        color = Muted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                    )
                 }
             }
             items(items = live, key = { it.id }) { game ->
                 val current = game.id == currentGameId
-                Column(
+                Row(
                     modifier = Modifier
-                        .width(cardWidth)
-                        .height(cardHeight)
+                        .height(pillH)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (current) Gold.copy(alpha = 0.22f) else Panel.copy(alpha = 0.95f),
+                            if (current) Gold else Panel.copy(alpha = 0.94f),
                         )
                         .clickable { onGameTap(game) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            game.league.label,
-                            color = Gold,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            "LIVE",
-                            color = LiveMint,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    // Two score lines — away / home always fully visible (FB.9)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            game.away.abbreviation.ifBlank { game.away.rowLabel },
-                            color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            game.away.displayScore,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            maxLines = 1,
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            game.home.abbreviation.ifBlank { game.home.rowLabel },
-                            color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            game.home.displayScore,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            maxLines = 1,
-                        )
-                    }
+                    TickerTeamLogo(url = game.away.logoUrl, abbrev = game.away.abbreviation)
+                    Text(
+                        text = buildString {
+                            append(game.away.abbreviation.ifBlank { game.away.rowLabel }.take(4))
+                            append(' ')
+                            append(game.away.displayScore)
+                            append('–')
+                            append(game.home.displayScore)
+                            append(' ')
+                            append(game.home.abbreviation.ifBlank { game.home.rowLabel }.take(4))
+                        },
+                        color = if (current) VoidBlack else TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = if (compact) 12.sp else 13.sp,
+                        maxLines = 1,
+                    )
+                    TickerTeamLogo(url = game.home.logoUrl, abbrev = game.home.abbreviation)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TickerTeamLogo(url: String?, abbrev: String) {
+    if (!url.isNullOrBlank()) {
+        AsyncImage(
+            model = url,
+            contentDescription = abbrev,
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape),
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = abbrev.take(2).ifBlank { "·" },
+                color = Gold,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }

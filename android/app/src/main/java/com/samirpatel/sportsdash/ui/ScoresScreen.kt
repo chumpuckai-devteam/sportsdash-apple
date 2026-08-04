@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -128,11 +129,6 @@ fun ScoresScreen(
                     selected = state.scoresFilter == ScoresFilter.FINAL,
                     onClick = { vm.setScoresFilter(ScoresFilter.FINAL) },
                 )
-                ScoreFilterChip(
-                    label = "★ Faves",
-                    selected = state.scoresFilter == ScoresFilter.FAVORITES,
-                    onClick = { vm.setScoresFilter(ScoresFilter.FAVORITES) },
-                )
                 Text(
                     text = state.scoresStatus ?: "Scores",
                     color = Muted,
@@ -163,14 +159,18 @@ fun ScoresScreen(
                 )
             }
 
+            // Variant A: favorite-team logo rail (ESPN / Bleacher Report)
+            FavoriteTeamsRail(
+                teams = vm.favoriteTeamsRail(),
+                onAddHint = {
+                    // Guide user: pick any game and long-press to star a team.
+                    teamFavGame = state.games.firstOrNull { !vm.gameHasFavoriteTeam(it) }
+                        ?: state.games.firstOrNull()
+                },
+            )
+
             val sections = vm.sportScoreSections()
-            val favoritePin = remember(state.games, state.favoriteTeamIds, state.scoresFilter) {
-                if (state.scoresFilter == ScoresFilter.FAVORITES || state.favoriteTeamIds.isEmpty()) {
-                    emptyList()
-                } else {
-                    vm.filteredGames().filter { vm.gameHasFavoriteTeam(it) }
-                }
-            }
+            val favoritePin = vm.myGamesPin()
             when {
                 state.isLoadingScores && state.games.isEmpty() -> {
                     Box(
@@ -195,12 +195,23 @@ fun ScoresScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(text = emptyFilterMessage(state.scoresFilter), color = Muted)
+                            Text(
+                                text = "Long-press a game to ★ a team",
+                                color = Muted,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
                         }
                     }
                 }
 
                 else -> {
-                    val rows = flattenScoreRows(sections, collapsedSports, favoritePin, favoritesOnly = state.scoresFilter == ScoresFilter.FAVORITES)
+                    val rows = flattenScoreRows(
+                        sections = sections,
+                        collapsedSports = collapsedSports,
+                        favoritePin = favoritePin,
+                        favoritesOnly = false,
+                    )
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -213,7 +224,7 @@ fun ScoresScreen(
                                     is ScoreRow.SportHeader -> "sport-${row.section.sportKey}"
                                     is ScoreRow.LeagueHeader -> "league-${row.sportKey}-${row.shelf.key}"
                                     is ScoreRow.GameItem -> row.rowKey
-                                    ScoreRow.MyTeamsHeader -> "my-teams"
+                                    ScoreRow.MyTeamsHeader -> "my-games"
                                 }
                             },
                         ) { row ->
@@ -232,7 +243,9 @@ fun ScoresScreen(
                                     onClick = { vm.openStreamPicker(row.game) },
                                     onLongClick = { teamFavGame = row.game },
                                 )
-                                ScoreRow.MyTeamsHeader -> MyTeamsSectionHeader()
+                                ScoreRow.MyTeamsHeader -> MyTeamsSectionHeader(
+                                    liveCount = favoritePin.count { it.isLive },
+                                )
                             }
                         }
                     }
@@ -257,7 +270,7 @@ fun ScoresScreen(
                 title = { Text("${g.away.rowLabel} @ ${g.home.rowLabel}", color = TextPrimary) },
                 text = {
                     Text(
-                        "Favorite teams pin under My teams and sort first in each league.",
+                        "Favorite teams appear first in Live, Upcoming, and Final.",
                         color = Muted,
                     )
                 },
@@ -300,7 +313,6 @@ private fun emptyFilterMessage(filter: ScoresFilter): String = when (filter) {
     ScoresFilter.LIVE -> "No live games right now"
     ScoresFilter.UPCOMING -> "Nothing upcoming for selected leagues"
     ScoresFilter.FINAL -> "No finals in current boards"
-    ScoresFilter.FAVORITES -> "Star a team (long-press a game) to fill ★ Faves"
 }
 
 private fun flattenScoreRows(
@@ -322,6 +334,7 @@ private fun flattenScoreRows(
         }
         return out
     }
+    val pinIds = favoritePin.map { it.id }.toSet()
     if (favoritePin.isNotEmpty()) {
         out.add(ScoreRow.MyTeamsHeader)
         for (g in favoritePin) {
@@ -333,8 +346,10 @@ private fun flattenScoreRows(
         out.add(ScoreRow.SportHeader(section, collapsed))
         if (collapsed) continue
         for (shelf in section.leagues) {
+            val rest = shelf.games.filter { it.id !in pinIds }
+            if (rest.isEmpty()) continue
             out.add(ScoreRow.LeagueHeader(shelf, section.sportKey))
-            for (g in shelf.games) {
+            for (g in rest) {
                 out.add(ScoreRow.GameItem(g, rowKey = "g-${section.sportKey}-${shelf.key}-${g.id}"))
             }
         }
@@ -343,7 +358,7 @@ private fun flattenScoreRows(
 }
 
 @Composable
-private fun MyTeamsSectionHeader() {
+private fun MyTeamsSectionHeader(liveCount: Int = 0) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -359,11 +374,83 @@ private fun MyTeamsSectionHeader() {
             modifier = Modifier.size(16.dp),
         )
         Text(
-            text = "My teams",
+            text = "My Games",
             color = Gold,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
         )
+        if (liveCount > 0) {
+            Text(
+                text = "$liveCount Live",
+                color = LiveMint,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoriteTeamsRail(
+    teams: List<TeamInfo>,
+    onAddHint: () -> Unit,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        items(items = teams, key = { it.id }) { team ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(56.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Panel)
+                        .border(2.dp, Gold.copy(alpha = 0.65f), CircleShape)
+                        .padding(6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 40.dp)
+                }
+                Text(
+                    text = team.rowLabel,
+                    color = Muted,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+        item(key = "add-fave") {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(56.dp)
+                    .clickable(onClick = onAddHint),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Panel)
+                        .border(2.dp, Muted.copy(alpha = 0.5f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("+", color = Muted, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    text = if (teams.isEmpty()) "Add ★" else "Add",
+                    color = Muted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -692,20 +779,32 @@ private fun TeamCell(
 }
 
 @Composable
-private fun TeamLogo(url: String?, abbrev: String) {
+private fun TeamLogo(
+    url: String?,
+    abbrev: String,
+    size: androidx.compose.ui.unit.Dp = 36.dp,
+) {
     if (!url.isNullOrBlank()) {
         AsyncImage(
             model = url,
             contentDescription = abbrev,
-            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.size(size).clip(RoundedCornerShape(8.dp)),
             contentScale = ContentScale.Fit,
         )
     } else {
         Box(
-            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(VoidBlack),
+            modifier = Modifier
+                .size(size)
+                .clip(RoundedCornerShape(8.dp))
+                .background(VoidBlack),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = abbrev.take(3), color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = abbrev.take(3).ifBlank { "?" },
+                color = Gold,
+                fontSize = (size.value * 0.28f).sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
