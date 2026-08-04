@@ -6,6 +6,7 @@ struct ScoresView: View {
     /// Collapsed sport section keys (`soccer`, `baseball`, …) — same idea as `LiveScoresStrip`.
     @State private var collapsedSports: Set<String> = []
     @State private var showLeaguesSettings = false
+    @State private var showFavoritePicker = false
 
     var body: some View {
         NavigationStack {
@@ -52,6 +53,11 @@ struct ScoresView: View {
                 #if os(iOS)
                 .navigationDestination(isPresented: $showLeaguesSettings) {
                     ScoresSettingsView()
+                }
+                .sheet(isPresented: $showFavoritePicker) {
+                    FavoriteTeamPickerView()
+                        .environmentObject(appModel)
+                        .sportsSheetChrome()
                 }
                 #endif
         }
@@ -117,24 +123,35 @@ struct ScoresView: View {
     }
 
     private var scoresContent: some View {
-        // Teams-only favorites (S-PARITY.FAV.3): no separate "My teams" / ★ Faves list.
-        // Starred-team games pin first inside Live / Upcoming / All (FAV.2).
+        // Android UI A parity: favorite logo rail + My Games pin, then collapsible sports.
+        // Starred-team games also pin first inside league shelves (FAV.2).
+        let pin = appModel.myGamesPin
+        let pinIds = Set(pin.map(\.id))
+        let boardGames = appModel.filteredGames.filter { !pinIds.contains($0.id) }
         let sections: [SportScoreSection] = Self.buildSections(
-            games: appModel.filteredGames,
+            games: boardGames,
             filter: appModel.dashboardFilter,
             selectedLeagues: appModel.selectedLeagues,
             favoriteTeamIds: appModel.favoriteTeamIds
         )
 
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                 }
 
-                if sections.isEmpty {
+                #if os(iOS)
+                favoriteTeamsRail
+                #endif
+
+                if !pin.isEmpty {
+                    myGamesSection(pin)
+                }
+
+                if sections.isEmpty && pin.isEmpty {
                     ContentUnavailableView(
                         emptyTitle,
                         systemImage: "sportscourt",
@@ -152,6 +169,102 @@ struct ScoresView: View {
         }
         .sportsRefreshable { await appModel.refreshScores() }
     }
+
+    #if os(iOS)
+    private var favoriteTeamsRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(appModel.favoriteTeamsRail) { team in
+                    VStack(spacing: 6) {
+                        railLogo(team)
+                        Text(team.rowLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(SportsColors.muted)
+                            .lineLimit(1)
+                            .frame(width: 56)
+                    }
+                }
+                Button {
+                    showFavoritePicker = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Text("+")
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(SportsColors.muted)
+                            .frame(width: 52, height: 52)
+                            .background(SportsColors.panel, in: Circle())
+                            .overlay(Circle().stroke(SportsColors.muted.opacity(0.5), lineWidth: 2))
+                        Text(appModel.favoriteTeamsRail.isEmpty ? "Add ★" : "Add")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(SportsColors.muted)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add favorite team")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func railLogo(_ team: TeamInfo) -> some View {
+        Group {
+            if let raw = team.logoURL, let url = URL(string: raw) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFit()
+                    default:
+                        Text(String(team.abbreviation.prefix(3)))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(SportsColors.gold)
+                    }
+                }
+            } else {
+                Text(String(team.abbreviation.prefix(3)))
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(SportsColors.gold)
+            }
+        }
+        .frame(width: 40, height: 40)
+        .padding(6)
+        .background(SportsColors.panel, in: Circle())
+        .overlay(Circle().stroke(SportsColors.gold.opacity(0.65), lineWidth: 2))
+    }
+
+    private func myGamesSection(_ games: [Game]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(SportsColors.gold)
+                    .font(.caption.weight(.bold))
+                Text("My Games")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(SportsColors.gold)
+                let live = games.filter(\.isLive).count
+                if live > 0 {
+                    Text("\(live) Live")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(SportsColors.live)
+                }
+            }
+            .padding(.horizontal, 16)
+
+            ForEach(games) { game in
+                GameScoreFocusRow(
+                    game: game,
+                    isFavorite: appModel.isFavorite(game),
+                    isAwayFavorite: appModel.isTeamFavorite(game.away.id),
+                    isHomeFavorite: appModel.isTeamFavorite(game.home.id),
+                    onSelect: { selectedGame = game },
+                    onToggleAwayFavorite: { appModel.toggleFavorite(team: game.away) },
+                    onToggleHomeFavorite: { appModel.toggleFavorite(team: game.home) }
+                )
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+    #endif
 
     /// Always-visible: leagues (truncated) · Updated time + Edit leagues (S-UX.P0.2).
     private var scoresContextStrip: some View {

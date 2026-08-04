@@ -290,6 +290,69 @@ actor SportsAPI {
         return games
     }
 
+
+    /// Full roster for favorite-team picker (Android parity).
+    func fetchTeams(league: SportLeague) async -> [TeamInfo] {
+        guard let url = URL(string: "\(base)/\(league.sportPath)/\(league.leaguePath)/teams?limit=400") else {
+            return []
+        }
+        do {
+            let (data, resp) = try await session.data(from: url)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return []
+            }
+            return Self.parseTeams(data)
+        } catch {
+            return []
+        }
+    }
+
+    nonisolated private static func parseTeams(_ data: Data) -> [TeamInfo] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sports = root["sports"] as? [[String: Any]] else { return [] }
+        var out: [TeamInfo] = []
+        var seen = Set<String>()
+        for sport in sports {
+            guard let leagues = sport["leagues"] as? [[String: Any]] else { continue }
+            for league in leagues {
+                guard let teams = league["teams"] as? [[String: Any]] else { continue }
+                for wrap in teams {
+                    let team = (wrap["team"] as? [String: Any]) ?? wrap
+                    let id = (team["id"] as? String)
+                        ?? (team["uid"] as? String)
+                        ?? (team["abbreviation"] as? String)
+                        ?? ""
+                    guard !id.isEmpty, seen.insert(id).inserted else { continue }
+                    var logo: String?
+                    if let logos = team["logos"] as? [[String: Any]],
+                       let href = logos.first?["href"] as? String, !href.isEmpty {
+                        logo = href
+                    } else if let l = team["logo"] as? String, !l.isEmpty {
+                        logo = l
+                    }
+                    let name = (team["displayName"] as? String)
+                        ?? (team["name"] as? String)
+                        ?? (team["shortDisplayName"] as? String)
+                        ?? id
+                    let abbr = (team["abbreviation"] as? String)
+                        ?? String(name.prefix(3)).uppercased()
+                    let short = (team["shortDisplayName"] as? String) ?? (team["name"] as? String)
+                    out.append(TeamInfo(
+                        id: id,
+                        name: name,
+                        abbreviation: abbr,
+                        score: nil,
+                        logoURL: logo,
+                        colorHex: team["color"] as? String,
+                        alternateColorHex: team["alternateColor"] as? String,
+                        shortName: short
+                    ))
+                }
+            }
+        }
+        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
     /// ESPN scoreboard dates vary: with/without seconds, with/without fractional seconds, `Z` or offset.
     nonisolated static func parseESPNDate(_ raw: String) -> Date? {
         let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published var xtreamAccount: XtreamAccountInfo?
     @Published var isLoadingAccount = false
     @Published var favoriteTeamIds: Set<String> = []
+    @Published var favoriteTeams: [TeamInfo] = []
     /// IPTV channel favorites (Guide ★) — Android long-press parity.
     @Published var favoriteChannelIds: Set<String> = []
     @Published var lastPlayedGameIds: [String] = []
@@ -61,6 +62,7 @@ final class AppModel: ObservableObject {
 
     init() {
         favoriteTeamIds = storage.favoriteTeamIds()
+        favoriteTeams = storage.favoriteTeams()
         favoriteChannelIds = storage.favoriteChannelIds()
         lastPlayedGameIds = storage.lastPlayedGameIds()
         playerPrefs = storage.playerPrefs()
@@ -615,8 +617,67 @@ final class AppModel: ObservableObject {
 
     func toggleFavorite(teamId: String) {
         guard !teamId.isEmpty else { return }
+        if let team = games.flatMap({ [$0.home, $0.away] }).first(where: { $0.id == teamId }) {
+            toggleFavorite(team: team)
+            return
+        }
         storage.toggleFavorite(teamId: teamId)
         favoriteTeamIds = storage.favoriteTeamIds()
+        favoriteTeams = storage.favoriteTeams()
+    }
+
+    func toggleFavorite(team: TeamInfo) {
+        guard !team.id.isEmpty else { return }
+        storage.toggleFavorite(team: team)
+        favoriteTeams = storage.favoriteTeams()
+        favoriteTeamIds = storage.favoriteTeamIds()
+    }
+
+    /// Android UI A: games with a starred team under the active filter.
+    var myGamesPin: [Game] {
+        guard !favoriteTeamIds.isEmpty else { return [] }
+        return Self.pinFavoriteGames(
+            filteredGames.filter { isFavorite($0) },
+            favoriteTeamIds: favoriteTeamIds
+        )
+    }
+
+    /// Horizontal rail with logos (meta first, enrich from board).
+    var favoriteTeamsRail: [TeamInfo] {
+        if !favoriteTeams.isEmpty {
+            var board: [String: TeamInfo] = [:]
+            for g in games {
+                board[g.home.id] = g.home
+                board[g.away.id] = g.away
+            }
+            return favoriteTeams.map { t in
+                if (t.logoURL == nil || t.logoURL?.isEmpty == true),
+                   let b = board[t.id], let logo = b.logoURL, !logo.isEmpty {
+                    var enriched = t
+                    enriched.logoURL = logo
+                    if enriched.colorHex == nil { enriched.colorHex = b.colorHex }
+                    return enriched
+                }
+                return t
+            }
+        }
+        var byId: [String: TeamInfo] = [:]
+        for g in games {
+            if favoriteTeamIds.contains(g.home.id) { byId[g.home.id] = g.home }
+            if favoriteTeamIds.contains(g.away.id) { byId[g.away.id] = g.away }
+        }
+        return favoriteTeamIds.compactMap { byId[$0] }
+    }
+
+    func sportGroupsForPicker() -> [(String, [SportLeague])] {
+        let groups = Dictionary(grouping: Array(SportLeague.allCases)) { $0.sportSectionTitle }
+        return groups.keys.sorted().map { key in
+            (key, (groups[key] ?? []).sorted { $0.label < $1.label })
+        }
+    }
+
+    func loadTeamsForLeague(_ league: SportLeague) async -> [TeamInfo] {
+        await sportsAPI.fetchTeams(league: league)
     }
 
     /// Users favorite **teams**, not whole games (S-PARITY.FAV.3).

@@ -6,6 +6,8 @@ struct LiveScoresStrip: View {
     var currentGameId: String?
     var favoriteTeamIds: Set<String> = []
     var lastPlayedGameIds: [String] = []
+    /// Android D parity — compact horizontal pills under exit bar (top of player).
+    var compactTopStyle: Bool = false
     var onGameTap: (Game) -> Void
 
     /// Collapsed sport section keys (`soccer`, `baseball`, …).
@@ -36,6 +38,80 @@ struct LiveScoresStrip: View {
     }
 
     var body: some View {
+        Group {
+            if compactTopStyle {
+                compactPills
+            } else {
+                legacyStrip
+            }
+        }
+    }
+
+    /// NFL-style top pills with logos + scores (Android D).
+    private var compactPills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if liveOrdered.isEmpty {
+                    Text("No other live games")
+                        .font(.caption)
+                        .foregroundStyle(SportsColors.muted)
+                        .padding(.horizontal, 8)
+                }
+                ForEach(liveOrdered) { g in
+                    Button { onGameTap(g) } label: {
+                        HStack(spacing: 6) {
+                            miniLogo(g.away)
+                            Text("\(g.away.abbreviation) \(g.away.displayScore)–\(g.home.displayScore) \(g.home.abbreviation)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(g.id == currentGameId ? SportsColors.voidBlack : SportsColors.text)
+                                .lineLimit(1)
+                            miniLogo(g.home)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            g.id == currentGameId ? SportsColors.gold : SportsColors.panel.opacity(0.94),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(
+            LinearGradient(
+                colors: [.black.opacity(0.82), .black.opacity(0.35), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private func miniLogo(_ team: TeamInfo) -> some View {
+        Group {
+            if let raw = team.logoURL, let url = URL(string: raw) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img): img.resizable().scaledToFit()
+                    default:
+                        Text(String(team.abbreviation.prefix(2)))
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(SportsColors.gold)
+                    }
+                }
+            } else {
+                Text(String(team.abbreviation.prefix(2)))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(SportsColors.gold)
+            }
+        }
+        .frame(width: 18, height: 18)
+        .clipShape(Circle())
+    }
+
+    private var legacyStrip: some View {
         VStack(spacing: 6) {
             if let current = games.first(where: { $0.id == currentGameId }) {
                 hero(current)
@@ -68,7 +144,6 @@ struct LiveScoresStrip: View {
             .frame(height: 120)
         }
         .padding(.bottom, 8)
-        // Scrim only — never glass-fill the strip over video.
         .background(
             LinearGradient(
                 colors: [.clear, .black.opacity(0.5), .black.opacity(0.9)],

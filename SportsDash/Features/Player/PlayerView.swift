@@ -52,21 +52,18 @@ struct PlayerView: View {
                 errorOverlay(err)
             }
 
-            // Top: controls. Bottom: channel/EPG info, then scores ticker (never covers buttons).
+            // Android D parity: exit + optional ticker at TOP; info chrome mid/bottom.
             VStack(spacing: 0) {
-                if showChrome {
-                    topChrome
-                }
-                Spacer(minLength: 0)
-                if showChrome {
-                    bottomInfoChrome
-                }
+                // Always-on exit row (even when chrome auto-hides)
+                alwaysOnExitBar
+
                 if showScoresStrip, playback.error == nil {
                     LiveScoresStrip(
                         games: appModel.games.filter(\.isLive),
                         currentGameId: game?.id,
                         favoriteTeamIds: appModel.favoriteTeamIds,
                         lastPlayedGameIds: appModel.lastPlayedGameIds,
+                        compactTopStyle: true,
                         onGameTap: { g in
                             Task {
                                 let chans = appModel.channels
@@ -82,8 +79,16 @@ struct PlayerView: View {
                         }
                     )
                 }
+
+                if showChrome {
+                    topChrome
+                }
+                Spacer(minLength: 0)
+                if showChrome {
+                    bottomInfoChrome
+                }
             }
-            .allowsHitTesting(showChrome || showScoresStrip)
+            .allowsHitTesting(true)
         }
         #if os(iOS)
         .statusBarHidden(true)
@@ -157,16 +162,31 @@ struct PlayerView: View {
         }
     }
 
-    // MARK: - Chrome (controls top, info mid-bottom, ticker absolute bottom)
+    // MARK: - Chrome
     // Liquid Glass on floating controls only — never glass-fill the video surface.
     // https://developer.apple.com/design/human-interface-guidelines/materials
+
+    /// Always visible exit (Android player exit parity).
+    private var alwaysOnExitBar: some View {
+        HStack(spacing: 10) {
+            chromeIconButton(systemName: "chevron.left") { dismiss() }
+            Spacer(minLength: 0)
+            if showChrome {
+                chromeIconButton(systemName: "xmark") { dismiss() }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(
+            LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom)
+        )
+    }
 
     private var topChrome: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                chromeIconButton(systemName: "chevron.left") { dismiss() }
-
-                Spacer()
+                Spacer(minLength: 0)
 
                 Text(engineChip)
                     .font(.caption.weight(.bold))

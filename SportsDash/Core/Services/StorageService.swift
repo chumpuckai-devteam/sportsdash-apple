@@ -9,6 +9,7 @@ final class StorageService {
     private let iptvMetaKey = "iptv_config_meta"
     private let iptvPassAccount = "iptv_xtream_password"
     private let favoritesKey = "favorite_team_ids"
+    private let favoriteTeamsMetaKey = "favorite_teams_meta_json"
     private let favoriteChannelsKey = "favorite_channel_ids"
     private let lastPlayedKey = "last_played_game_ids"
     private let playerPrefsKey = "player_prefs_json"
@@ -32,6 +33,41 @@ final class StorageService {
         var ids = favoriteTeamIds()
         if ids.contains(teamId) { ids.remove(teamId) } else { ids.insert(teamId) }
         setFavoriteTeamIds(ids)
+        // Drop meta row if unstarred
+        if !ids.contains(teamId) {
+            var meta = favoriteTeams()
+            meta.removeAll { $0.id == teamId }
+            setFavoriteTeams(meta)
+        }
+    }
+
+
+    func favoriteTeams() -> [TeamInfo] {
+        guard let data = defaults.data(forKey: favoriteTeamsMetaKey),
+              let decoded = try? JSONDecoder().decode([TeamInfo].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+
+    func setFavoriteTeams(_ teams: [TeamInfo]) {
+        let distinct = Dictionary(grouping: teams.filter { !$0.id.isEmpty }, by: \.id)
+            .compactMap { $0.value.first }
+        if let data = try? JSONEncoder().encode(distinct) {
+            defaults.set(data, forKey: favoriteTeamsMetaKey)
+        }
+        setFavoriteTeamIds(Set(distinct.map(\.id)))
+    }
+
+    func toggleFavorite(team: TeamInfo) {
+        guard !team.id.isEmpty else { return }
+        var meta = favoriteTeams()
+        if let idx = meta.firstIndex(where: { $0.id == team.id }) {
+            meta.remove(at: idx)
+        } else {
+            meta.append(team)
+        }
+        setFavoriteTeams(meta)
     }
 
     // MARK: - Channel favorites (Android long-press parity)

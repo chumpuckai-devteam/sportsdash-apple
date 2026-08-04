@@ -90,6 +90,8 @@ final class VLCPlayerController: NSObject, ObservableObject {
         player = p
         p.media = m
         p.play()
+        // Initial gain; re-applied when .playing fires
+        p.audio?.volume = 140
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 30_000_000_000)
@@ -154,6 +156,17 @@ final class VLCPlayerController: NSObject, ObservableObject {
     func setMuted(_ muted: Bool) {
         #if os(iOS) || os(tvOS)
         player?.audio?.isMuted = muted
+        if !muted {
+            applyPreferredVolume()
+        }
+        #endif
+    }
+
+    /// Soft boost for quiet IPTV (Android libVLC 140/200 parity ~ VLCKit 0…200 scale).
+    func applyPreferredVolume() {
+        #if os(iOS) || os(tvOS)
+        // VLCKit: 0–200, 100 = unity
+        player?.audio?.volume = Int32(140)
         #endif
     }
 }
@@ -172,6 +185,7 @@ extension VLCPlayerController: VLCMediaPlayerDelegate {
                 self.isBuffering = false
                 self.isPlaying = true
                 self.error = nil
+                self.applyPreferredVolume()
             case .paused:
                 self.isPlaying = false
                 self.isLoading = false
