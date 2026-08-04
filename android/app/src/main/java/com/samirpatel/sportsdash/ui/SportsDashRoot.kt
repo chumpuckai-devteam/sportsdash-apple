@@ -48,25 +48,38 @@ fun SportsDashRoot(vm: AppViewModel) {
     val playUrl = state.playUrl
     // Fullscreen only when not floating mini-player
     if (playing != null && playUrl != null && !state.floating) {
-        PlayerScreen(
-            channel = playing,
-            url = playUrl,
-            engineLabel = state.engineLabel,
-            liveGames = vm.liveGames(),
-            currentGameId = state.playingGameId,
-            showScoresTicker = state.showScoresTicker,
-            nowTitle = vm.nowTitle(playing.id),
-            nextTitle = vm.nextTitle(playing.id),
-            onClose = { vm.stopPlayback() },
-            onPopOut = { vm.popOutPlayer() },
-            onTickerGame = { game -> vm.playFromTicker(game) },
-            onReplay = {
-                vm.play(playing, gameId = state.playingGameId)
-            },
-            onToggleScoresTicker = { vm.toggleScoresTicker() },
-            displayName = vm.displayChannelName(playing.name),
-            favoriteTeamIds = state.favoriteTeamIds,
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            PlayerScreen(
+                channel = playing,
+                url = playUrl,
+                engineLabel = state.engineLabel,
+                liveGames = vm.liveGamesForTicker(),
+                currentGameId = state.playingGameId,
+                showScoresTicker = state.showScoresTicker,
+                nowTitle = vm.nowTitle(playing.id),
+                nextTitle = vm.nextTitle(playing.id),
+                onClose = { vm.stopPlayback() },
+                onPopOut = { vm.popOutPlayer() },
+                onTickerGame = { game -> vm.playFromTicker(game) },
+                onReplay = {
+                    vm.play(playing, gameId = state.playingGameId)
+                },
+                onToggleScoresTicker = { vm.toggleScoresTicker() },
+                displayName = vm.displayChannelName(playing.name),
+                favoriteTeamIds = state.favoriteTeamIds,
+            )
+            // Stream picker over fullscreen player (ticker game switch)
+            val pickerGame = state.streamPickerGame
+            if (pickerGame != null) {
+                StreamPickerDialog(
+                    game = pickerGame,
+                    matches = state.streamMatches,
+                    hasPlaylist = state.playlist != null,
+                    onClose = { vm.dismissStreamPicker() },
+                    onPlay = { match -> vm.playMatch(match, pickerGame) },
+                )
+            }
+        }
         return
     }
 

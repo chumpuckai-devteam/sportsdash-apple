@@ -511,16 +511,23 @@ private fun Chip(
 private fun LiveScoresTicker(
     games: List<Game>,
     currentGameId: String?,
+    favoriteTeamIds: Set<String> = emptySet(),
     compact: Boolean,
     onGameTap: (Game) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val live = remember(games, currentGameId) {
+    val live = remember(games, currentGameId, favoriteTeamIds) {
         games
             .filter { it.isLive }
             .sortedWith(
-                compareBy<Game> { if (it.id == currentGameId) 0 else 1 }
-                    .thenBy { it.startTimeMs },
+                compareBy<Game> { g ->
+                    when {
+                        g.id == currentGameId -> 0
+                        favoriteTeamIds.isNotEmpty() &&
+                            (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds) -> 1
+                        else -> 2
+                    }
+                }.thenBy { it.startTimeMs },
             )
             .take(24)
     }

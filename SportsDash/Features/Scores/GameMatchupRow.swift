@@ -184,14 +184,13 @@ struct GameMatchupRow: View {
 
     private var centerStatus: some View {
         VStack(spacing: 5) {
-            if game.isLive {
-                Text("LIVE")
-                    .font(.caption2.weight(.black))
-                    .foregroundStyle(SportsColors.live)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(SportsColors.live.opacity(0.16), in: Capsule())
-            }
+            // Gold WATCH affordance (stream path) — not green LIVE badge
+            Text("WATCH")
+                .font(.caption2.weight(.black))
+                .foregroundStyle(SportsColors.voidBlack)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(SportsColors.gold, in: Capsule())
             Text(game.statusLine)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(game.isLive ? SportsColors.live : SportsColors.muted)

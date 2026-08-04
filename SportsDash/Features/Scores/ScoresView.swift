@@ -691,7 +691,8 @@ struct ScoresView: View {
                 .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
                 .focusSection()
                 #else
-                .sportsSoftSurface(radius: 22)
+                // No gray group plate — games sit on void dashboard background
+                .background(Color.clear)
                 .padding(.horizontal, 12)
                 #endif
             }

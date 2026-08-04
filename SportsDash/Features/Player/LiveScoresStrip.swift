@@ -17,16 +17,17 @@ struct LiveScoresStrip: View {
 
     private var liveOrdered: [Game] {
         var live = games.filter(\.isLive)
+        // Current game, then favorite-team games (cycle faves), then the rest.
         live.sort { a, b in
             let aNow = a.id == currentGameId ? 0 : 1
             let bNow = b.id == currentGameId ? 0 : 1
             if aNow != bNow { return aNow < bNow }
-            let aLp = lastPlayedRank(a.id)
-            let bLp = lastPlayedRank(b.id)
-            if aLp != bLp { return aLp < bLp }
             let aFav = isFav(a) ? 0 : 1
             let bFav = isFav(b) ? 0 : 1
             if aFav != bFav { return aFav < bFav }
+            let aLp = lastPlayedRank(a.id)
+            let bLp = lastPlayedRank(b.id)
+            if aLp != bLp { return aLp < bLp }
             return a.startTime < b.startTime
         }
         return Array(live.prefix(40))

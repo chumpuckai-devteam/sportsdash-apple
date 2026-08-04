@@ -800,7 +800,7 @@ private fun LeagueSectionHeader(shelf: LeagueShelf) {
 }
 
 @Composable
-private fun StreamPickerDialog(
+fun StreamPickerDialog(
     game: Game,
     matches: List<ChannelMatch>,
     hasPlaylist: Boolean,

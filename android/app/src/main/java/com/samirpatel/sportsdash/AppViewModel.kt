@@ -923,6 +923,22 @@ class AppViewModel(
         return ScoreboardGrouping.sportSections(filteredGames())
     }
 
+    fun liveGamesForTicker(): List<Game> {
+        // Favorites first so user can cycle starred teams from the player strip.
+        val favs = _state.value.favoriteTeamIds
+        val currentId = _state.value.playingGameId
+        val live = _state.value.games.filter { it.isLive }
+        return live.sortedWith(
+            compareBy<Game> { g ->
+                when {
+                    g.id == currentId -> 0
+                    favs.isNotEmpty() && (g.home.id in favs || g.away.id in favs) -> 1
+                    else -> 2
+                }
+            }.thenBy { it.startTimeMs },
+        )
+    }
+
     fun liveGames(): List<Game> {
         return pinFavoriteGames(_state.value.games.filter { it.isLive })
     }
@@ -1009,14 +1025,12 @@ class AppViewModel(
         play(match.channel, gameId = game.id)
     }
 
+    /**
+     * Ticker tap: always open stream picker (home/away/4K) so user can choose.
+     * Auto-pick hid the menu and left users stuck if the first match failed.
+     */
     fun playFromTicker(game: Game) {
-        val matches = matching.matchGameToChannels(game, _state.value.channels, limit = 1)
-        val best = matches.firstOrNull()
-        if (best != null) {
-            play(best.channel, gameId = game.id)
-        } else {
-            openStreamPicker(game)
-        }
+        openStreamPicker(game)
     }
 
     companion object {
