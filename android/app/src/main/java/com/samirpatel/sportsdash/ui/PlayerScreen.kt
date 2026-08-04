@@ -556,8 +556,9 @@ private fun LiveScoresTicker(
                     .height(pillH)
                     .clip(RoundedCornerShape(10.dp))
                     .background(
-                        if (current) Gold.copy(alpha = 0.92f)
-                        else Color.Black.copy(alpha = 0.38f),
+                        // Opaque pill only — row itself stays transparent
+                        if (current) Gold
+                        else Panel,
                     )
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },

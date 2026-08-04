@@ -66,25 +66,63 @@ struct ScoresView: View {
     /// Filters + context strip stay pinned under nav while body scrolls (S-UX.P1.1).
     private var scoresRoot: some View {
         VStack(spacing: 0) {
+            #if os(iOS)
+            condensedTopChrome
+            #else
             VStack(spacing: 0) {
                 filterBar
                 scoresContextStrip
-                Rectangle()
-                    .fill(SportsColors.border.opacity(0.4))
-                    .frame(height: 1)
-                    .allowsHitTesting(false)
             }
-            #if os(iOS)
-            .background {
-                SportsColors.voidBlack.opacity(0.94)
-                    .background(.ultraThinMaterial)
-            }
-            #else
             .background(SportsColors.voidBlack.opacity(0.92))
             #endif
             scoresBody
         }
     }
+
+    #if os(iOS)
+    /// Filters + faves rail in one compact band (landscape: stack filters left).
+    private var condensedTopChrome: some View {
+        ViewThatFits(in: .horizontal) {
+            // Wide / landscape-ish: filters column + horizontal faves
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    compactFilterStack
+                }
+                .frame(width: 118, alignment: .leading)
+                favoriteTeamsRail
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+
+            // Portrait: filters row then rail
+            VStack(spacing: 2) {
+                filterBar
+                favoriteTeamsRail
+            }
+            .padding(.bottom, 2)
+        }
+        .background(SportsColors.voidBlack)
+    }
+
+    private var compactFilterStack: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(DashboardFilter.allCases) { f in
+                let liveCount = appModel.games.filter(\.isLive).count
+                let upcomingCount = appModel.games.filter(\.isUpcoming).count
+                SportsFilterChip(
+                    title: f.label,
+                    count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
+                    selected: appModel.dashboardFilter == f
+                ) {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        appModel.dashboardFilter = f
+                    }
+                }
+            }
+        }
+    }
+    #endif
 
     @ViewBuilder
     private var scoresBody: some View {
@@ -92,7 +130,7 @@ struct ScoresView: View {
             VStack(spacing: 16) {
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 10)
                 }
                 Spacer(minLength: 12)
                 ProgressView()
@@ -105,7 +143,7 @@ struct ScoresView: View {
                 VStack(spacing: 22) {
                     if SetupChecklist.isIncomplete(appModel) {
                         SetupChecklistCard()
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 10)
                     }
                     ContentUnavailableView(
                         "Scores unavailable",
@@ -114,7 +152,7 @@ struct ScoresView: View {
                     )
                     .frame(maxWidth: .infinity, minHeight: SetupChecklist.isIncomplete(appModel) ? 240 : 320)
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, 6)
             }
             .sportsRefreshable { await appModel.refreshScores() }
         } else {
@@ -136,16 +174,12 @@ struct ScoresView: View {
         )
 
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 12) {
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 10)
                         .padding(.top, 8)
                 }
-
-                #if os(iOS)
-                favoriteTeamsRail
-                #endif
 
                 if !pin.isEmpty {
                     myGamesSection(pin)
@@ -164,7 +198,7 @@ struct ScoresView: View {
                     }
                 }
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 6)
             .padding(.bottom, 28)
         }
         .sportsRefreshable { await appModel.refreshScores() }
@@ -191,9 +225,8 @@ struct ScoresView: View {
                         Text("+")
                             .font(.title2.weight(.bold))
                             .foregroundStyle(SportsColors.muted)
-                            .frame(width: 52, height: 52)
+                            .frame(width: 40, height: 40)
                             .background(SportsColors.panel, in: Circle())
-                            .overlay(Circle().stroke(SportsColors.muted.opacity(0.5), lineWidth: 2))
                         Text(appModel.favoriteTeamsRail.isEmpty ? "Add ★" : "Add")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(SportsColors.muted)
@@ -202,7 +235,7 @@ struct ScoresView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add favorite team")
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 10)
             .padding(.vertical, 4)
         }
     }
@@ -226,10 +259,9 @@ struct ScoresView: View {
                     .foregroundStyle(SportsColors.gold)
             }
         }
-        .frame(width: 40, height: 40)
-        .padding(6)
+        .frame(width: 34, height: 34)
+        .padding(4)
         .background(SportsColors.panel, in: Circle())
-        .overlay(Circle().stroke(SportsColors.gold.opacity(0.65), lineWidth: 2))
     }
 
     private func myGamesSection(_ games: [Game]) -> some View {
@@ -248,7 +280,7 @@ struct ScoresView: View {
                         .foregroundStyle(SportsColors.live)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 10)
 
             ForEach(games) { game in
                 GameScoreFocusRow(
@@ -260,7 +292,7 @@ struct ScoresView: View {
                     onToggleAwayFavorite: { appModel.toggleFavorite(team: game.away) },
                     onToggleHomeFavorite: { appModel.toggleFavorite(team: game.home) }
                 )
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 10)
             }
         }
     }
@@ -532,14 +564,7 @@ struct ScoresView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(SportsColors.panelElevated.opacity(0.72))
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(
-                    collapsed ? SportsColors.border.opacity(0.35) : SportsColors.gold.opacity(0.45),
-                    lineWidth: 1
-                )
-        }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         #endif
         #if os(tvOS)
         .frame(minHeight: SportsTVMetrics.minFocusSize)
@@ -597,7 +622,7 @@ struct ScoresView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
         .focusSection()
         #else
         ScrollView(.horizontal, showsIndicators: false) {
@@ -616,7 +641,7 @@ struct ScoresView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 10)
             .padding(.top, 10)
             .padding(.bottom, 6)
         }
@@ -658,7 +683,7 @@ struct ScoresView: View {
                         .foregroundStyle(SportsColors.muted)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 10)
             .padding(.bottom, 6)
             .padding(.top, 2)
 
@@ -666,7 +691,7 @@ struct ScoresView: View {
                 Text("No upcoming games in the next week for this league.")
                     .font(.caption)
                     .foregroundStyle(SportsColors.muted)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 10)
                     .padding(.bottom, 12)
             } else {
                 VStack(spacing: 10) {

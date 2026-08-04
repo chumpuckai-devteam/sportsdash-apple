@@ -71,8 +71,8 @@ struct LiveScoresStrip: View {
                         .padding(.vertical, 6)
                         .background(
                             g.id == currentGameId
-                                ? SportsColors.gold.opacity(0.92)
-                                : Color.black.opacity(0.38),
+                                ? SportsColors.gold
+                                : SportsColors.panel,
                             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                         )
                     }

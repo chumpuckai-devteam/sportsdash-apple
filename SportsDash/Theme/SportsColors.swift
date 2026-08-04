@@ -286,13 +286,8 @@ struct SportsFilterChip: View {
         .padding(.vertical, 8)
         #if os(iOS)
         .background {
-            if selected {
-                Capsule(style: .continuous).fill(SportsColors.gold.gradient)
-            } else {
-                Capsule(style: .continuous)
-                    .fill(.clear)
-                    .sportsGlass(in: Capsule(style: .continuous))
-            }
+            Capsule(style: .continuous)
+                .fill(selected ? SportsColors.gold : SportsColors.panel)
         }
         #else
         .padding(.horizontal, 12)
@@ -327,7 +322,7 @@ struct SportsLiveBadge: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(SportsColors.live.opacity(0.16), in: Capsule(style: .continuous))
-            .overlay(Capsule(style: .continuous).stroke(SportsColors.live.opacity(0.35), lineWidth: 0.5))
+
             .accessibilityLabel("Live")
     }
 }

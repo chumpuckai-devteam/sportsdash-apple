@@ -1,8 +1,8 @@
 package com.samirpatel.sportsdash.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -114,45 +114,25 @@ fun ScoresScreen(
                 .fillMaxSize()
                 .background(VoidBlack),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                ScoreFilterChip(
-                    label = "Live",
-                    selected = state.scoresFilter == ScoresFilter.LIVE,
-                    onClick = { vm.setScoresFilter(ScoresFilter.LIVE) },
-                )
-                ScoreFilterChip(
-                    label = "Upcoming",
-                    selected = state.scoresFilter == ScoresFilter.UPCOMING,
-                    onClick = { vm.setScoresFilter(ScoresFilter.UPCOMING) },
-                )
-                ScoreFilterChip(
-                    label = "Final",
-                    selected = state.scoresFilter == ScoresFilter.FINAL,
-                    onClick = { vm.setScoresFilter(ScoresFilter.FINAL) },
-                )
-                Text(
-                    text = state.scoresStatus ?: "Scores",
-                    color = Muted,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            // Condensed chrome: landscape = filters stacked left + faves row right;
+            // portrait = one tight row of filters then compact faves rail.
+            ScoresTopChrome(
+                landscape = landscape,
+                filter = state.scoresFilter,
+                status = state.scoresStatus,
+                teams = vm.favoriteTeamsRail(),
+                onFilter = { vm.setScoresFilter(it) },
+                onOpenPicker = { showTeamPicker = true },
+                onTeamClick = { showTeamPicker = true },
+            )
 
             if (!landscape && state.playlist == null) {
                 Text(
                     text = "Add IPTV in Settings to watch from scores.",
                     color = Muted,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     modifier = Modifier
-                        .padding(horizontal = 12.dp, vertical = 2.dp)
+                        .padding(horizontal = 12.dp, vertical = 1.dp)
                         .clickable(onClick = onGoSettings),
                 )
             }
@@ -162,19 +142,9 @@ fun ScoresScreen(
                 Text(
                     text = scoresErr,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
                 )
             }
-
-            // Variant A: favorite-team logo rail (ESPN / Bleacher Report)
-            FavoriteTeamsRail(
-                teams = vm.favoriteTeamsRail(),
-                onOpenPicker = { showTeamPicker = true },
-                onTeamClick = { team ->
-                    // Quick unstar from rail long-path: open picker focused later; tap = info via picker
-                    showTeamPicker = true
-                },
-            )
 
             val sections = vm.sportScoreSections()
             val favoritePin = vm.myGamesPin()
@@ -220,8 +190,8 @@ fun ScoresScreen(
                         favoritesOnly = false,
                     )
                     LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(
@@ -412,34 +382,105 @@ private fun MyTeamsSectionHeader(liveCount: Int = 0) {
     }
 }
 
+
+@Composable
+private fun ScoresTopChrome(
+    landscape: Boolean,
+    filter: ScoresFilter,
+    status: String?,
+    teams: List<TeamInfo>,
+    onFilter: (ScoresFilter) -> Unit,
+    onOpenPicker: () -> Unit,
+    onTeamClick: (TeamInfo) -> Unit,
+) {
+    if (landscape) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.width(110.dp),
+            ) {
+                ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) })
+                ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) })
+                ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) })
+            }
+            FavoriteTeamsRail(
+                teams = teams,
+                onOpenPicker = onOpenPicker,
+                onTeamClick = onTeamClick,
+                compact = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) })
+                ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) })
+                ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) })
+                if (!status.isNullOrBlank()) {
+                    Text(
+                        text = status,
+                        color = Muted,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            FavoriteTeamsRail(
+                teams = teams,
+                onOpenPicker = onOpenPicker,
+                onTeamClick = onTeamClick,
+                compact = true,
+            )
+        }
+    }
+}
+
 @Composable
 private fun FavoriteTeamsRail(
     teams: List<TeamInfo>,
     onOpenPicker: () -> Unit,
     onTeamClick: (TeamInfo) -> Unit = {},
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
+    val logo = if (compact) 34.dp else 40.dp
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = if (compact) 0.dp else 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         items(items = teams, key = { it.id }) { team ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .width(56.dp)
+                    .width(48.dp)
                     .clickable { onTeamClick(team) },
             ) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(Panel)
-                        .border(2.dp, Gold.copy(alpha = 0.65f), CircleShape)
-                        .padding(6.dp),
+                        .padding(4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 40.dp)
+                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 32.dp)
                 }
                 Text(
                     text = team.rowLabel,
@@ -455,18 +496,17 @@ private fun FavoriteTeamsRail(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .width(56.dp)
+                    .width(48.dp)
                     .clickable(onClick = onOpenPicker),
             ) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(Panel)
-                        .border(2.dp, Muted.copy(alpha = 0.5f), CircleShape),
+                        .background(Panel),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("+", color = Muted, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("+", color = Muted, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(
                     text = if (teams.isEmpty()) "Add ★" else "Add",
@@ -694,16 +734,11 @@ private fun SportSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp)
+            .padding(top = 4.dp)
             .clip(shape)
             .background(Panel.copy(alpha = 0.72f))
-            .border(
-                width = 1.dp,
-                color = if (collapsed) Muted.copy(alpha = 0.35f) else Gold.copy(alpha = 0.45f),
-                shape = shape,
-            )
             .clickable(onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .semantics { heading() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -893,7 +928,8 @@ private fun ScoreFilterChip(label: String, selected: Boolean, onClick: () -> Uni
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(text = label) },
+        label = { Text(text = label, fontSize = 12.sp) },
+        border = BorderStroke(0.dp, androidx.compose.ui.graphics.Color.Transparent),
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = Gold,
             selectedLabelColor = VoidBlack,

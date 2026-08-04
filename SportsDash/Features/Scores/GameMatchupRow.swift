@@ -347,14 +347,13 @@ struct GameScoreFocusRow: View {
             let favFill = SportsColors.gold.opacity(focused ? 0.22 : 0.12)
             shape.fill(isFavorite ? favFill : base)
         }
+        #if os(tvOS)
         .overlay {
-            shape.stroke(
-                focused
-                    ? SportsColors.gold
-                    : (isFavorite ? SportsColors.gold.opacity(0.45) : SportsColors.border.opacity(0.35)),
-                lineWidth: focused ? 3 : 1
-            )
+            if focused {
+                shape.stroke(SportsColors.gold, lineWidth: 3)
+            }
         }
+        #endif
         .clipShape(shape)
         .shadow(color: focused ? SportsColors.gold.opacity(0.30) : .clear, radius: 14, y: 0)
         #if os(tvOS)

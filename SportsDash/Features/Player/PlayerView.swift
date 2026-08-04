@@ -52,17 +52,12 @@ struct PlayerView: View {
                 errorOverlay(err)
             }
 
-            // Full-bleed video under transparent overlay chrome.
-            // Top: Back + ticker same row; bottom multi-line info when chrome up.
+            // Full-bleed video; top = back+ticker; bottom = program info + scrollable circle controls.
             VStack(spacing: 0) {
                 topOverlayBar
-                if showChrome {
-                    // Extra transport/utilities without second opaque band
-                    topChrome
-                }
                 Spacer(minLength: 0)
                 if showChrome {
-                    bottomInfoChrome
+                    bottomPlayerChrome
                 }
             }
             .allowsHitTesting(true)
@@ -184,154 +179,97 @@ struct PlayerView: View {
         .background(Color.clear)
     }
 
-    private var topChrome: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
-
-                Text(engineChip)
-                    .font(.caption.weight(.bold))
+    /// Program info (left) + horizontal scroll of circle controls (right/under).
+    private var bottomPlayerChrome: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Multi-line program block
+            VStack(alignment: .leading, spacing: 4) {
+                if let group = channel.group, !group.isEmpty {
+                    Text(group.uppercased())
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(SportsColors.gold)
+                }
+                Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
+                    .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .sportsGlass(in: Capsule(style: .continuous))
-
-                chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
-                    playback.toggleMute()
-                    scheduleChromeHide()
+                    .lineLimit(2)
+                if let prog = currentProgram {
+                    Text(prog.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .lineLimit(2)
+                    Text(prog.timeRangeLabel)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else if let g = game {
+                    Text(g.matchupLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.95))
                 }
-
-                chromeIconButton(systemName: "aspectratio") {
-                    cycleAspect()
-                    scheduleChromeHide()
-                }
-
-                chromeIconButton(systemName: "ellipsis") {
-                    showMoreMenu = true
+                if let next = nextProgram {
+                    Text("Next: \(next.title)")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Transport + utilities stay at the top so the scores ticker never covers them.
-            HStack(spacing: 10) {
-                Button {
-                    playback.togglePlayPause()
-                    scheduleChromeHide()
-                } label: {
-                    Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                        .sportsGlass(in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
-
-                HStack(spacing: 6) {
-                    utilityButton(systemName: "dot.radiowaves.left.and.right", tint: SportsColors.live) {
+            // Single style of circle controls — scrollable horizontally if needed
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    chromeIconButton(systemName: playback.isPlaying ? "pause.fill" : "play.fill") {
+                        playback.togglePlayPause()
+                        scheduleChromeHide()
+                    }
+                    chromeIconButton(systemName: "dot.radiowaves.left.and.right") {
                         playback.jumpToLive()
                         scheduleChromeHide()
                     }
-                    // UHF-style pop-out: floating mini player over the app (not system PiP).
-                    utilityButton(
-                        systemName: "rectangle.inset.filled.and.person.filled",
-                        tint: .white
-                    ) {
+                    chromeIconButton(systemName: "rectangle.inset.filled.and.person.filled") {
                         popOutToFloatingPlayer()
                     }
-                    #if os(iOS)
-                    // System AirPlay / external display route picker.
-                    // Note: VLC AirPlay is often audio-focused; AVKit can mirror video better.
-                    AirPlayRoutePicker()
-                        .frame(width: 28, height: 28)
-                        .accessibilityLabel("AirPlay")
-                        .accessibilityHint("Video AirPlay works best with AVKit player in Settings")
-                    #endif
-                    utilityButton(systemName: "captions.bubble", tint: .white) {
-                        playback.cycleSubtitleTrack()
+                    chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
+                        playback.toggleMute()
                         scheduleChromeHide()
                     }
-                    utilityButton(
-                        systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt",
-                        tint: showScoresStrip ? SportsColors.gold : .white
-                    ) {
+                    chromeIconButton(systemName: "aspectratio") {
+                        cycleAspect()
+                        scheduleChromeHide()
+                    }
+                    chromeIconButton(systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt") {
                         showScoresStrip.toggle()
                         scheduleChromeHide()
                     }
-                    utilityButton(systemName: "list.bullet", tint: SportsColors.gold) {
+                    chromeIconButton(systemName: "list.bullet") {
                         showStreamSheet = true
                     }
+                    #if os(iOS)
+                    AirPlayRoutePicker()
+                        .frame(width: 44, height: 44)
+                        .accessibilityLabel("AirPlay")
+                    #endif
+                    chromeIconButton(systemName: "captions.bubble") {
+                        playback.cycleSubtitleTrack()
+                        scheduleChromeHide()
+                    }
+                    chromeIconButton(systemName: "ellipsis") {
+                        showMoreMenu = true
+                    }
+                    Text(engineChip)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.12), in: Capsule())
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .sportsGlass(in: Capsule(style: .continuous))
-
-                Spacer(minLength: 0)
+                .padding(.horizontal, 4)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.top, 8)
         .padding(.bottom, 20)
-        // Soft scrim for legibility only — not Liquid Glass over the video.
-        .background(Color.clear)
-    }
-
-    /// Channel + EPG multi-line — transparent over full-bleed video.
-    private var bottomInfoChrome: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let group = channel.group, !group.isEmpty {
-                Text(group.uppercased())
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SportsColors.gold)
-            }
-
-            Text(ChannelNameCleanup.displayName(channel.name, enabled: appModel.playerPrefs.cleanUpNames))
-                .font(.title2.weight(.bold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-
-            if let prog = currentProgram {
-                Text(prog.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.95))
-                    .lineLimit(2)
-                Text(prog.timeRangeLabel)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
-                MovieRatingLoader(
-                    title: prog.title,
-                    categories: prog.categories,
-                    channelGroup: channel.group,
-                    channelName: channel.name,
-                    compact: false
-                )
-                .padding(.top, 2)
-            } else if let g = game {
-                Text(g.matchupLabel)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.95))
-            }
-
-            if let next = nextProgram {
-                Text("Next: \(next.title)")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
-            }
-
-            HStack(spacing: 6) {
-                badge(appModel.activePlaylist?.name ?? "IPTV", color: SportsColors.gold.opacity(0.85))
-                badge(engineChip, color: .white.opacity(0.25))
-                if playback.isPlaying {
-                    badge("LIVE", color: SportsColors.live.opacity(0.35))
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, showScoresStrip ? 10 : 28)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Transparent overlay — full-bleed video stays visible underneath.
         .background(Color.clear)
     }
 
