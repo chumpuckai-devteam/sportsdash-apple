@@ -52,35 +52,12 @@ struct PlayerView: View {
                 errorOverlay(err)
             }
 
-            // Android D parity: exit + optional ticker at TOP; info chrome mid/bottom.
+            // Full-bleed video under transparent overlay chrome.
+            // Top: Back + ticker same row; bottom multi-line info when chrome up.
             VStack(spacing: 0) {
-                // Always-on exit row (even when chrome auto-hides)
-                alwaysOnExitBar
-
-                if showScoresStrip, playback.error == nil {
-                    LiveScoresStrip(
-                        games: appModel.games.filter(\.isLive),
-                        currentGameId: game?.id,
-                        favoriteTeamIds: appModel.favoriteTeamIds,
-                        lastPlayedGameIds: appModel.lastPlayedGameIds,
-                        compactTopStyle: true,
-                        onGameTap: { g in
-                            Task {
-                                let chans = appModel.channels
-                                let m = await Task.detached(priority: .userInitiated) {
-                                    MatchingService().matchGameToChannels(g, channels: chans)
-                                }.value
-                                if m.isEmpty {
-                                    playback.banner = "No streams matched for \(g.matchupLabel)"
-                                } else {
-                                    showGamePicker = g
-                                }
-                            }
-                        }
-                    )
-                }
-
+                topOverlayBar
                 if showChrome {
+                    // Extra transport/utilities without second opaque band
                     topChrome
                 }
                 Spacer(minLength: 0)
@@ -166,21 +143,45 @@ struct PlayerView: View {
     // Liquid Glass on floating controls only — never glass-fill the video surface.
     // https://developer.apple.com/design/human-interface-guidelines/materials
 
-    /// Always visible exit (Android player exit parity).
-    private var alwaysOnExitBar: some View {
-        HStack(spacing: 10) {
+    /// Back + scores ticker aligned left; transparent overlay (no black band).
+    private var topOverlayBar: some View {
+        HStack(alignment: .center, spacing: 8) {
             chromeIconButton(systemName: "chevron.left") { dismiss() }
-            Spacer(minLength: 0)
+
+            if showScoresStrip, playback.error == nil {
+                LiveScoresStrip(
+                    games: appModel.games.filter(\.isLive),
+                    currentGameId: game?.id,
+                    favoriteTeamIds: appModel.favoriteTeamIds,
+                    lastPlayedGameIds: appModel.lastPlayedGameIds,
+                    compactTopStyle: true,
+                    onGameTap: { g in
+                        Task {
+                            let chans = appModel.channels
+                            let m = await Task.detached(priority: .userInitiated) {
+                                MatchingService().matchGameToChannels(g, channels: chans)
+                            }.value
+                            if m.isEmpty {
+                                playback.banner = "No streams matched for \(g.matchupLabel)"
+                            } else {
+                                showGamePicker = g
+                            }
+                        }
+                    }
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+            }
+
             if showChrome {
                 chromeIconButton(systemName: "xmark") { dismiss() }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(
-            LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom)
-        )
+        .background(Color.clear)
     }
 
     private var topChrome: some View {
@@ -272,12 +273,10 @@ struct PlayerView: View {
         .padding(.top, 12)
         .padding(.bottom, 20)
         // Soft scrim for legibility only — not Liquid Glass over the video.
-        .background(
-            LinearGradient(colors: [.black.opacity(0.72), .clear], startPoint: .top, endPoint: .bottom)
-        )
+        .background(Color.clear)
     }
 
-    /// Channel + EPG only — sits above the scores ticker.
+    /// Channel + EPG multi-line — transparent over full-bleed video.
     private var bottomInfoChrome: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let group = channel.group, !group.isEmpty {
@@ -332,14 +331,8 @@ struct PlayerView: View {
         .padding(.top, 20)
         .padding(.bottom, showScoresStrip ? 10 : 28)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Content-layer scrim (opaque gradient) — not glass over video/info.
-        .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.45), .black.opacity(0.88)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        // Transparent overlay — full-bleed video stays visible underneath.
+        .background(Color.clear)
     }
 
     private var engineChip: String {

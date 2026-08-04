@@ -47,46 +47,41 @@ struct LiveScoresStrip: View {
         }
     }
 
-    /// NFL-style top pills with logos + scores (Android D).
+    /// Overlay pills — transparent strip background; full-bleed video underneath.
     private var compactPills: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 if liveOrdered.isEmpty {
                     Text("No other live games")
                         .font(.caption)
                         .foregroundStyle(SportsColors.muted)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 4)
                 }
                 ForEach(liveOrdered) { g in
                     Button { onGameTap(g) } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
                             miniLogo(g.away)
                             Text("\(g.away.abbreviation) \(g.away.displayScore)–\(g.home.displayScore) \(g.home.abbreviation)")
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(g.id == currentGameId ? SportsColors.voidBlack : SportsColors.text)
+                                .foregroundStyle(g.id == currentGameId ? SportsColors.voidBlack : .white)
                                 .lineLimit(1)
                             miniLogo(g.home)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                         .background(
-                            g.id == currentGameId ? SportsColors.gold : SportsColors.panel.opacity(0.94),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            g.id == currentGameId
+                                ? SportsColors.gold.opacity(0.92)
+                                : Color.black.opacity(0.38),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                         )
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, 2)
         }
-        .background(
-            LinearGradient(
-                colors: [.black.opacity(0.82), .black.opacity(0.35), .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background(Color.clear) // never reserve/scrim over video
     }
 
     private func miniLogo(_ team: TeamInfo) -> some View {
