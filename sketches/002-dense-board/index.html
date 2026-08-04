@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SportsDash · Dense Board</title>
+<link rel="stylesheet" href="../themes/tokens.css"/>
+<style>
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: #0a0c0b;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1.page { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--void);
+    border-radius: 36px;
+    border: 1px solid #2a3530;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+  }
+  .status {
+    height: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 28px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status .right { display: flex; gap: 6px; opacity: 0.85; font-size: 11px; }
+  .app {
+    height: calc(100% - 48px - 64px);
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+  .tabbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 64px;
+    background: rgba(10,14,12,0.94);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    backdrop-filter: blur(12px);
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.on { color: var(--gold); }
+  .tab .ic { font-size: 18px; line-height: 1; }
+  .notes {
+    max-width: 390px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .notes strong { color: var(--ink); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .pill.on { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+  .pill.live { color: var(--mint); border-color: rgba(61,214,140,0.35); }
+  .watch {
+    background: var(--gold);
+    color: #1a1400;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .muted { color: var(--muted); }
+  .live { color: var(--mint); font-weight: 700; }
+  .toast {
+    position:absolute; left:16px; right:16px; bottom: 80px;
+    background: var(--panel-2); border:1px solid var(--gold); border-radius: 10px;
+    padding: 10px 12px; font-size: 13px; display:none; z-index:5;
+  }
+  .toast.on { display:block; }
+
+
+  .hdr { padding: 2px 16px 8px; display:flex; align-items:baseline; justify-content:space-between; }
+  .hdr h2 { font-size: 30px; font-weight: 800; }
+  .days { display:flex; gap:0; padding: 0 8px 10px; border-bottom: 1px solid var(--border); overflow-x:auto; }
+  .day {
+    flex: 0 0 auto; width: 52px; text-align:center; padding: 8px 0; cursor:pointer;
+    color: var(--muted); font-size: 11px; font-weight: 600;
+  }
+  .day b { display:block; font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 2px; }
+  .day.on { color: var(--gold); }
+  .day.on b { color: var(--gold); }
+  .day.on::after {
+    content:""; display:block; width: 28px; height: 3px; background: var(--gold);
+    margin: 6px auto 0; border-radius: 2px;
+  }
+  .strip {
+    margin: 10px 16px; padding: 8px 12px; border-radius: 8px;
+    background: var(--mint-dim); border: 1px solid rgba(61,214,140,0.25);
+    font-size: 12px; color: var(--mint); font-weight: 700;
+  }
+  .league {
+    margin: 8px 12px; border: 1px solid var(--border); border-radius: 14px;
+    background: var(--panel); overflow: hidden;
+  }
+  .lh {
+    display:flex; align-items:center; gap:10px; padding: 12px 14px; cursor:pointer;
+  }
+  .lh .mark {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--panel-2);
+    display:grid; place-items:center; font-size: 14px;
+  }
+  .lh .title { font-weight: 800; font-size: 15px; flex:1; }
+  .lh .chev { color: var(--gold); font-size: 12px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+  .cell { background: var(--panel); padding: 10px; min-height: 92px; cursor:pointer; }
+  .cell:hover { background: var(--panel-2); }
+  .st { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+  .ln { display:flex; align-items:center; gap:6px; margin: 4px 0; font-size: 13px; font-weight: 600; }
+  .ln .ab { width: 28px; color: var(--muted); font-size: 11px; font-weight: 800; }
+  .ln .sc { margin-left:auto; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .fave-bar { display:flex; gap:8px; padding: 10px 16px; overflow-x:auto; align-items:center; }
+  .ft {
+    width: 44px; height: 44px; border-radius: 10px; flex:0 0 auto;
+    display:grid; place-items:center; font-size: 11px; font-weight: 800; border:1px solid var(--border);
+  }
+
+</style>
+</head>
+<body>
+
+  <h1 class="page">Variant B · Dense Board</h1>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span class="right">5G · 86%</span></div>
+    <div class="app">
+      <div class="hdr"><h2>Scores</h2><span class="muted" style="font-size:12px">Aug 3</span></div>
+      <div class="days" id="days"></div>
+      <div class="strip">● LIVE · 14 games across your leagues</div>
+      <div class="fave-bar">
+        <span class="muted" style="font-size:11px;font-weight:700;margin-right:4px">★</span>
+        <div class="ft" style="background:#0c2340">MIN</div>
+        <div class="ft" style="background:#552583;color:#fdb927">LAL</div>
+        <div class="ft" style="background:#e31837;color:#ffb81c">KC</div>
+        <div class="ft" style="border-style:dashed;color:var(--muted)">+</div>
+      </div>
+      <div class="league">
+        <div class="lh" data-body="mlb-b"><div class="mark">⚾</div><div class="title">MLB</div><div class="chev">▾</div></div>
+        <div class="grid" id="mlb-b">
+          <div class="cell"><div class="st live">● Bot 7th</div>
+            <div class="ln"><span class="ab">MIN</span>Twins<span class="sc">3</span></div>
+            <div class="ln"><span class="ab">SEA</span>Mariners<span class="sc">2</span></div></div>
+          <div class="cell"><div class="st live">● 8th</div>
+            <div class="ln"><span class="ab">NYY</span>Yankees<span class="sc">5</span></div>
+            <div class="ln"><span class="ab">BOS</span>Red Sox<span class="sc">5</span></div></div>
+          <div class="cell"><div class="st muted">7:15 PM</div>
+            <div class="ln"><span class="ab">LAD</span>Dodgers<span class="sc">—</span></div>
+            <div class="ln"><span class="ab">SF</span>Giants<span class="sc">—</span></div></div>
+          <div class="cell"><div class="st muted">FINAL</div>
+            <div class="ln"><span class="ab">CHC</span>Cubs<span class="sc">4</span></div>
+            <div class="ln"><span class="ab">STL</span>Cards<span class="sc">1</span></div></div>
+        </div>
+      </div>
+      <div class="league">
+        <div class="lh" data-body="wnba-b"><div class="mark">🏀</div><div class="title">WNBA</div><div class="chev">▸</div></div>
+        <div class="grid" id="wnba-b" style="display:none">
+          <div class="cell"><div class="st live">● Q2</div>
+            <div class="ln"><span class="ab">NY</span>Liberty<span class="sc">44</span></div>
+            <div class="ln"><span class="ab">LV</span>Aces<span class="sc">40</span></div></div>
+          <div class="cell"><div class="st muted">FINAL</div>
+            <div class="ln"><span class="ab">SEA</span>Storm<span class="sc">78</span></div>
+            <div class="ln"><span class="ab">PHX</span>Mercury<span class="sc">71</span></div></div>
+        </div>
+      </div>
+      <div class="league">
+        <div class="lh" data-body="nba-b"><div class="mark">🏀</div><div class="title">NBA</div><div class="chev">▾</div></div>
+        <div class="grid" id="nba-b">
+          <div class="cell"><div class="st live">● Q4 3:30</div>
+            <div class="ln"><span class="ab">LAL</span>Lakers<span class="sc">102</span></div>
+            <div class="ln"><span class="ab">BOS</span>Celtics<span class="sc">98</span></div></div>
+          <div class="cell"><div class="st live">● Q3</div>
+            <div class="ln"><span class="ab">DEN</span>Nuggets<span class="sc">88</span></div>
+            <div class="ln"><span class="ab">PHX</span>Suns<span class="sc">91</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast">…</div>
+    <div class="tabbar">
+      <div class="tab on"><div class="ic">▣</div>Scores</div>
+      <div class="tab"><div class="ic">☰</div>Guide</div>
+      <div class="tab"><div class="ic">⚙</div>Settings</div>
+    </div>
+  </div>
+
+<p class="notes"><strong>Stance:</strong> CBS density — date strip, live strip, 2-up grid, collapsible WNBA (like our app). Tap cell to watch.</p>
+<script>
+
+const toast=document.getElementById('toast');
+function flash(m){toast.textContent=m;toast.classList.add('on');setTimeout(()=>toast.classList.remove('on'),1500)}
+const days=document.getElementById('days');
+[['Sat',1],['Sun',2],['Mon',3,'on'],['Tue',4],['Wed',5],['Thu',6]].forEach(([d,n,on])=>{
+  const el=document.createElement('div'); el.className='day'+(on?' on':'');
+  el.innerHTML=d+'<b>'+n+'</b>'; el.onclick=()=>{document.querySelectorAll('.day').forEach(x=>x.classList.remove('on'));el.classList.add('on');flash('Day · '+d+' '+n)};
+  days.appendChild(el);
+});
+document.querySelectorAll('.lh').forEach(h=>h.onclick=()=>{
+  const b=document.getElementById(h.dataset.body);
+  const isHidden = getComputedStyle(b).display==='none';
+  if(isHidden){ b.style.display='grid'; h.querySelector('.chev').textContent='▾'; }
+  else { b.style.display='none'; h.querySelector('.chev').textContent='▸'; }
+});
+document.querySelectorAll('.cell').forEach(c=>c.onclick=()=>flash('WATCH → IPTV stream picker'));
+
+</script>
+</body>
+</html>

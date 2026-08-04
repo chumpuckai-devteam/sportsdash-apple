@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SportsDash · Symmetric Watch</title>
+<link rel="stylesheet" href="../themes/tokens.css"/>
+<style>
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: #0a0c0b;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1.page { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--void);
+    border-radius: 36px;
+    border: 1px solid #2a3530;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+  }
+  .status {
+    height: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 28px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status .right { display: flex; gap: 6px; opacity: 0.85; font-size: 11px; }
+  .app {
+    height: calc(100% - 48px - 64px);
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+  .tabbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 64px;
+    background: rgba(10,14,12,0.94);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    backdrop-filter: blur(12px);
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.on { color: var(--gold); }
+  .tab .ic { font-size: 18px; line-height: 1; }
+  .notes {
+    max-width: 390px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .notes strong { color: var(--ink); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .pill.on { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+  .pill.live { color: var(--mint); border-color: rgba(61,214,140,0.35); }
+  .watch {
+    background: var(--gold);
+    color: #1a1400;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .muted { color: var(--muted); }
+  .live { color: var(--mint); font-weight: 700; }
+  .toast {
+    position:absolute; left:16px; right:16px; bottom: 80px;
+    background: var(--panel-2); border:1px solid var(--gold); border-radius: 10px;
+    padding: 10px 12px; font-size: 13px; display:none; z-index:5;
+  }
+  .toast.on { display:block; }
+
+
+  .hdr { padding: 4px 16px 6px; }
+  .hdr h2 { font-size: 28px; font-weight: 800; }
+  .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .days { display:flex; gap:8px; padding: 8px 16px 12px; overflow-x:auto; }
+  .d {
+    width: 44px; height: 56px; border-radius: 22px; background: var(--panel);
+    border: 1px solid var(--border); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; font-size: 10px; color: var(--muted);
+    cursor:pointer; flex:0 0 auto;
+  }
+  .d b { font-size: 15px; color: var(--ink); margin-top: 2px; }
+  .d.on { background: var(--gold); border-color: var(--gold); color: #1a1400; }
+  .d.on b { color: #1a1400; }
+  .match {
+    margin: 0 16px 12px; padding: 16px 12px 12px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    cursor: pointer;
+  }
+  .match:hover { border-color: rgba(212,160,23,0.45); }
+  .board { display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap: 8px; }
+  .side { display:flex; flex-direction:column; gap: 8px; }
+  .side.left { align-items: flex-start; }
+  .side.right { align-items: flex-end; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--panel-2);
+    display:grid; place-items:center; font-size: 11px; font-weight: 800; color: var(--gold);
+  }
+  .nm { font-size: 14px; font-weight: 700; }
+  .sc { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .mid { text-align:center; min-width: 88px; }
+  .mid .clock { font-size: 13px; font-weight: 800; }
+  .mid .dot { color: var(--mint); }
+  .streams {
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap: 8px;
+  }
+  .ch { font-size: 11px; color: var(--muted); }
+  .ch strong { color: var(--ink); font-weight: 700; }
+
+</style>
+</head>
+<body>
+
+  <h1 class="page">Variant C · Symmetric Watch</h1>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span class="right">5G · 86%</span></div>
+    <div class="app">
+      <div class="hdr">
+        <h2>Games</h2>
+        <div class="sub">Tap a game to watch on your IPTV</div>
+      </div>
+      <div class="days">
+        <div class="d">S<b>2</b></div>
+        <div class="d on">M<b>3</b></div>
+        <div class="d">T<b>4</b></div>
+        <div class="d">W<b>5</b></div>
+        <div class="d">T<b>6</b></div>
+        <div class="d">F<b>7</b></div>
+      </div>
+      <div class="match" data-t="MIN @ SEA">
+        <div class="board">
+          <div class="side left"><div class="logo">MIN</div><div class="nm">Twins ★</div><div class="sc">3</div></div>
+          <div class="mid"><div class="clock"><span class="dot">●</span> Bot 7th</div><div class="muted" style="font-size:11px;margin-top:4px">MLB</div></div>
+          <div class="side right"><div class="logo">SEA</div><div class="nm">Mariners</div><div class="sc">2</div></div>
+        </div>
+        <div class="streams"><div class="ch">Matched · <strong>ESPN 2 HD</strong> · Bally</div><button class="watch">WATCH</button></div>
+      </div>
+      <div class="match" data-t="LAL @ BOS">
+        <div class="board">
+          <div class="side left"><div class="logo">LAL</div><div class="nm">Lakers ★</div><div class="sc">102</div></div>
+          <div class="mid"><div class="clock"><span class="dot">●</span> Q4 3:30</div><div class="muted" style="font-size:11px;margin-top:4px">NBA</div></div>
+          <div class="side right"><div class="logo">BOS</div><div class="nm">Celtics</div><div class="sc">98</div></div>
+        </div>
+        <div class="streams"><div class="ch">Matched · <strong>NBA TV</strong> · ESPN</div><button class="watch">WATCH</button></div>
+      </div>
+      <div class="match" data-t="DEN @ PHX">
+        <div class="board">
+          <div class="side left"><div class="logo">DEN</div><div class="nm">Nuggets</div><div class="sc">88</div></div>
+          <div class="mid"><div class="clock"><span class="dot">●</span> Q3 4:12</div><div class="muted" style="font-size:11px;margin-top:4px">NBA</div></div>
+          <div class="side right"><div class="logo">PHX</div><div class="nm">Suns</div><div class="sc">91</div></div>
+        </div>
+        <div class="streams"><div class="ch">Matched · <strong>TNT HD</strong></div><button class="watch">WATCH</button></div>
+      </div>
+      <div class="match" data-t="KC @ BUF">
+        <div class="board">
+          <div class="side left"><div class="logo">KC</div><div class="nm">Chiefs ★</div><div class="sc muted" style="font-size:18px">—</div></div>
+          <div class="mid"><div class="clock" style="color:var(--ink)">8:20 PM</div><div class="muted" style="font-size:11px;margin-top:4px">NFL</div></div>
+          <div class="side right"><div class="logo">BUF</div><div class="nm">Bills</div><div class="sc muted" style="font-size:18px">—</div></div>
+        </div>
+        <div class="streams"><div class="ch">Upcoming · <strong>NBC HD</strong></div><span class="muted" style="font-size:11px">Later</span></div>
+      </div>
+    </div>
+    <div class="toast" id="toast">…</div>
+    <div class="tabbar">
+      <div class="tab on"><div class="ic">▣</div>Scores</div>
+      <div class="tab"><div class="ic">☰</div>Guide</div>
+      <div class="tab"><div class="ic">⚙</div>Settings</div>
+    </div>
+  </div>
+
+<p class="notes"><strong>Stance:</strong> NBA-style symmetric matchup — logos out, scores large, clock center, matched IPTV channel under row.</p>
+<script>
+
+const toast=document.getElementById('toast');
+function flash(m){toast.textContent=m;toast.classList.add('on');setTimeout(()=>toast.classList.remove('on'),1500)}
+document.querySelectorAll('.d').forEach(d=>d.onclick=()=>{document.querySelectorAll('.d').forEach(x=>x.classList.remove('on'));d.classList.add('on')});
+document.querySelectorAll('.match').forEach(m=>m.onclick=()=>flash('Play · '+m.dataset.t+' → stream picker'));
+
+</script>
+</body>
+</html>

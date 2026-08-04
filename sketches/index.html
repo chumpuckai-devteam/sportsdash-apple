@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SportsDash UI sketches</title>
+<link rel="stylesheet" href="themes/tokens.css"/>
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body {
+    font-family: var(--font); background: var(--void); color: var(--ink);
+    padding: 32px 20px 64px; max-width: 720px; margin: 0 auto; line-height: 1.5;
+  }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 8px 0 28px; font-size: 15px; }
+  .card {
+    display:block; text-decoration:none; color:inherit;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 18px; margin-bottom: 12px; transition: border-color .15s;
+  }
+  .card:hover { border-color: var(--gold); }
+  .card h2 { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+  .card p { color: var(--muted); font-size: 13px; }
+  .tag {
+    display:inline-block; font-size: 10px; font-weight: 800; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 6px;
+  }
+  .rec {
+    margin-top: 28px; padding: 16px; border-radius: 12px;
+    background: var(--gold-dim); border: 1px solid rgba(212,160,23,.35);
+    font-size: 14px;
+  }
+  .rec strong { color: var(--gold); }
+  ol { margin: 12px 0 0 18px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <h1>SportsDash UI sketches</h1>
+  <p class="sub">From ESPN · CBS · NFL · Bleacher Report · NBA · Smarters · IPTVx · Chillio.<br/>
+  Brand: void + gold + live mint · tabs Scores · Guide · Settings · structure only (no trademark clone).</p>
+
+  <a class="card" href="001-my-games-first/index.html">
+    <div class="tag">A · Scores</div>
+    <h2>My Games First</h2>
+    <p>ESPN-inspired favorite rail + pinned My Games slate, then collapsible leagues. Gold WATCH → IPTV.</p>
+  </a>
+  <a class="card" href="002-dense-board/index.html">
+    <div class="tag">B · Scores</div>
+    <h2>Dense Board</h2>
+    <p>CBS-inspired date strip, live strip, 2-up game grid, collapsible WNBA/MLB (matches our accordion).</p>
+  </a>
+  <a class="card" href="003-symmetric-watch/index.html">
+    <div class="tag">C · Scores</div>
+    <h2>Symmetric Watch</h2>
+    <p>NBA-style matchup rows: logos out, scores large, clock center, matched channel under row + WATCH.</p>
+  </a>
+  <a class="card" href="004-player-ticker-top/index.html">
+    <div class="tag">D · Player</div>
+    <h2>Top scores ticker</h2>
+    <p>NFL-style sticky multi-game ticker on video; native system Back/Home; auto-fade chrome; pop-out + ticker toggle.</p>
+  </a>
+
+  <div class="rec">
+    <strong>Recommendation for ship direction</strong><br/>
+    Combine <strong>A + C</strong> for Scores (favorite rail + My Games, symmetric rows), keep collapse from B,
+    move player ticker toward <strong>D (top)</strong> especially in landscape.
+    <ol>
+      <li>Pick A / B / C (or hybrid) for Scores</li>
+      <li>Confirm player ticker top vs bottom</li>
+      <li>Then implement Android first (dogfood), iOS parity second</li>
+    </ol>
+  </div>
+</body>
+</html>

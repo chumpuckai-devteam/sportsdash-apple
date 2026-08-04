@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SportsDash · My Games First</title>
+<link rel="stylesheet" href="../themes/tokens.css"/>
+<style>
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: #0a0c0b;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1.page { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--void);
+    border-radius: 36px;
+    border: 1px solid #2a3530;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+  }
+  .status {
+    height: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 28px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status .right { display: flex; gap: 6px; opacity: 0.85; font-size: 11px; }
+  .app {
+    height: calc(100% - 48px - 64px);
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+  .tabbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 64px;
+    background: rgba(10,14,12,0.94);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    backdrop-filter: blur(12px);
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.on { color: var(--gold); }
+  .tab .ic { font-size: 18px; line-height: 1; }
+  .notes {
+    max-width: 390px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .notes strong { color: var(--ink); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .pill.on { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+  .pill.live { color: var(--mint); border-color: rgba(61,214,140,0.35); }
+  .watch {
+    background: var(--gold);
+    color: #1a1400;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .muted { color: var(--muted); }
+  .live { color: var(--mint); font-weight: 700; }
+  .toast {
+    position:absolute; left:16px; right:16px; bottom: 80px;
+    background: var(--panel-2); border:1px solid var(--gold); border-radius: 10px;
+    padding: 10px 12px; font-size: 13px; display:none; z-index:5;
+  }
+  .toast.on { display:block; }
+
+
+  .hdr { padding: 4px 16px 10px; display:flex; align-items:center; justify-content:space-between; }
+  .hdr h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+  .filters { display:flex; gap:8px; padding: 0 16px 12px; overflow-x:auto; }
+  .fave-rail { display:flex; gap:12px; padding: 4px 16px 14px; overflow-x:auto; }
+  .fave { width: 56px; flex: 0 0 auto; text-align:center; cursor:pointer; }
+  .fave .logo {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: var(--panel-2); border: 2px solid var(--border);
+    display:grid; place-items:center; font-weight:800; font-size:13px; margin:0 auto 6px;
+  }
+  .fave.on .logo { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dim); }
+  .fave .name { font-size: 10px; color: var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .section { padding: 0 16px 8px; }
+  .sec-h {
+    display:flex; align-items:center; gap: 6px;
+    padding: 10px 0 8px; font-size: 13px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .sec-h .n { color: var(--mint); font-weight: 800; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 10px; overflow: hidden;
+  }
+  .row {
+    display:grid; grid-template-columns: 1fr auto; gap: 10px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border); cursor:pointer;
+  }
+  .row:last-child { border-bottom: none; }
+  .teams { display:flex; flex-direction:column; gap:8px; }
+  .tline { display:flex; align-items:center; gap:10px; }
+  .dot {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--panel-2);
+    display:grid; place-items:center; font-size: 10px; font-weight: 800; color: var(--gold);
+  }
+  .tname { font-size: 15px; font-weight: 600; flex:1; }
+  .tscore { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 28px; text-align:right; }
+  .meta { display:flex; flex-direction:column; align-items:flex-end; gap:6px; min-width: 88px; }
+  .clock { font-size: 12px; font-weight: 700; }
+  .net { font-size: 10px; color: var(--muted); }
+  .league-h {
+    display:flex; align-items:center; gap:8px; padding: 14px 16px 6px;
+    font-size: 14px; font-weight: 800;
+  }
+  .league-h button {
+    margin-left:auto; background:none; border:none; color: var(--gold); font-size: 12px; cursor:pointer;
+  }
+
+</style>
+</head>
+<body>
+
+  <h1 class="page">Variant A · My Games First</h1>
+  <div class="phone" id="phone">
+    <div class="status"><span>9:41</span><span class="right">5G · 86%</span></div>
+    <div class="app">
+      <div class="hdr">
+        <h2>Scores</h2>
+        <button class="pill" id="editFaves">Edit ★</button>
+      </div>
+      <div class="filters">
+        <button class="pill on live" data-f="live">Live</button>
+        <button class="pill" data-f="up">Upcoming</button>
+        <button class="pill" data-f="fin">Final</button>
+        <button class="pill" data-f="fav">★ Faves</button>
+      </div>
+      <div class="fave-rail" id="rail">
+        <div class="fave on" data-t="MIN"><div class="logo" style="background:#0c2340;color:#fff">MIN</div><div class="name">Twins</div></div>
+        <div class="fave" data-t="SEA"><div class="logo" style="background:#0c2c56;color:#c4ced4">SEA</div><div class="name">Mariners</div></div>
+        <div class="fave" data-t="LAL"><div class="logo" style="background:#552583;color:#fdb927">LAL</div><div class="name">Lakers</div></div>
+        <div class="fave" data-t="KC"><div class="logo" style="background:#e31837;color:#ffb81c">KC</div><div class="name">Chiefs</div></div>
+        <div class="fave" data-t="+"><div class="logo" style="border-style:dashed;color:var(--muted)">+</div><div class="name">Add</div></div>
+      </div>
+      <div class="section">
+        <div class="sec-h">My Games · <span class="n">2 Live</span></div>
+        <div class="card" id="mygames">
+          <div class="row" data-g="min-sea">
+            <div class="teams">
+              <div class="tline"><div class="dot">MIN</div><div class="tname">Twins ★</div><div class="tscore">3</div></div>
+              <div class="tline"><div class="dot">SEA</div><div class="tname">Mariners</div><div class="tscore">2</div></div>
+            </div>
+            <div class="meta">
+              <div class="clock live">● Bot 7th</div>
+              <div class="net">MLB.TV</div>
+              <button class="watch">WATCH</button>
+            </div>
+          </div>
+          <div class="row" data-g="lal-bos">
+            <div class="teams">
+              <div class="tline"><div class="dot">LAL</div><div class="tname">Lakers ★</div><div class="tscore">102</div></div>
+              <div class="tline"><div class="dot">BOS</div><div class="tname">Celtics</div><div class="tscore">98</div></div>
+            </div>
+            <div class="meta">
+              <div class="clock live">● Q4 3:30</div>
+              <div class="net">ESPN</div>
+              <button class="watch">WATCH</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="league-h">⚾ MLB <button type="button" class="collapse" data-sec="mlb">Collapse ▾</button></div>
+      <div class="section" id="mlb">
+        <div class="card">
+          <div class="row"><div class="teams">
+            <div class="tline"><div class="dot">NYY</div><div class="tname">Yankees</div><div class="tscore">5</div></div>
+            <div class="tline"><div class="dot">BOS</div><div class="tname">Red Sox</div><div class="tscore">5</div></div>
+          </div><div class="meta"><div class="clock live">● 8th</div><button class="watch">WATCH</button></div></div>
+          <div class="row"><div class="teams">
+            <div class="tline"><div class="dot">LAD</div><div class="tname">Dodgers</div><div class="tscore">—</div></div>
+            <div class="tline"><div class="dot">SF</div><div class="tname">Giants</div><div class="tscore">—</div></div>
+          </div><div class="meta"><div class="clock muted">7:15 PM</div><button class="watch">WATCH</button></div></div>
+        </div>
+      </div>
+      <div class="league-h">🏀 NBA <button type="button" class="collapse" data-sec="nba">Collapse ▾</button></div>
+      <div class="section" id="nba">
+        <div class="card">
+          <div class="row"><div class="teams">
+            <div class="tline"><div class="dot">DEN</div><div class="tname">Nuggets</div><div class="tscore">88</div></div>
+            <div class="tline"><div class="dot">PHX</div><div class="tname">Suns</div><div class="tscore">91</div></div>
+          </div><div class="meta"><div class="clock live">● Q3</div><button class="watch">WATCH</button></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast">Stream picker → matched IPTV channels</div>
+    <div class="tabbar">
+      <div class="tab on"><div class="ic">▣</div>Scores</div>
+      <div class="tab"><div class="ic">☰</div>Guide</div>
+      <div class="tab"><div class="ic">⚙</div>Settings</div>
+    </div>
+  </div>
+
+<p class="notes"><strong>Stance:</strong> ESPN “My Games” first. Favorite team rail + pinned slate, then collapsible leagues. Gold WATCH → IPTV.</p>
+<script>
+
+const toast = document.getElementById('toast');
+function flash(msg){ toast.textContent = msg; toast.classList.add('on'); setTimeout(()=>toast.classList.remove('on'), 1600); }
+document.querySelectorAll('.filters .pill').forEach(p=>p.onclick=()=>{
+  document.querySelectorAll('.filters .pill').forEach(x=>x.classList.remove('on'));
+  p.classList.add('on'); flash('Filter · ' + p.textContent);
+});
+document.querySelectorAll('.collapse').forEach(b=>b.onclick=()=>{
+  const el = document.getElementById(b.dataset.sec);
+  const hide = el.style.display !== 'none';
+  el.style.display = hide ? 'none' : '';
+  b.textContent = hide ? 'Expand ▸' : 'Collapse ▾';
+});
+document.querySelectorAll('.watch').forEach(el=>el.addEventListener('click', e=>{
+  e.stopPropagation(); flash('WATCH → stream picker (Xtream match)');
+}));
+document.getElementById('editFaves').onclick=()=>flash('Bleacher-style favorite teams editor');
+document.querySelectorAll('.fave').forEach(f=>f.onclick=()=>{
+  document.querySelectorAll('.fave').forEach(x=>x.classList.remove('on'));
+  f.classList.add('on');
+  flash(f.dataset.t === '+' ? 'Add favorite team' : 'Focus · ' + f.dataset.t);
+});
+
+</script>
+</body>
+</html>

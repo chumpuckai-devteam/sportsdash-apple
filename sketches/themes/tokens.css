@@ -1,0 +1,17 @@
+:root {
+  --void: #070a08;
+  --panel: #121816;
+  --panel-2: #1a221e;
+  --border: #24302a;
+  --ink: #f2f5f3;
+  --muted: #8b9a92;
+  --gold: #d4a017;
+  --gold-dim: rgba(212, 160, 23, 0.18);
+  --mint: #3dd68c;
+  --mint-dim: rgba(61, 214, 140, 0.16);
+  --danger: #ff5c5c;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --safe-b: 72px;
+}

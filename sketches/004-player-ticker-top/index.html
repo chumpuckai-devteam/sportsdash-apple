@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SportsDash · Player Top Ticker</title>
+<link rel="stylesheet" href="../themes/tokens.css"/>
+<style>
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: #0a0c0b;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1.page { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--void);
+    border-radius: 36px;
+    border: 1px solid #2a3530;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+  }
+  .status {
+    height: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 28px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .status .right { display: flex; gap: 6px; opacity: 0.85; font-size: 11px; }
+  .app {
+    height: calc(100% - 48px - 64px);
+    overflow-y: auto;
+    padding-bottom: 12px;
+  }
+  .tabbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 64px;
+    background: rgba(10,14,12,0.94);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    backdrop-filter: blur(12px);
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.on { color: var(--gold); }
+  .tab .ic { font-size: 18px; line-height: 1; }
+  .notes {
+    max-width: 390px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .notes strong { color: var(--ink); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .pill.on { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
+  .pill.live { color: var(--mint); border-color: rgba(61,214,140,0.35); }
+  .watch {
+    background: var(--gold);
+    color: #1a1400;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .muted { color: var(--muted); }
+  .live { color: var(--mint); font-weight: 700; }
+  .toast {
+    position:absolute; left:16px; right:16px; bottom: 80px;
+    background: var(--panel-2); border:1px solid var(--gold); border-radius: 10px;
+    padding: 10px 12px; font-size: 13px; display:none; z-index:5;
+  }
+  .toast.on { display:block; }
+
+
+  .phone { background:#000; }
+  .app { display:none; }
+  .tabbar { display:none; }
+  .video {
+    position:absolute; inset:0;
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 28%, transparent 62%, rgba(0,0,0,0.75) 100%),
+      radial-gradient(ellipse at 40% 40%, #1a3a2a 0%, #050805 70%);
+  }
+  .ticker {
+    position:absolute; top: 52px; left:0; right:0; z-index:3;
+    display:flex; gap:8px; padding: 8px 12px; overflow-x:auto;
+  }
+  .tick {
+    flex:0 0 auto; padding: 8px 12px; border-radius: 10px;
+    background: rgba(18,24,22,0.88); border: 1px solid var(--border);
+    font-size: 12px; font-weight: 700; white-space:nowrap; cursor:pointer;
+    backdrop-filter: blur(8px);
+  }
+  .tick b { color: var(--mint); font-weight: 800; margin-right: 6px; font-size: 10px; }
+  .tick.on { background: var(--gold); color:#1a1400; border-color: var(--gold); }
+  .tick.on b { color:#1a1400; }
+  .topmeta {
+    position:absolute; top: 118px; left: 14px; right: 14px; z-index:2;
+  }
+  .title { font-size: 14px; font-weight: 700; text-shadow: 0 1px 4px #000; }
+  .title small { display:block; color: #c8d4cc; font-weight: 500; font-size: 12px; margin-top: 2px; }
+  .sys {
+    position:absolute; bottom: 10px; left:0; right:0; height: 28px;
+    display:flex; justify-content:center; gap: 40px; align-items:center;
+    color: #9aa; font-size: 11px; z-index:4;
+  }
+  .chrome {
+    position:absolute; left:0; right:0; bottom: 42px; z-index:3;
+    padding: 12px 16px; display:flex; flex-direction:column; gap: 12px;
+    transition: opacity .2s;
+  }
+  .transport { display:flex; justify-content:center; align-items:center; gap: 28px; }
+  .btn {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.18);
+    color:#fff; display:grid; place-items:center; font-size: 16px; cursor:pointer;
+  }
+  .btn.main { width: 58px; height: 58px; background: rgba(212,160,23,0.9); color:#1a1400; border:none; font-size: 20px; }
+  .row2 { display:flex; justify-content:space-between; align-items:center; }
+  .hint {
+    position:absolute; left:16px; right:16px; bottom: 88px; z-index:5;
+    text-align:center; font-size: 12px; color: #ddd; text-shadow:0 1px 3px #000;
+    opacity: 0; transition: opacity .2s;
+  }
+  .hint.on { opacity: 1; }
+  .livebadge {
+    display:inline-block; background: #ff5c5c; color:#fff;
+    font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-right: 6px;
+  }
+
+</style>
+</head>
+<body>
+
+  <h1 class="page">Variant D · Player · Top ticker</h1>
+  <div class="phone">
+    <div class="status" style="position:relative;z-index:4"><span>9:41</span><span class="right">5G · 86%</span></div>
+    <div class="video"></div>
+    <div class="ticker" id="ticker">
+      <div class="tick on"><b>LIVE</b>MIN 3–2 SEA</div>
+      <div class="tick"><b>LIVE</b>LAL 102–98 BOS</div>
+      <div class="tick"><b>LIVE</b>DEN 88–91 PHX</div>
+      <div class="tick"><b>Q3</b>NYY 5–5 BOS</div>
+      <div class="tick"><b>8:20</b>KC @ BUF</div>
+    </div>
+    <div class="topmeta">
+      <div class="title"><span class="livebadge">LIVE</span>ESPN 2 HD
+        <small>Twins @ Mariners · Bot 7th</small>
+      </div>
+    </div>
+    <div class="chrome" id="chrome">
+      <div class="transport">
+        <div class="btn" title="Rejoin live">↺</div>
+        <div class="btn main" id="pp">❚❚</div>
+        <div class="btn" title="Mute">♪</div>
+      </div>
+      <div class="row2">
+        <button class="pill" id="pop">Pop out</button>
+        <button class="pill on" id="togTick">Scores on</button>
+      </div>
+    </div>
+    <div class="hint" id="hint">System Back leaves player · Home / Recents stay native</div>
+    <div class="sys"><span>△</span><span>○</span><span>◻</span></div>
+  </div>
+
+<p class="notes"><strong>Stance:</strong> NFL-style top multi-game ticker; native system Back/Home; auto-fade chrome. Tap video to fade.</p>
+<script>
+
+const chrome=document.getElementById('chrome');
+const hint=document.getElementById('hint');
+let show=true;
+document.querySelector('.video').onclick=()=>{
+  show=!show; chrome.style.opacity=show?'1':'0'; chrome.style.pointerEvents=show?'auto':'none';
+};
+document.querySelectorAll('.tick').forEach(t=>t.onclick=e=>{
+  e.stopPropagation();
+  document.querySelectorAll('.tick').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  hint.textContent='Switch context · '+t.textContent.trim()+' (rebind VLC)';
+  hint.classList.add('on'); setTimeout(()=>hint.classList.remove('on'),1600);
+});
+document.getElementById('pp').onclick=e=>{e.stopPropagation(); const b=e.currentTarget; b.textContent=b.textContent==='❚❚'?'▶':'❚❚';};
+document.getElementById('togTick').onclick=e=>{
+  e.stopPropagation();
+  const on=e.currentTarget.classList.toggle('on');
+  e.currentTarget.textContent=on?'Scores on':'Scores off';
+  document.getElementById('ticker').style.display=on?'flex':'none';
+};
+document.getElementById('pop').onclick=e=>{e.stopPropagation();hint.textContent='Pop-out mini player over tabs';hint.classList.add('on');setTimeout(()=>hint.classList.remove('on'),1600);};
+
+</script>
+</body>
+</html>
