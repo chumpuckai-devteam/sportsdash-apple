@@ -36,6 +36,63 @@ class SportsRepository(
         }
     }
 
+    /**
+     * Full roster for favorite-team picker.
+     * ESPN: /sports/{sport}/{league}/teams
+     */
+    suspend fun fetchTeams(league: SportLeague): List<TeamInfo> = withContext(Dispatchers.IO) {
+        val url = "https://site.api.espn.com/apis/site/v2/sports/${league.sportPath}/${league.leaguePath}/teams?limit=400"
+        val body = runCatching { httpGet(url) }.getOrDefault("")
+        if (body.isBlank()) return@withContext emptyList()
+        parseTeams(body)
+    }
+
+    private fun parseTeams(body: String): List<TeamInfo> {
+        val root = runCatching { JSONObject(body) }.getOrNull() ?: return emptyList()
+        val sports = root.optJSONArray("sports") ?: return emptyList()
+        val out = ArrayList<TeamInfo>()
+        val seen = HashSet<String>()
+        for (si in 0 until sports.length()) {
+            val sport = sports.optJSONObject(si) ?: continue
+            val leagues = sport.optJSONArray("leagues") ?: continue
+            for (li in 0 until leagues.length()) {
+                val league = leagues.optJSONObject(li) ?: continue
+                val teams = league.optJSONArray("teams") ?: continue
+                for (ti in 0 until teams.length()) {
+                    val wrap = teams.optJSONObject(ti) ?: continue
+                    val team = wrap.optJSONObject("team") ?: wrap
+                    val id = team.optString("id").ifBlank {
+                        team.optString("uid").ifBlank { team.optString("abbreviation") }
+                    }
+                    if (id.isBlank() || !seen.add(id)) continue
+                    val logos = team.optJSONArray("logos")
+                    var logo: String? = null
+                    if (logos != null && logos.length() > 0) {
+                        logo = logos.optJSONObject(0)?.optString("href")?.takeIf { it.isNotBlank() }
+                    }
+                    if (logo.isNullOrBlank()) {
+                        logo = team.optString("logo").takeIf { it.isNotBlank() }
+                    }
+                    out.add(
+                        TeamInfo(
+                            id = id,
+                            name = team.optString("displayName").ifBlank {
+                                team.optString("name").ifBlank { team.optString("shortDisplayName") }
+                            },
+                            abbreviation = team.optString("abbreviation").ifBlank {
+                                team.optString("shortDisplayName").take(3)
+                            },
+                            logoUrl = logo,
+                            shortName = team.optString("shortDisplayName").takeIf { it.isNotBlank() }
+                                ?: team.optString("name").takeIf { it.isNotBlank() },
+                        ),
+                    )
+                }
+            }
+        }
+        return out.sortedBy { it.name.lowercase() }
+    }
+
     private fun fetchLeague(league: SportLeague): List<Game> {
         val urls = scoreboardUrls(league)
         val byId = linkedMapOf<String, Game>()

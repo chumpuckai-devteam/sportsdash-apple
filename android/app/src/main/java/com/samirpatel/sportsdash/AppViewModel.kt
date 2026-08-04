@@ -100,6 +100,8 @@ data class AppUiState(
     val favoriteChannelIds: Set<String> = emptySet(),
     /** ESPN team ids starred (iOS favoriteTeamIds parity). */
     val favoriteTeamIds: Set<String> = emptySet(),
+    /** Full starred teams (logos/names) for rail + picker. */
+    val favoriteTeams: List<TeamInfo> = emptyList(),
     val cleanUpNames: Boolean = true,
     /** Guide filter: movie-like now-playing only. */
     val moviesNow: Boolean = false,
@@ -170,8 +172,24 @@ class AppViewModel(
             }
         }
         viewModelScope.launch {
+            prefs.favoriteTeamsFlow.collect { teams ->
+                _state.update {
+                    it.copy(
+                        favoriteTeams = teams,
+                        favoriteTeamIds = teams.map { t -> t.id }.toSet().ifEmpty {
+                            // keep ids if meta empty (legacy)
+                            it.favoriteTeamIds
+                        },
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
             prefs.favoriteTeamIdsFlow.collect { ids ->
-                _state.update { it.copy(favoriteTeamIds = ids) }
+                _state.update { s ->
+                    if (s.favoriteTeams.isNotEmpty()) s
+                    else s.copy(favoriteTeamIds = ids)
+                }
             }
         }
         viewModelScope.launch {
@@ -382,10 +400,53 @@ class AppViewModel(
     }
 
     fun toggleTeamFavorite(teamId: String) {
-        val next = _state.value.favoriteTeamIds.toMutableSet()
-        if (!next.add(teamId)) next.remove(teamId)
-        _state.update { it.copy(favoriteTeamIds = next) }
-        viewModelScope.launch { prefs.setFavoriteTeamIds(next) }
+        if (teamId.isBlank()) return
+        val current = _state.value.favoriteTeams.toMutableList()
+        val idx = current.indexOfFirst { it.id == teamId }
+        if (idx >= 0) {
+            current.removeAt(idx)
+        } else {
+            // Prefer rich row from live boards if present
+            val fromBoard = _state.value.games.asSequence()
+                .flatMap { sequenceOf(it.home, it.away) }
+                .firstOrNull { it.id == teamId }
+            current.add(
+                fromBoard ?: TeamInfo(id = teamId, name = teamId, abbreviation = teamId.take(3)),
+            )
+        }
+        persistFavoriteTeams(current)
+    }
+
+    fun toggleTeamFavorite(team: TeamInfo) {
+        if (team.id.isBlank()) return
+        val current = _state.value.favoriteTeams.toMutableList()
+        val idx = current.indexOfFirst { it.id == team.id }
+        if (idx >= 0) current.removeAt(idx)
+        else current.add(team)
+        persistFavoriteTeams(current)
+    }
+
+    private fun persistFavoriteTeams(teams: List<TeamInfo>) {
+        val distinct = teams.filter { it.id.isNotBlank() }.distinctBy { it.id }
+        _state.update {
+            it.copy(
+                favoriteTeams = distinct,
+                favoriteTeamIds = distinct.map { t -> t.id }.toSet(),
+            )
+        }
+        viewModelScope.launch { prefs.setFavoriteTeams(distinct) }
+    }
+
+    suspend fun loadTeamsForLeague(league: SportLeague): List<TeamInfo> {
+        return runCatching { sports.fetchTeams(league) }.getOrDefault(emptyList())
+    }
+
+    fun sportGroupsForPicker(): List<Pair<String, List<SportLeague>>> {
+        return SportLeague.ALL
+            .groupBy { it.section }
+            .entries
+            .sortedBy { it.key }
+            .map { it.key to it.value }
     }
 
     fun setCleanUpNames(enabled: Boolean) {
@@ -878,6 +939,19 @@ class AppViewModel(
 
     /** Horizontal favorite-team rail with ESPN logos when present. */
     fun favoriteTeamsRail(): List<TeamInfo> {
+        val stored = _state.value.favoriteTeams
+        if (stored.isNotEmpty()) {
+            // Enrich logos from live board when meta lacks them
+            val board = linkedMapOf<String, TeamInfo>()
+            for (g in _state.value.games) {
+                board.putIfAbsent(g.home.id, g.home)
+                board.putIfAbsent(g.away.id, g.away)
+            }
+            return stored.map { t ->
+                val b = board[t.id]
+                if (b != null && t.logoUrl.isNullOrBlank() && !b.logoUrl.isNullOrBlank()) b else t
+            }
+        }
         val ids = _state.value.favoriteTeamIds
         if (ids.isEmpty()) return emptyList()
         val byId = linkedMapOf<String, TeamInfo>()
@@ -885,12 +959,7 @@ class AppViewModel(
             if (g.home.id in ids) byId.putIfAbsent(g.home.id, g.home)
             if (g.away.id in ids) byId.putIfAbsent(g.away.id, g.away)
         }
-        // Stable order: known ids first, then any extras
-        val ordered = ArrayList<TeamInfo>()
-        for (id in ids) {
-            byId[id]?.let { ordered.add(it) }
-        }
-        return ordered
+        return ids.mapNotNull { byId[it] }
     }
 
     /** Favorites first, then earlier start. */

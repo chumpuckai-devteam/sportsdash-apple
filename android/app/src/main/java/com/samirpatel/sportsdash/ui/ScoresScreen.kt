@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -42,6 +43,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.launch
+import com.samirpatel.sportsdash.core.sports.SportLeague
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -89,6 +95,7 @@ fun ScoresScreen(
     onGoSettings: () -> Unit = {},
 ) {
     var teamFavGame by remember { mutableStateOf<Game?>(null) }
+    var showTeamPicker by remember { mutableStateOf(false) }
     // CSV survives rotation; defaults expanded like iOS @State.
     var collapsedSportsCsv by rememberSaveable { mutableStateOf("") }
     val collapsedSports = remember(collapsedSportsCsv) {
@@ -162,10 +169,10 @@ fun ScoresScreen(
             // Variant A: favorite-team logo rail (ESPN / Bleacher Report)
             FavoriteTeamsRail(
                 teams = vm.favoriteTeamsRail(),
-                onAddHint = {
-                    // Guide user: pick any game and long-press to star a team.
-                    teamFavGame = state.games.firstOrNull { !vm.gameHasFavoriteTeam(it) }
-                        ?: state.games.firstOrNull()
+                onOpenPicker = { showTeamPicker = true },
+                onTeamClick = { team ->
+                    // Quick unstar from rail long-path: open picker focused later; tap = info via picker
+                    showTeamPicker = true
                 },
             )
 
@@ -270,13 +277,13 @@ fun ScoresScreen(
                 title = { Text("${g.away.rowLabel} @ ${g.home.rowLabel}", color = TextPrimary) },
                 text = {
                     Text(
-                        "Favorite teams appear first in Live, Upcoming, and Final.",
+                        "Star a team from this game, or use + Add for Sport → League → Team.",
                         color = Muted,
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        vm.toggleTeamFavorite(g.home.id)
+                        vm.toggleTeamFavorite(g.home)
                         teamFavGame = null
                     }) {
                         Text(
@@ -289,7 +296,7 @@ fun ScoresScreen(
                 dismissButton = {
                     Row {
                         TextButton(onClick = {
-                            vm.toggleTeamFavorite(g.away.id)
+                            vm.toggleTeamFavorite(g.away)
                             teamFavGame = null
                         }) {
                             Text(
@@ -298,12 +305,27 @@ fun ScoresScreen(
                                 color = Gold,
                             )
                         }
+                        TextButton(onClick = {
+                            teamFavGame = null
+                            showTeamPicker = true
+                        }) {
+                            Text("Browse…", color = Gold)
+                        }
                         TextButton(onClick = { teamFavGame = null }) {
                             Text("Cancel", color = Muted)
                         }
                     }
                 },
                 containerColor = Panel,
+            )
+        }
+
+        if (showTeamPicker) {
+            FavoriteTeamPickerDialog(
+                vm = vm,
+                favoriteIds = state.favoriteTeamIds,
+                onDismiss = { showTeamPicker = false },
+                onToggle = { team -> vm.toggleTeamFavorite(team) },
             )
         }
     }
@@ -393,7 +415,8 @@ private fun MyTeamsSectionHeader(liveCount: Int = 0) {
 @Composable
 private fun FavoriteTeamsRail(
     teams: List<TeamInfo>,
-    onAddHint: () -> Unit,
+    onOpenPicker: () -> Unit,
+    onTeamClick: (TeamInfo) -> Unit = {},
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -403,7 +426,9 @@ private fun FavoriteTeamsRail(
         items(items = teams, key = { it.id }) { team ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(56.dp),
+                modifier = Modifier
+                    .width(56.dp)
+                    .clickable { onTeamClick(team) },
             ) {
                 Box(
                     modifier = Modifier
@@ -431,7 +456,7 @@ private fun FavoriteTeamsRail(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .width(56.dp)
-                    .clickable(onClick = onAddHint),
+                    .clickable(onClick = onOpenPicker),
             ) {
                 Box(
                     modifier = Modifier
@@ -451,6 +476,204 @@ private fun FavoriteTeamsRail(
                 )
             }
         }
+    }
+}
+
+private enum class FavPickerStep { Sport, League, Team }
+
+@Composable
+private fun FavoriteTeamPickerDialog(
+    vm: AppViewModel,
+    favoriteIds: Set<String>,
+    onDismiss: () -> Unit,
+    onToggle: (TeamInfo) -> Unit,
+) {
+    var step by remember { mutableStateOf(FavPickerStep.Sport) }
+    var sportName by remember { mutableStateOf<String?>(null) }
+    var league by remember { mutableStateOf<SportLeague?>(null) }
+    var teams by remember { mutableStateOf<List<TeamInfo>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val groups = remember { vm.sportGroupsForPicker() }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.82f),
+            shape = RoundedCornerShape(18.dp),
+            color = Panel,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (step != FavPickerStep.Sport) {
+                        TextButton(onClick = {
+                            when (step) {
+                                FavPickerStep.Team -> {
+                                    step = FavPickerStep.League
+                                    teams = emptyList()
+                                    error = null
+                                }
+                                FavPickerStep.League -> {
+                                    step = FavPickerStep.Sport
+                                    sportName = null
+                                    league = null
+                                }
+                                else -> Unit
+                            }
+                        }) { Text("Back", color = Gold) }
+                    }
+                    Text(
+                        text = when (step) {
+                            FavPickerStep.Sport -> "Add favorite · Sport"
+                            FavPickerStep.League -> "Add favorite · ${sportName ?: "League"}"
+                            FavPickerStep.Team -> "Add favorite · ${league?.label ?: "Team"}"
+                        },
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Muted)
+                    }
+                }
+                Text(
+                    text = when (step) {
+                        FavPickerStep.Sport -> "1. Choose a sport"
+                        FavPickerStep.League -> "2. Choose a league"
+                        FavPickerStep.Team -> "3. Tap a team to star / unstar"
+                    },
+                    color = Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                error?.let {
+                    Text(text = it, color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp))
+                }
+                if (loading) {
+                    Box(Modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Gold)
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        when (step) {
+                            FavPickerStep.Sport -> {
+                                items(groups, key = { it.first }) { (name, _) ->
+                                    PickerRow(
+                                        title = name,
+                                        subtitle = "${groups.first { it.first == name }.second.size} leagues",
+                                        onClick = {
+                                            sportName = name
+                                            step = FavPickerStep.League
+                                        },
+                                    )
+                                }
+                            }
+                            FavPickerStep.League -> {
+                                val leagues = groups.firstOrNull { it.first == sportName }?.second.orEmpty()
+                                items(leagues, key = { it.id }) { lg ->
+                                    PickerRow(
+                                        title = lg.label,
+                                        subtitle = lg.id.uppercase(),
+                                        onClick = {
+                                            league = lg
+                                            step = FavPickerStep.Team
+                                            loading = true
+                                            error = null
+                                            scope.launch {
+                                                val list = vm.loadTeamsForLeague(lg)
+                                                teams = list
+                                                loading = false
+                                                if (list.isEmpty()) {
+                                                    error = "No teams returned for ${lg.label}. Try again later."
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                            FavPickerStep.Team -> {
+                                items(teams, key = { it.id }) { team ->
+                                    val starred = team.id in favoriteIds
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (starred) Gold.copy(alpha = 0.14f) else VoidBlack,
+                                            )
+                                            .clickable { onToggle(team) }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 36.dp)
+                                        Spacer(Modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                team.name.ifBlank { team.rowLabel },
+                                                color = TextPrimary,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(team.abbreviation, color = Muted, fontSize = 12.sp)
+                                        }
+                                        Text(
+                                            if (starred) "★" else "☆",
+                                            color = Gold,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickerRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(VoidBlack)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(subtitle, color = Muted, fontSize = 12.sp)
+        }
+        Icon(
+            imageVector = Icons.Default.KeyboardArrowRight,
+            contentDescription = null,
+            tint = Gold,
+        )
     }
 }
 

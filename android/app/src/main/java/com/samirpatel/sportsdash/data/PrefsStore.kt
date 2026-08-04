@@ -66,8 +66,21 @@ class PrefsStore(private val context: Context) {
     }
 
     val favoriteTeamIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        decodeIdSet(prefs[keyFavoriteTeams])
+        val meta = decodeFavoriteTeams(prefs[keyFavoriteTeamsMeta])
+        if (meta.isNotEmpty()) meta.map { it.id }.toSet()
+        else decodeIdSet(prefs[keyFavoriteTeams])
     }
+
+    /** Full team rows (logo/name) for the favorite rail + picker. */
+    val favoriteTeamsFlow: Flow<List<com.samirpatel.sportsdash.core.sports.TeamInfo>> =
+        context.dataStore.data.map { prefs ->
+            val meta = decodeFavoriteTeams(prefs[keyFavoriteTeamsMeta])
+            if (meta.isNotEmpty()) meta
+            else {
+                // Legacy ids-only → empty details until user re-stars via picker
+                emptyList()
+            }
+        }
 
     val cleanUpNamesFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[keyCleanNames] ?: true
@@ -139,6 +152,16 @@ class PrefsStore(private val context: Context) {
     suspend fun setFavoriteTeamIds(ids: Set<String>) {
         context.dataStore.edit {
             it[keyFavoriteTeams] = JSONArray(ids.toList()).toString()
+        }
+    }
+
+    suspend fun setFavoriteTeams(teams: List<com.samirpatel.sportsdash.core.sports.TeamInfo>) {
+        val distinct = teams
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+        context.dataStore.edit { prefs ->
+            prefs[keyFavoriteTeamsMeta] = encodeFavoriteTeams(distinct)
+            prefs[keyFavoriteTeams] = encodeIdSet(distinct.map { it.id }.toSet())
         }
     }
 
@@ -317,6 +340,45 @@ class PrefsStore(private val context: Context) {
             m3uUrl = o.optString("m3uUrl"),
         )
     }.getOrNull()
+
+
+    private fun encodeFavoriteTeams(teams: List<com.samirpatel.sportsdash.core.sports.TeamInfo>): String {
+        val arr = JSONArray()
+        for (team in teams) {
+            arr.put(
+                JSONObject()
+                    .put("id", team.id)
+                    .put("name", team.name)
+                    .put("abbreviation", team.abbreviation)
+                    .put("logoUrl", team.logoUrl ?: "")
+                    .put("shortName", team.shortName ?: ""),
+            )
+        }
+        return arr.toString()
+    }
+
+    private fun decodeFavoriteTeams(raw: String?): List<com.samirpatel.sportsdash.core.sports.TeamInfo> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val id = o.optString("id")
+                    if (id.isBlank()) continue
+                    add(
+                        com.samirpatel.sportsdash.core.sports.TeamInfo(
+                            id = id,
+                            name = o.optString("name"),
+                            abbreviation = o.optString("abbreviation"),
+                            logoUrl = o.optString("logoUrl").takeIf { it.isNotBlank() },
+                            shortName = o.optString("shortName").takeIf { it.isNotBlank() },
+                        ),
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
 
     companion object {
         private const val TAG = "PrefsStore"
