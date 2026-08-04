@@ -562,14 +562,21 @@ private fun FavoriteTeamPickerDialog(
                         modifier = Modifier.padding(horizontal = 16.dp))
                 }
                 if (loading) {
-                    Box(Modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         CircularProgressIndicator(color = Gold)
                     }
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                     ) {
                         when (step) {
                             FavPickerStep.Sport -> {
@@ -622,7 +629,7 @@ private fun FavoriteTeamPickerDialog(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 36.dp)
-                                        Spacer(Modifier = Modifier.width(12.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 team.name.ifBlank { team.rowLabel },

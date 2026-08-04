@@ -34,6 +34,7 @@ class PrefsStore(private val context: Context) {
     private val keyShowTicker = booleanPreferencesKey("player_show_scores_ticker")
     private val keyFavoriteChannels = stringPreferencesKey("favorite_channel_ids_json")
     private val keyFavoriteTeams = stringPreferencesKey("favorite_team_ids_json")
+    private val keyFavoriteTeamsMeta = stringPreferencesKey("favorite_teams_meta_json")
     private val keyCleanNames = booleanPreferencesKey("clean_up_channel_names")
     private val keyMoviesNow = booleanPreferencesKey("guide_movies_now")
     private val keyChannelCache = stringPreferencesKey("channel_cache_json")
@@ -304,6 +305,8 @@ class PrefsStore(private val context: Context) {
             }
         }.getOrDefault(emptyList())
     }
+
+    private fun encodeIdSet(ids: Set<String>): String = JSONArray(ids.toList()).toString()
 
     private fun decodeIdSet(raw: String?): Set<String> {
         if (raw.isNullOrBlank()) return emptySet()
