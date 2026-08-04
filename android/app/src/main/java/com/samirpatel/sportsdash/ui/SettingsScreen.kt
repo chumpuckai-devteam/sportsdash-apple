@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.samirpatel.sportsdash.AppUiState
 import com.samirpatel.sportsdash.AppViewModel
+import com.samirpatel.sportsdash.core.model.PlaylistType
 import com.samirpatel.sportsdash.core.sports.SportLeague
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.Muted
@@ -47,11 +49,26 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 @Composable
 fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
     var mode by remember { mutableIntStateOf(0) }
-    var name by remember { mutableStateOf(state.playlist?.name ?: "My IPTV") }
-    var serverUrl by remember { mutableStateOf(state.playlist?.host ?: "") }
-    var user by remember { mutableStateOf(state.playlist?.username ?: "") }
+    var name by remember { mutableStateOf("My IPTV") }
+    var serverUrl by remember { mutableStateOf("") }
+    var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    var m3u by remember { mutableStateOf(state.playlist?.m3uUrl ?: "") }
+    var m3u by remember { mutableStateOf("") }
+    var hydrated by remember { mutableStateOf(false) }
+
+    // When playlist loads from disk (after update / cold start), fill the form once.
+    // Password stays blank intentionally — blank save keeps existing password.
+    LaunchedEffect(state.playlist?.id, state.playlist?.host, state.playlist?.username) {
+        val pl = state.playlist ?: return@LaunchedEffect
+        if (hydrated) return@LaunchedEffect
+        name = pl.name.ifBlank { "My IPTV" }
+        serverUrl = pl.host
+        user = pl.username
+        m3u = pl.m3uUrl
+        mode = if (pl.type == PlaylistType.M3U) 1 else 0
+        pass = ""
+        hydrated = true
+    }
 
     val fields = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Gold,
@@ -143,7 +160,17 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
                 OutlinedTextField(
                     value = pass,
                     onValueChange = { pass = it },
-                    label = { Text("Password") },
+                    label = {
+                        Text(
+                            if (state.playlist?.type == PlaylistType.XTREAM &&
+                                state.playlist!!.password.isNotBlank()
+                            ) {
+                                "Password (saved · leave blank to keep)"
+                            } else {
+                                "Password"
+                            },
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     colors = fields,
                     singleLine = true,
@@ -154,6 +181,8 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
             item {
                 Button(
                     onClick = { vm.saveXtream(name, serverUrl, user, pass) },
+                    enabled = serverUrl.isNotBlank() && user.isNotBlank() &&
+                        (pass.isNotBlank() || state.playlist?.password?.isNotBlank() == true),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Gold,
                         contentColor = VoidBlack,
@@ -190,7 +219,19 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
         }
         item {
             state.playlist?.let { pl ->
-                Text(text = "Active: ${pl.name} · ${pl.type}", color = TextPrimary)
+                val ready = when (pl.type) {
+                    PlaylistType.XTREAM ->
+                        pl.host.isNotBlank() && pl.username.isNotBlank() && pl.password.isNotBlank()
+                    PlaylistType.M3U -> pl.m3uUrl.isNotBlank()
+                }
+                Text(
+                    text = if (ready) {
+                        "Saved login: ${pl.name} · ${pl.type} · will keep after app updates"
+                    } else {
+                        "Active: ${pl.name} · ${pl.type} (incomplete)"
+                    },
+                    color = TextPrimary,
+                )
             }
             state.channelStatus?.let { Text(text = it, color = Muted) }
             state.channelError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }

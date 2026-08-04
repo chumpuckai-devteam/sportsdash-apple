@@ -134,6 +134,17 @@ class AppViewModel(
     private var categoryEpgJob: Job? = null
 
     init {
+        // Cold-start: restore playlist ASAP so Settings/Guide don't look "logged out"
+        // after an APK update while DataStore is still warming up.
+        viewModelScope.launch {
+            val peeked = prefs.peekPlaylist()
+            if (peeked != null && _state.value.playlist == null) {
+                _state.update { it.copy(playlist = peeked) }
+                if (_state.value.channels.isEmpty()) {
+                    refreshChannels()
+                }
+            }
+        }
         viewModelScope.launch {
             prefs.playlistFlow.collect { cfg ->
                 _state.update { it.copy(playlist = cfg) }
@@ -183,12 +194,22 @@ class AppViewModel(
     }
 
     fun saveXtream(name: String, serverUrl: String, user: String, pass: String) {
+        val existing = _state.value.playlist
+        // Blank password = keep previously saved password (Settings never echoes it).
+        val resolvedPass = when {
+            pass.isNotBlank() -> pass
+            existing != null &&
+                existing.type == PlaylistType.XTREAM &&
+                existing.password.isNotBlank() -> existing.password
+            else -> pass
+        }
         val cfg = PlaylistConfig(
+            id = existing?.id?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString(),
             name = name.ifBlank { "Xtream" },
             type = PlaylistType.XTREAM,
             host = serverUrl.trim(),
             username = user.trim(),
-            password = pass,
+            password = resolvedPass,
         )
         viewModelScope.launch {
             prefs.savePlaylist(cfg)
@@ -206,7 +227,9 @@ class AppViewModel(
     }
 
     fun saveM3u(name: String, url: String) {
+        val existing = _state.value.playlist
         val cfg = PlaylistConfig(
+            id = existing?.id?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString(),
             name = name.ifBlank { "M3U" },
             type = PlaylistType.M3U,
             m3uUrl = url.trim(),

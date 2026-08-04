@@ -9,6 +9,7 @@ import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -16,6 +17,14 @@ import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
 
+/**
+ * App prefs. Playlist credentials are dual-written:
+ * 1) DataStore (primary)
+ * 2) SharedPreferences backup (survives some DataStore edge cases on update)
+ *
+ * Both live in app private storage and are kept across APK updates
+ * (same applicationId). Uninstall still wipes them.
+ */
 class PrefsStore(private val context: Context) {
     private val keyPlaylist = stringPreferencesKey("playlist_json")
     private val keyShowTicker = booleanPreferencesKey("player_show_scores_ticker")
@@ -28,9 +37,13 @@ class PrefsStore(private val context: Context) {
     private val keyOmdb = stringPreferencesKey("omdb_api_key")
     private val keyTmdb = stringPreferencesKey("tmdb_api_key")
 
-    val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
-        prefs[keyPlaylist]?.let { decodePlaylist(it) }
+    private val backupPrefs by lazy {
+        context.getSharedPreferences(BACKUP_PREFS, Context.MODE_PRIVATE)
     }
+
+    val playlistFlow: Flow<PlaylistConfig?> = context.dataStore.data.map { prefs ->
+        prefs[keyPlaylist]?.let { decodePlaylist(it) } ?: readPlaylistBackup()
+    }.distinctUntilChanged()
 
     val showScoresTickerFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[keyShowTicker] ?: true
@@ -60,8 +73,22 @@ class PrefsStore(private val context: Context) {
         prefs[keyTmdb]?.takeIf { it.isNotBlank() }
     }
 
+    /** One-shot read for cold start before flows emit. */
+    suspend fun peekPlaylist(): PlaylistConfig? {
+        val fromDs = context.dataStore.data.first()[keyPlaylist]?.let { decodePlaylist(it) }
+        if (fromDs != null) return fromDs
+        val backup = readPlaylistBackup()
+        if (backup != null) {
+            // Heal DataStore from backup after update/migration
+            savePlaylist(backup)
+        }
+        return backup
+    }
+
     suspend fun savePlaylist(config: PlaylistConfig) {
-        context.dataStore.edit { it[keyPlaylist] = encodePlaylist(config) }
+        val encoded = encodePlaylist(config)
+        context.dataStore.edit { it[keyPlaylist] = encoded }
+        backupPrefs.edit().putString(BACKUP_PLAYLIST_KEY, encoded).apply()
     }
 
     suspend fun clearPlaylist() {
@@ -70,6 +97,7 @@ class PrefsStore(private val context: Context) {
             it.remove(keyChannelCache)
             it.remove(keyCategoryOrder)
         }
+        backupPrefs.edit().remove(BACKUP_PLAYLIST_KEY).apply()
     }
 
     suspend fun setShowScoresTicker(show: Boolean) {
@@ -156,6 +184,11 @@ class PrefsStore(private val context: Context) {
         return channels to cats
     }
 
+    private fun readPlaylistBackup(): PlaylistConfig? {
+        val raw = backupPrefs.getString(BACKUP_PLAYLIST_KEY, null) ?: return null
+        return decodePlaylist(raw)
+    }
+
     private fun decodeStringList(raw: String?): List<String> {
         if (raw.isNullOrBlank()) return emptyList()
         return runCatching {
@@ -202,6 +235,11 @@ class PrefsStore(private val context: Context) {
             username = o.optString("username"),
             password = o.optString("password"),
             m3uUrl = o.optString("m3uUrl"),
-        )
+        ).takeIf { it.host.isNotBlank() || it.m3uUrl.isNotBlank() }
     }.getOrNull()
+
+    companion object {
+        private const val BACKUP_PREFS = "sportsdash_secure_backup"
+        private const val BACKUP_PLAYLIST_KEY = "playlist_json"
+    }
 }
