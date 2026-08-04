@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -81,7 +83,8 @@ import kotlinx.coroutines.delay
  * - Video + low-z tap catcher
  * - Chrome/ticker at higher zIndex so buttons always win
  * - Top stack: status → optional ticker → control row (never under ticker)
- * - System Back exits; no immersive hide of nav bars
+ * - Always-on Back + Close exit controls; system Back also exits
+* - No immersive hide of nav bars
  */
 @Composable
 fun PlayerScreen(
@@ -220,6 +223,48 @@ fun PlayerScreen(
                 )
                 .padding(bottom = 8.dp),
         ) {
+            // Exit controls — ALWAYS visible (even when chrome auto-hides).
+            // System Back also calls onClose via BackHandler.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircleControl(
+                    onClick = onClose,
+                    contentDescription = "Exit player",
+                    size = 48.dp,
+                    background = Color.Black.copy(alpha = 0.72f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (chromeVisible) {
+                    Chip(text = "VLC", filled = false)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    CircleControl(
+                        onClick = onClose,
+                        contentDescription = "Close player",
+                        size = 44.dp,
+                        background = Color.Black.copy(alpha = 0.72f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+
             if (showScoresTicker) {
                 LiveScoresTicker(
                     games = liveGames,
@@ -239,11 +284,10 @@ fun PlayerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Chip(text = "VLC", filled = false)
                     Spacer(modifier = Modifier.weight(1f))
                     CircleControl(
                         onClick = {
