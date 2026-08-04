@@ -745,20 +745,9 @@ final class AppModel: ObservableObject {
     }
 
     /// Favorites first, then live over not-live, then earlier start (stable secondary).
+    /// Implementation lives on `ScoreboardGrouping` (nonisolated) for Swift 6 / MainActor safety.
     static func pinFavoriteGames(_ games: [Game], favoriteTeamIds: Set<String>) -> [Game] {
-        guard !favoriteTeamIds.isEmpty else {
-            return games.sorted {
-                if $0.isLive != $1.isLive { return $0.isLive && !$1.isLive }
-                return $0.startTime < $1.startTime
-            }
-        }
-        return games.sorted { a, b in
-            let aFav = favoriteTeamIds.contains(a.home.id) || favoriteTeamIds.contains(a.away.id)
-            let bFav = favoriteTeamIds.contains(b.home.id) || favoriteTeamIds.contains(b.away.id)
-            if aFav != bFav { return aFav && !bFav }
-            if a.isLive != b.isLive { return a.isLive && !b.isLive }
-            return a.startTime < b.startTime
-        }
+        ScoreboardGrouping.pinFavoriteGames(games, favoriteTeamIds: favoriteTeamIds)
     }
 
     /// Compatibility: ordered groups from cached maps (O(groups), not O(channels) rebuild).

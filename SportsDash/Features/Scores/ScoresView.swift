@@ -748,6 +748,23 @@ struct SportScoreSection: Identifiable {
 enum ScoreboardGrouping {
     static let leagueOrder: [SportLeague] = SportLeague.allCases
 
+    /// Nonisolated so scoreboard grouping can run off MainActor.
+    static func pinFavoriteGames(_ games: [Game], favoriteTeamIds: Set<String>) -> [Game] {
+        guard !favoriteTeamIds.isEmpty else {
+            return games.sorted {
+                if $0.isLive != $1.isLive { return $0.isLive && !$1.isLive }
+                return $0.startTime < $1.startTime
+            }
+        }
+        return games.sorted { a, b in
+            let aFav = favoriteTeamIds.contains(a.home.id) || favoriteTeamIds.contains(a.away.id)
+            let bFav = favoriteTeamIds.contains(b.home.id) || favoriteTeamIds.contains(b.away.id)
+            if aFav != bFav { return aFav && !bFav }
+            if a.isLive != b.isLive { return a.isLive && !b.isLive }
+            return a.startTime < b.startTime
+        }
+    }
+
     static func leagueShelves(from games: [Game], favoriteTeamIds: Set<String> = []) -> [LeagueShelf] {
         var buckets: [SportLeague: [Game]] = [:]
         for g in games {
@@ -755,7 +772,7 @@ enum ScoreboardGrouping {
         }
         for k in buckets.keys {
             // S-PARITY.FAV.2: within each league, favorite-team games pin first.
-            buckets[k] = AppModel.pinFavoriteGames(buckets[k] ?? [], favoriteTeamIds: favoriteTeamIds)
+            buckets[k] = pinFavoriteGames(buckets[k] ?? [], favoriteTeamIds: favoriteTeamIds)
         }
         var shelves: [LeagueShelf] = []
         var lastSport: String?
