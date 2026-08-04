@@ -12,13 +12,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,7 +39,6 @@ import androidx.compose.material.icons.filled.Sports
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -79,12 +81,11 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 import kotlinx.coroutines.delay
 
 /**
- * Fullscreen player with reliable Compose chrome hit-testing:
- * - Video + low-z tap catcher
- * - Chrome/ticker at higher zIndex so buttons always win
- * - Top stack: status → optional ticker → control row (never under ticker)
- * - Always-on Back + Close exit controls; system Back also exits
-* - No immersive hide of nav bars
+ * Fullscreen player:
+ * - Landscape: ticker band ABOVE video (never covers picture); no ticker scrim
+ * - Portrait: same column split so video stays clean under chrome overlays only for controls
+ * - Channel/program: multi-line bottom chrome (landscape + portrait)
+ * - Always-on Back; system Back; chrome auto-fade
  */
 @Composable
 fun PlayerScreen(
@@ -163,68 +164,20 @@ fun PlayerScreen(
         onDispose { controller.release() }
     }
 
-    Box(
+    // Column split: reserved top band (exit + ticker) then video stage.
+    // Ticker never paints on top of the video surface.
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .statusBarsPadding(),
     ) {
-        // 1) Video surface — never sits above chrome
-        AndroidView(
-            factory = { ctx ->
-                createVlcVideoLayout(ctx).also { layout ->
-                    // Critical: VLC view must not steal Compose taps
-                    layout.isClickable = false
-                    layout.isFocusable = false
-                    layout.isFocusableInTouchMode = false
-                    controller.attach(layout)
-                    if (url.isNotBlank()) controller.play(url)
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(0f),
-            update = { layout ->
-                layout.isClickable = false
-                layout.isFocusable = false
-                controller.attach(layout)
-            },
-        )
-
-        // 2) Full-screen tap catcher BELOW chrome (z=1). Does not cover z>=10 siblings.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(1f)
-                .clickable(
-                    interactionSource = tapInteraction,
-                    indication = null,
-                    onClick = { toggleChrome() },
-                )
-                .semantics { contentDescription = "Toggle player controls" },
-        )
-
-        // 3) Top chrome stack — ticker + buttons in ONE column so buttons aren't under ticker
+        // —— TOP BAND (above video) ——
         Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .zIndex(20f)
-                .statusBarsPadding()
-                .background(
-                    if (chromeVisible || showScoresTicker) {
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.88f), Color.Transparent),
-                        )
-                    } else {
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent),
-                        )
-                    },
-                )
-                .padding(bottom = 8.dp),
+                .background(Color.Black),
         ) {
-            // Exit controls — ALWAYS visible (even when chrome auto-hides).
-            // System Back also calls onClose via BackHandler.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -247,7 +200,7 @@ fun PlayerScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (chromeVisible) {
-                    Chip(text = "VLC", filled = false)
+                    Chip(text = engineLabel.substringBefore(" ·").ifBlank { "VLC" }, filled = false)
                     Spacer(modifier = Modifier.width(4.dp))
                     CircleControl(
                         onClick = onClose,
@@ -266,6 +219,7 @@ fun PlayerScreen(
             }
 
             if (showScoresTicker) {
+                // No gradient / scrim — pills only on solid black band above video
                 LiveScoresTicker(
                     games = liveGames,
                     currentGameId = currentGameId,
@@ -279,16 +233,105 @@ fun PlayerScreen(
                         .systemGestureExclusion(),
                 )
             }
+        }
+
+        // —— VIDEO STAGE (full remaining height) ——
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color.Black),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    createVlcVideoLayout(ctx).also { layout ->
+                        layout.isClickable = false
+                        layout.isFocusable = false
+                        layout.isFocusableInTouchMode = false
+                        controller.attach(layout)
+                        if (url.isNotBlank()) controller.play(url)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(0f),
+                update = { layout ->
+                    layout.isClickable = false
+                    layout.isFocusable = false
+                    controller.attach(layout)
+                },
+            )
+
+            // Tap to toggle chrome — only over video stage
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(1f)
+                    .clickable(
+                        interactionSource = tapInteraction,
+                        indication = null,
+                        onClick = { toggleChrome() },
+                    )
+                    .semantics { contentDescription = "Toggle player controls" },
+            )
 
             if (chromeVisible) {
+                // Center transport
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                        .align(Alignment.Center)
+                        .zIndex(30f)
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (landscape) 36.dp else 28.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Spacer(modifier = Modifier.weight(1f))
+                    CircleControl(
+                        onClick = {
+                            noteChromeInteraction()
+                            onReplay()
+                            controller.play(url)
+                            isPlaying = true
+                        },
+                        contentDescription = "Rejoin live",
+                        size = if (landscape) 52.dp else 56.dp,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color.White,
+                        )
+                    }
+                    CircleControl(
+                        onClick = {
+                            noteChromeInteraction()
+                            controller.togglePlayPause()
+                            isPlaying = controller.isPlaying
+                        },
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        size = if (landscape) 72.dp else 76.dp,
+                        background = Gold,
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = VoidBlack,
+                            modifier = Modifier.size(if (landscape) 36.dp else 40.dp),
+                        )
+                    }
+                }
+
+                // Right-side utility cluster (landscape-friendly)
+                Column(
+                    modifier = Modifier
+                        .align(if (landscape) Alignment.CenterEnd else Alignment.TopEnd)
+                        .zIndex(30f)
+                        .padding(
+                            end = 12.dp,
+                            top = if (landscape) 0.dp else 10.dp,
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     CircleControl(
                         onClick = {
                             noteChromeInteraction()
@@ -343,107 +386,102 @@ fun PlayerScreen(
                     }
                 }
 
-                if (!landscape) {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                        Text(
-                            text = channel.group?.uppercase() ?: "LIVE TV",
-                            color = Gold,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = displayName,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (!nowTitle.isNullOrBlank()) {
-                            Text(
-                                text = "Now · $nowTitle",
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (!nextTitle.isNullOrBlank()) {
-                            Text(
-                                text = "Next · $nextTitle",
-                                color = Muted,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Chip(
-                                text = engineLabel.substringBefore(" ·").ifBlank { "VLC" },
-                                filled = false,
-                            )
-                            Chip(text = "LIVE", filled = true, fillColor = LiveMint)
-                        }
-                    }
-                } else {
-                    Text(
-                        text = displayName,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
-                    )
-                }
+                // Multi-line channel / program block — bottom, never a single mid-screen line
+                ChannelProgramChrome(
+                    channel = channel,
+                    displayName = displayName,
+                    nowTitle = nowTitle,
+                    nextTitle = nextTitle,
+                    engineLabel = engineLabel,
+                    landscape = landscape,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .zIndex(30f)
+                        .fillMaxWidth(if (landscape) 0.62f else 1f)
+                        .navigationBarsPadding()
+                        .padding(
+                            start = 14.dp,
+                            end = if (landscape) 12.dp else 14.dp,
+                            bottom = if (landscape) 10.dp else 14.dp,
+                        ),
+                )
             }
         }
+    }
+}
 
-        // 4) Center transport — highest chrome z so never under tap catcher
-        if (chromeVisible) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .zIndex(30f)
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(28.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CircleControl(
-                    onClick = {
-                        noteChromeInteraction()
-                        onReplay()
-                        controller.play(url)
-                        isPlaying = true
-                    },
-                    contentDescription = "Rejoin live",
-                    size = 56.dp,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = Color.White,
-                    )
-                }
-                CircleControl(
-                    onClick = {
-                        noteChromeInteraction()
-                        controller.togglePlayPause()
-                        isPlaying = controller.isPlaying
-                    },
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    size = 76.dp,
-                    background = Gold,
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = VoidBlack,
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
+@Composable
+private fun ChannelProgramChrome(
+    channel: IptvChannel,
+    displayName: String,
+    nowTitle: String?,
+    nextTitle: String?,
+    engineLabel: String,
+    landscape: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                ),
+            )
+            .padding(top = 20.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(if (landscape) 3.dp else 4.dp),
+    ) {
+        Text(
+            text = channel.group?.uppercase()?.takeIf { it.isNotBlank() } ?: "LIVE TV",
+            color = Gold,
+            fontWeight = FontWeight.Bold,
+            fontSize = if (landscape) 10.sp else 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = displayName,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = if (landscape) 15.sp else 18.sp,
+            maxLines = if (landscape) 2 else 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = if (landscape) 18.sp else 22.sp,
+        )
+        if (!nowTitle.isNullOrBlank()) {
+            Text(
+                text = "Now",
+                color = LiveMint,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = if (landscape) 10.sp else 11.sp,
+                maxLines = 1,
+            )
+            Text(
+                text = nowTitle,
+                color = Color.White.copy(alpha = 0.95f),
+                fontWeight = FontWeight.Medium,
+                fontSize = if (landscape) 12.sp else 13.sp,
+                maxLines = if (landscape) 2 else 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = if (landscape) 15.sp else 16.sp,
+            )
+        }
+        if (!nextTitle.isNullOrBlank()) {
+            Text(
+                text = "Next · $nextTitle",
+                color = Muted,
+                fontSize = if (landscape) 11.sp else 12.sp,
+                maxLines = if (landscape) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (!landscape) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip(
+                    text = engineLabel.substringBefore(" ·").ifBlank { "VLC" },
+                    filled = false,
+                )
+                Chip(text = "LIVE", filled = true, fillColor = LiveMint)
             }
         }
     }
@@ -460,7 +498,6 @@ private fun CircleControl(
     background: Color = Color.Black.copy(alpha = 0.62f),
     content: @Composable () -> Unit,
 ) {
-    // Explicit clickable + large min size — more reliable than Surface-only over AndroidView
     Box(
         modifier = modifier
             .size(size)
@@ -515,66 +552,61 @@ private fun LiveScoresTicker(
     }
 
     val listState = rememberLazyListState()
-    val pillH = if (compact) 44.dp else 48.dp
+    val pillH = if (compact) 40.dp else 46.dp
 
-    Column(
+    // Transparent band — only pills; no overlay gradient over video
+    LazyRow(
+        state = listState,
         modifier = modifier
             .fillMaxWidth()
             .systemGestureExclusion()
-            .padding(top = 4.dp, bottom = 6.dp),
+            .padding(bottom = 6.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        userScrollEnabled = true,
     ) {
-        LazyRow(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .systemGestureExclusion(),
-            contentPadding = PaddingValues(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            userScrollEnabled = true,
-        ) {
-            if (live.isEmpty()) {
-                item {
-                    Text(
-                        text = "No other live games",
-                        color = Muted,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
-                    )
-                }
+        if (live.isEmpty()) {
+            item {
+                Text(
+                    text = "No other live games",
+                    color = Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                )
             }
-            items(items = live, key = { it.id }) { game ->
-                val current = game.id == currentGameId
-                Row(
-                    modifier = Modifier
-                        .height(pillH)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (current) Gold else Panel.copy(alpha = 0.94f))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onGameTap(game) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    TickerTeamLogo(url = game.away.logoUrl, abbrev = game.away.abbreviation)
-                    Text(
-                        text = buildString {
-                            append(game.away.abbreviation.ifBlank { game.away.rowLabel }.take(4))
-                            append(' ')
-                            append(game.away.displayScore)
-                            append('–')
-                            append(game.home.displayScore)
-                            append(' ')
-                            append(game.home.abbreviation.ifBlank { game.home.rowLabel }.take(4))
-                        },
-                        color = if (current) VoidBlack else TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = if (compact) 12.sp else 13.sp,
-                        maxLines = 1,
-                    )
-                    TickerTeamLogo(url = game.home.logoUrl, abbrev = game.home.abbreviation)
-                }
+        }
+        items(items = live, key = { it.id }) { game ->
+            val current = game.id == currentGameId
+            Row(
+                modifier = Modifier
+                    .height(pillH)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (current) Gold else Panel.copy(alpha = 0.96f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onGameTap(game) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                TickerTeamLogo(url = game.away.logoUrl, abbrev = game.away.abbreviation)
+                Text(
+                    text = buildString {
+                        append(game.away.abbreviation.ifBlank { game.away.rowLabel }.take(4))
+                        append(' ')
+                        append(game.away.displayScore)
+                        append('–')
+                        append(game.home.displayScore)
+                        append(' ')
+                        append(game.home.abbreviation.ifBlank { game.home.rowLabel }.take(4))
+                    },
+                    color = if (current) VoidBlack else TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = if (compact) 12.sp else 13.sp,
+                    maxLines = 1,
+                )
+                TickerTeamLogo(url = game.home.logoUrl, abbrev = game.home.abbreviation)
             }
         }
     }
@@ -587,14 +619,14 @@ private fun TickerTeamLogo(url: String?, abbrev: String) {
             model = url,
             contentDescription = abbrev,
             modifier = Modifier
-                .size(22.dp)
+                .size(20.dp)
                 .clip(CircleShape),
             contentScale = ContentScale.Fit,
         )
     } else {
         Box(
             modifier = Modifier
-                .size(22.dp)
+                .size(20.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.35f)),
             contentAlignment = Alignment.Center,
