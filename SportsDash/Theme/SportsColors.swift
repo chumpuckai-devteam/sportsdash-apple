@@ -250,6 +250,7 @@ struct SportsFilterChip: View {
     var count: Int? = nil
     var countTint: Color = SportsColors.live
     let selected: Bool
+    var compact: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -274,16 +275,16 @@ struct SportsFilterChip: View {
     private func chipLabel(focused: Bool) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
             if let count, count > 0 {
                 Text("\(count)")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(selected ? SportsColors.voidBlack.opacity(0.75) : countTint)
             }
         }
+        .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
         .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, compact ? 10 : 14)
+        .padding(.vertical, compact ? 5 : 8)
         #if os(iOS)
         .background {
             Capsule(style: .continuous)

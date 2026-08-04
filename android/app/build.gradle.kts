@@ -13,8 +13,8 @@ android {
         minSdk = 26
         // 34 sideloads more predictably on some Samsung One UI builds than 35
         targetSdk = 34
-        versionCode = 20
-        versionName = "1.1.13-dashboard-chrome"
+        versionCode = 21
+        versionName = "1.1.14-dense-scores-chrome"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         // Phone ABIs only — smaller universal APK for friends

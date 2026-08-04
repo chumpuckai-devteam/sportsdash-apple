@@ -245,8 +245,12 @@ struct PlayerView: View {
                         showStreamSheet = true
                     }
                     #if os(iOS)
+                    // Match chromeIconButton glass circle
                     AirPlayRoutePicker()
+                        .frame(width: 28, height: 28)
                         .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                        .sportsGlass(in: Circle())
                         .accessibilityLabel("AirPlay")
                     #endif
                     chromeIconButton(systemName: "captions.bubble") {

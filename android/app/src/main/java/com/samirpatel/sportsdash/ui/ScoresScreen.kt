@@ -393,60 +393,25 @@ private fun ScoresTopChrome(
     onOpenPicker: () -> Unit,
     onTeamClick: (TeamInfo) -> Unit,
 ) {
-    if (landscape) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.width(110.dp),
-            ) {
-                ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) })
-                ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) })
-                ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) })
-            }
-            FavoriteTeamsRail(
-                teams = teams,
-                onOpenPicker = onOpenPicker,
-                onTeamClick = onTeamClick,
-                compact = true,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    } else {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) })
-                ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) })
-                ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) })
-                if (!status.isNullOrBlank()) {
-                    Text(
-                        text = status,
-                        color = Muted,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            FavoriteTeamsRail(
-                teams = teams,
-                onOpenPicker = onOpenPicker,
-                onTeamClick = onTeamClick,
-                compact = true,
-            )
-        }
+    // One short row: Live | Upcoming | Final | scrollable faves…  (never stacked)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) }, compact = true)
+        ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) }, compact = true)
+        ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) }, compact = true)
+        FavoriteTeamsRail(
+            teams = teams,
+            onOpenPicker = onOpenPicker,
+            onTeamClick = onTeamClick,
+            compact = true,
+            logosOnly = true,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -456,12 +421,14 @@ private fun FavoriteTeamsRail(
     onOpenPicker: () -> Unit,
     onTeamClick: (TeamInfo) -> Unit = {},
     compact: Boolean = false,
+    logosOnly: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val logo = if (compact) 34.dp else 40.dp
+    val mark = if (logosOnly || compact) 30.dp else 40.dp
+    val cell = if (logosOnly) 34.dp else if (compact) 48.dp else 56.dp
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = if (compact) 0.dp else 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (logosOnly) 6.dp else 8.dp),
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -469,51 +436,55 @@ private fun FavoriteTeamsRail(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .width(48.dp)
+                    .width(cell)
                     .clickable { onTeamClick(team) },
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(mark)
                         .clip(CircleShape)
                         .background(Panel)
-                        .padding(4.dp),
+                        .padding(3.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 32.dp)
+                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = mark - 6.dp)
                 }
-                Text(
-                    text = team.rowLabel,
-                    color = Muted,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                if (!logosOnly) {
+                    Text(
+                        text = team.rowLabel,
+                        color = Muted,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
         item(key = "add-fave") {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .width(48.dp)
+                    .width(cell)
                     .clickable(onClick = onOpenPicker),
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(mark)
                         .clip(CircleShape)
                         .background(Panel),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("+", color = Muted, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("+", color = Muted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
-                Text(
-                    text = if (teams.isEmpty()) "Add ★" else "Add",
-                    color = Muted,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                if (!logosOnly) {
+                    Text(
+                        text = if (teams.isEmpty()) "Add ★" else "Add",
+                        color = Muted,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
     }
@@ -924,18 +895,28 @@ private fun StreamPickerDialog(
 }
 
 @Composable
-private fun ScoreFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(text = label, fontSize = 12.sp) },
-        border = BorderStroke(0.dp, androidx.compose.ui.graphics.Color.Transparent),
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Gold,
-            selectedLabelColor = VoidBlack,
-            containerColor = Panel,
-            labelColor = TextPrimary,
-        ),
+private fun ScoreFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    compact: Boolean = false,
+) {
+    // Custom compact chip — Material FilterChip is too tall for dense chrome.
+    val shape = RoundedCornerShape(50)
+    Text(
+        text = label,
+        color = if (selected) VoidBlack else TextPrimary,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = if (compact) 11.sp else 12.sp,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) Gold else Panel)
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = if (compact) 10.dp else 12.dp,
+                vertical = if (compact) 5.dp else 8.dp,
+            ),
     )
 }
 

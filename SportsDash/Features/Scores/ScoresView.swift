@@ -80,47 +80,27 @@ struct ScoresView: View {
     }
 
     #if os(iOS)
-    /// Filters + faves rail in one compact band (landscape: stack filters left).
+    /// One short row: Live | Upcoming | Final | scrollable faves (logos only).
     private var condensedTopChrome: some View {
-        ViewThatFits(in: .horizontal) {
-            // Wide / landscape-ish: filters column + horizontal faves
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    compactFilterStack
-                }
-                .frame(width: 118, alignment: .leading)
-                favoriteTeamsRail
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-
-            // Portrait: filters row then rail
-            VStack(spacing: 2) {
-                filterBar
-                favoriteTeamsRail
-            }
-            .padding(.bottom, 2)
-        }
-        .background(SportsColors.voidBlack)
-    }
-
-    private var compactFilterStack: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 6) {
             ForEach(DashboardFilter.allCases) { f in
-                let liveCount = appModel.games.filter(\.isLive).count
-                let upcomingCount = appModel.games.filter(\.isUpcoming).count
                 SportsFilterChip(
                     title: f.label,
-                    count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
-                    selected: appModel.dashboardFilter == f
+                    count: nil,
+                    selected: appModel.dashboardFilter == f,
+                    compact: true
                 ) {
                     withAnimation(.snappy(duration: 0.2)) {
                         appModel.dashboardFilter = f
                     }
                 }
             }
+            favoriteTeamsRail
+                .frame(maxWidth: .infinity)
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(SportsColors.voidBlack)
     }
     #endif
 
@@ -207,36 +187,29 @@ struct ScoresView: View {
     #if os(iOS)
     private var favoriteTeamsRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
+            HStack(spacing: 8) {
                 ForEach(appModel.favoriteTeamsRail) { team in
-                    VStack(spacing: 6) {
+                    Button {
+                        showFavoritePicker = true
+                    } label: {
                         railLogo(team)
-                        Text(team.rowLabel)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(SportsColors.muted)
-                            .lineLimit(1)
-                            .frame(width: 56)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(team.name)
                 }
                 Button {
                     showFavoritePicker = true
                 } label: {
-                    VStack(spacing: 6) {
-                        Text("+")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(SportsColors.muted)
-                            .frame(width: 40, height: 40)
-                            .background(SportsColors.panel, in: Circle())
-                        Text(appModel.favoriteTeamsRail.isEmpty ? "Add ★" : "Add")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(SportsColors.muted)
-                    }
+                    Text("+")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(SportsColors.muted)
+                        .frame(width: 30, height: 30)
+                        .background(SportsColors.panel, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add favorite team")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.leading, 4)
         }
     }
 
@@ -248,19 +221,19 @@ struct ScoresView: View {
                     case .success(let img):
                         img.resizable().scaledToFit()
                     default:
-                        Text(String(team.abbreviation.prefix(3)))
-                            .font(.caption2.weight(.bold))
+                        Text(String(team.abbreviation.prefix(2)))
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(SportsColors.gold)
                     }
                 }
             } else {
-                Text(String(team.abbreviation.prefix(3)))
-                    .font(.caption2.weight(.bold))
+                Text(String(team.abbreviation.prefix(2)))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(SportsColors.gold)
             }
         }
-        .frame(width: 34, height: 34)
-        .padding(4)
+        .frame(width: 26, height: 26)
+        .padding(2)
         .background(SportsColors.panel, in: Circle())
     }
 
