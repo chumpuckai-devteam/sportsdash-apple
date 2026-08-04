@@ -95,12 +95,13 @@ struct GameMatchupRow: View {
 
     private var matchup: some View {
         HStack(spacing: 0) {
-            // Away
+            // Away — star outside top-LEFT of logo
             HStack(spacing: 6) {
                 teamBlock(
                     team: game.away,
                     isTeamFavorite: isAwayFavorite,
-                    onToggleFavorite: onToggleAwayFavorite
+                    onToggleFavorite: onToggleAwayFavorite,
+                    starCorner: .topLeading
                 )
                 scoreText(game.away.displayScore, dimmed: losing(game.away))
             }
@@ -110,13 +111,14 @@ struct GameMatchupRow: View {
             centerStatus
                 .frame(width: 86)
 
-            // Home
+            // Home — star outside top-RIGHT of logo
             HStack(spacing: 6) {
                 scoreText(game.home.displayScore, dimmed: losing(game.home))
                 teamBlock(
                     team: game.home,
                     isTeamFavorite: isHomeFavorite,
-                    onToggleFavorite: onToggleHomeFavorite
+                    onToggleFavorite: onToggleHomeFavorite,
+                    starCorner: .topTrailing
                 )
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -126,22 +128,30 @@ struct GameMatchupRow: View {
     private func teamBlock(
         team: TeamInfo,
         isTeamFavorite: Bool,
-        onToggleFavorite: (() -> Void)?
+        onToggleFavorite: (() -> Void)?,
+        starCorner: Alignment
     ) -> some View {
         VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
+            ZStack(alignment: starCorner) {
                 TeamMarkView(team: team, size: 44)
+                    // Keep logo clear of the corner badge
+                    .padding(.top, 6)
+                    .padding(.leading, starCorner == .topLeading ? 8 : 0)
+                    .padding(.trailing, starCorner == .topTrailing ? 8 : 0)
                 teamStarBadge(isTeamFavorite: isTeamFavorite, onToggle: onToggleFavorite)
-                    .offset(x: 6, y: -4)
+                    .offset(
+                        x: starCorner == .topLeading ? -2 : 2,
+                        y: -2
+                    )
             }
             Text(team.rowLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SportsColors.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: 72)
+                .frame(maxWidth: 78)
         }
-        .frame(width: 72)
+        .frame(width: 78)
     }
 
     @ViewBuilder
