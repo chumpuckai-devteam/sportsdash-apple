@@ -388,7 +388,7 @@ fun PlayerScreen(
             }
         }
 
-        if (chromeVisible && showScoresTicker) {
+        if (showScoresTicker) { // S-AND.FB.11: pref only; chrome auto-hide must not clear ticker
             LiveScoresTicker(
                 games = liveGames,
                 currentGameId = currentGameId,
@@ -467,8 +467,8 @@ private fun LiveScoresTicker(
             .take(24)
     }
 
-    val cardHeight = if (compact) 64.dp else 76.dp
-    val cardWidth = if (compact) 148.dp else 168.dp
+    val cardHeight = if (compact) 78.dp else 88.dp
+    val cardWidth = if (compact) 152.dp else 168.dp
     val scoreSize = if (compact) 15.sp else 17.sp
     val abbrSize = if (compact) 11.sp else 12.sp
 
@@ -555,25 +555,49 @@ private fun LiveScoresTicker(
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Text(
-                        text = game.matchupLabel,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = abbrSize,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "${game.away.displayScore}  –  ${game.home.displayScore}",
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = scoreSize,
-                        maxLines = 1,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(min = 48.dp),
-                    )
+                    // Two score lines — away / home always fully visible (FB.9)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            game.away.abbreviation.ifBlank { game.away.rowLabel },
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            game.away.displayScore,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            game.home.abbreviation.ifBlank { game.home.rowLabel },
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            game.home.displayScore,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
