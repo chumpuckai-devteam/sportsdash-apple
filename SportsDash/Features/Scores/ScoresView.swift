@@ -178,9 +178,12 @@ struct ScoresView: View {
                     }
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
             .padding(.bottom, 28)
+            .background(Color.clear)
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .sportsRefreshable { await appModel.refreshScores() }
     }
 
@@ -533,10 +536,8 @@ struct ScoresView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         #if os(iOS)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(SportsColors.panelElevated.opacity(0.72))
-        }
+        // Transparent — no gray band behind sport headers / game list
+        .background(Color.clear)
         .padding(.horizontal, 10)
         #endif
         #if os(tvOS)

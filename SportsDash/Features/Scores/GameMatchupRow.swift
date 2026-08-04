@@ -351,20 +351,22 @@ struct GameScoreFocusRow: View {
         .padding(.vertical, 12)
         .frame(minHeight: SportsTVMetrics.scoreRowMinHeight)
         #endif
+        #if os(iOS)
+        // No gray card behind games — sit directly on void screen background.
+        .background(Color.clear)
+        #else
         .background {
-            // Android gold-tint when match involves a favorite team.
             let base = focused ? SportsColors.panelElevated : SportsColors.panel.opacity(0.92)
             let favFill = SportsColors.gold.opacity(focused ? 0.22 : 0.12)
             shape.fill(isFavorite ? favFill : base)
         }
-        #if os(tvOS)
         .overlay {
             if focused {
                 shape.stroke(SportsColors.gold, lineWidth: 3)
             }
         }
-        #endif
         .clipShape(shape)
+        #endif
         .shadow(color: focused ? SportsColors.gold.opacity(0.30) : .clear, radius: 14, y: 0)
         #if os(tvOS)
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
