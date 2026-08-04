@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +25,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -74,14 +72,20 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.ui.input.pointer.pointerInput
 
 /**
- * Fullscreen player closer to iOS:
- * - Always-reachable Back (system back + top-left)
+ * Fullscreen player:
+ * - Native system Back / Home / Recents (bars stay visible; no immersive hide)
+ * - System Back exits player via BackHandler (no custom back chip)
  * - Play / pause, mute, rejoin live
  * - Channel title + engine / LIVE chips
  * - Bottom live scores ticker (compact, scores never clip)
  * - Chrome auto-hides after idle; tap video to restore (S-AND.FB.13)
+ * - Landscape ticker scrolls: systemGestureExclusion + tap-only video layer (S-AND.FB.10)
  *
  * VLC uses TextureView so overlays receive taps (SurfaceView was eating the X).
  */
@@ -101,6 +105,7 @@ fun PlayerScreen(
     onReplay: () -> Unit,
     onToggleScoresTicker: () -> Unit,
     displayName: String = channel.name,
+    favoriteTeamIds: Set<String> = emptySet(),
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -133,22 +138,24 @@ fun PlayerScreen(
         chromeVisible = false
     }
 
-    // Immersive fullscreen — kills the thin status-bar hairline in landscape video.
+    // Keep native system Back / Home / Recents visible (gesture or 3-button).
+    // Edge-to-edge draw only — do NOT immersive-hide bars.
     DisposableEffect(Unit) {
         val activity = context as? Activity
         val window = activity?.window
         val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
         insetsController?.let {
             WindowCompat.setDecorFitsSystemWindows(window, false)
-            it.hide(WindowInsetsCompat.Type.systemBars())
-            it.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            it.show(WindowInsetsCompat.Type.systemBars())
+            it.isAppearanceLightStatusBars = false
+            it.isAppearanceLightNavigationBars = false
         }
         onDispose {
             insetsController?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 
+    // System Back / predictive back → leave player
     BackHandler(onBack = onClose)
 
     DisposableEffect(url) {
@@ -180,18 +187,19 @@ fun PlayerScreen(
             },
         )
 
+        // Tap-only video hit target — never claims horizontal drags meant for the ticker.
+        // Landscape bottom reserve clears compact ticker (label + cards + pad).
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
                     top = if (landscape) 72.dp else 96.dp,
-                    bottom = if (landscape) 96.dp else 148.dp,
+                    bottom = if (landscape) 148.dp else 160.dp,
                 )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    toggleChrome()
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        toggleChrome()
+                    }
                 },
         )
 
@@ -214,23 +222,12 @@ fun PlayerScreen(
                 )
                 .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CircleControl(
-                    onClick = onClose,
-                    contentDescription = "Back",
+            // No custom Back — use system Back / Home / Recents.
+            if (chromeVisible) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-
-                if (chromeVisible) {
                     Chip(text = "VLC", filled = false)
                     Spacer(modifier = Modifier.weight(1f))
                     CircleControl(
@@ -285,8 +282,6 @@ fun PlayerScreen(
                             modifier = Modifier.size(20.dp),
                         )
                     }
-                } else {
-                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
 
@@ -399,7 +394,11 @@ fun PlayerScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .zIndex(10f)
+                    .zIndex(20f)
+                    .fillMaxWidth()
+                    // Immersive landscape parks the strip in the home/back gesture zone —
+                    // exclude so horizontal LazyRow swipes reach Compose (S-AND.FB.10).
+                    .systemGestureExclusion()
                     .navigationBarsPadding(),
             )
         }
@@ -471,10 +470,12 @@ private fun LiveScoresTicker(
     val cardWidth = if (compact) 152.dp else 168.dp
     val scoreSize = if (compact) 15.sp else 17.sp
     val abbrSize = if (compact) 11.sp else 12.sp
+    val listState = rememberLazyListState()
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .systemGestureExclusion()
             .background(
                 Brush.verticalGradient(
                     listOf(
@@ -494,8 +495,13 @@ private fun LiveScoresTicker(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
         )
         LazyRow(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .systemGestureExclusion(),
             contentPadding = PaddingValues(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            userScrollEnabled = true,
         ) {
             if (live.isNotEmpty()) {
                 item {
