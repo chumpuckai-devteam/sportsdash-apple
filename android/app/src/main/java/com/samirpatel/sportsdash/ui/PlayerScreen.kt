@@ -229,10 +229,12 @@ fun PlayerScreen(
                     )
                 }
 
-                if (showScoresTicker) {
+                // Ticker is part of chrome — hide with controls so video stays clean
+                if (showScoresTicker && chromeVisible) {
                     LiveScoresTicker(
                         games = liveGames,
                         currentGameId = currentGameId,
+                        favoriteTeamIds = favoriteTeamIds,
                         compact = true,
                         onGameTap = { game ->
                             noteChromeInteraction()
@@ -517,15 +519,20 @@ private fun LiveScoresTicker(
     modifier: Modifier = Modifier,
 ) {
     val live = remember(games, currentGameId, favoriteTeamIds) {
+        fun isFav(g: Game): Boolean =
+            favoriteTeamIds.isNotEmpty() &&
+                (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds)
+        // Favorites lead the strip (cycle faves). Current game first only if also a fav;
+        // otherwise current sits after the fav block so starred teams stay up front.
         games
             .filter { it.isLive }
             .sortedWith(
                 compareBy<Game> { g ->
                     when {
-                        g.id == currentGameId -> 0
-                        favoriteTeamIds.isNotEmpty() &&
-                            (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds) -> 1
-                        else -> 2
+                        isFav(g) && g.id == currentGameId -> 0
+                        isFav(g) -> 1
+                        g.id == currentGameId -> 2
+                        else -> 3
                     }
                 }.thenBy { it.startTimeMs },
             )
@@ -533,6 +540,12 @@ private fun LiveScoresTicker(
     }
 
     val listState = rememberLazyListState()
+    // After channel/game switch, snap strip to the front (fav block)
+    LaunchedEffect(live.map { it.id }, currentGameId, favoriteTeamIds) {
+        if (live.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
     val pillH = if (compact) 36.dp else 42.dp
 
     // Fully transparent row — only pills float over video

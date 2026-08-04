@@ -924,16 +924,19 @@ class AppViewModel(
     }
 
     fun liveGamesForTicker(): List<Game> {
-        // Favorites first so user can cycle starred teams from the player strip.
+        // Favorites lead the strip so user can cycle starred teams after switching games.
         val favs = _state.value.favoriteTeamIds
         val currentId = _state.value.playingGameId
         val live = _state.value.games.filter { it.isLive }
+        fun isFav(g: Game): Boolean =
+            favs.isNotEmpty() && (g.home.id in favs || g.away.id in favs)
         return live.sortedWith(
             compareBy<Game> { g ->
                 when {
-                    g.id == currentId -> 0
-                    favs.isNotEmpty() && (g.home.id in favs || g.away.id in favs) -> 1
-                    else -> 2
+                    isFav(g) && g.id == currentId -> 0
+                    isFav(g) -> 1
+                    g.id == currentId -> 2
+                    else -> 3
                 }
             }.thenBy { it.startTimeMs },
         )

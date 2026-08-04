@@ -143,7 +143,8 @@ struct PlayerView: View {
         HStack(alignment: .center, spacing: 8) {
             chromeIconButton(systemName: "chevron.left") { dismiss() }
 
-            if showScoresStrip, playback.error == nil {
+            // Ticker fades with chrome — part of player controls, not a permanent overlay
+            if showChrome, showScoresStrip, playback.error == nil {
                 LiveScoresStrip(
                     games: appModel.games.filter(\.isLive),
                     currentGameId: game?.id,
