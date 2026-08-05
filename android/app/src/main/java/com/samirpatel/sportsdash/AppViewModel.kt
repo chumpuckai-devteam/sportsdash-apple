@@ -1,5 +1,7 @@
 package com.samirpatel.sportsdash
 
+import com.samirpatel.sportsdash.core.player.ScoresTickerMode
+
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -94,7 +96,7 @@ data class AppUiState(
     val playerMessage: String? = null,
     val playingGameId: String? = null,
 
-    val showScoresTicker: Boolean = true,
+    val scoresTickerMode: ScoresTickerMode = ScoresTickerMode.FADE,
 
     /** Channel ids starred by user (persisted). */
     val favoriteChannelIds: Set<String> = emptySet(),
@@ -159,11 +161,11 @@ class AppViewModel(
         viewModelScope.launch {
             // Cold-start ticker preference before first player open (FB.11).
             runCatching {
-                val peeked = prefs.peekShowScoresTicker()
-                _state.update { it.copy(showScoresTicker = peeked) }
+                val peeked = prefs.peekScoresTickerMode()
+                _state.update { it.copy(scoresTickerMode = peeked) }
             }
-            prefs.showScoresTickerFlow.collect { show ->
-                _state.update { it.copy(showScoresTicker = show) }
+            prefs.scoresTickerModeFlow.collect { mode ->
+                _state.update { it.copy(scoresTickerMode = mode) }
             }
         }
         viewModelScope.launch {
@@ -821,18 +823,22 @@ class AppViewModel(
             blob.contains("hollywood") || Regex("""\b(19|20)\d{2}\b""").containsMatchIn(blob)
     }
 
-    fun setShowScoresTicker(show: Boolean) {
-        _state.update { it.copy(showScoresTicker = show) }
+    fun setScoresTickerMode(mode: ScoresTickerMode) {
+        _state.update { it.copy(scoresTickerMode = mode) }
         viewModelScope.launch {
-            // Survive leaving player / process death (FB.11).
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                runCatching { prefs.setShowScoresTicker(show) }
+                runCatching { prefs.setScoresTickerMode(mode) }
             }
         }
     }
 
+    fun setShowScoresTicker(show: Boolean) {
+        setScoresTickerMode(if (show) ScoresTickerMode.FADE else ScoresTickerMode.OFF)
+    }
+
+    /** Cycle Off → Fade → Persistent → Off. */
     fun toggleScoresTicker() {
-        setShowScoresTicker(!_state.value.showScoresTicker)
+        setScoresTickerMode(_state.value.scoresTickerMode.next())
     }
 
     fun refreshScores() {

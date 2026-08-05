@@ -55,7 +55,7 @@ fun SportsDashRoot(vm: AppViewModel) {
                 engineLabel = state.engineLabel,
                 liveGames = vm.liveGamesForTicker(),
                 currentGameId = state.playingGameId,
-                showScoresTicker = state.showScoresTicker,
+                tickerMode = state.scoresTickerMode,
                 nowTitle = vm.nowTitle(playing.id),
                 nextTitle = vm.nextTitle(playing.id),
                 onClose = { vm.stopPlayback() },

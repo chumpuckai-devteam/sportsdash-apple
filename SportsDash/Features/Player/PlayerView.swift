@@ -10,8 +10,7 @@ struct PlayerView: View {
     @State private var alternates: [ChannelMatch]
     @StateObject private var playback = PlaybackController()
     @State private var showChrome = true
-    @State private var showScoresStrip = true
-    @State private var showStreamSheet = false
+        @State private var showStreamSheet = false
     @State private var showGamePicker: Game?
     @State private var showMoreMenu = false
     @State private var chromeTask: Task<Void, Never>?
@@ -143,8 +142,8 @@ struct PlayerView: View {
         HStack(alignment: .center, spacing: 8) {
             chromeIconButton(systemName: "chevron.left") { dismiss() }
 
-            // Ticker fades with chrome — part of player controls, not a permanent overlay
-            if showChrome, showScoresStrip, playback.error == nil {
+            // Off | Fade-with-chrome | Persistent
+            if shouldShowTicker, playback.error == nil {
                 LiveScoresStrip(
                     games: appModel.games.filter(\.isLive),
                     currentGameId: game?.id,
@@ -238,10 +237,41 @@ struct PlayerView: View {
                         cycleAspect()
                         scheduleChromeHide()
                     }
-                    chromeIconButton(systemName: showScoresStrip ? "sportscourt.fill" : "sportscourt") {
-                        showScoresStrip.toggle()
+                    // Same sports button — 3-way: Off → Fade → Pin; label shows mode
+                    Button {
+                        var prefs = appModel.playerPrefs
+                        prefs.scoresTickerMode = prefs.scoresTickerMode.next()
+                        appModel.setPlayerPrefs(prefs)
                         scheduleChromeHide()
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: tickerMode == .off ? "sportscourt" : "sportscourt.fill")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(tickerMode == .off ? Color.white : SportsColors.voidBlack)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Circle())
+                                .background(
+                                    Group {
+                                        switch tickerMode {
+                                        case .off:
+                                            Color.clear
+                                        case .fade:
+                                            SportsColors.gold.opacity(0.55)
+                                        case .persistent:
+                                            SportsColors.gold.opacity(0.92)
+                                        }
+                                    },
+                                    in: Circle()
+                                )
+                                .sportsGlass(in: Circle())
+                            Text(tickerMode.shortLabel)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(tickerMode == .off ? Color.white.opacity(0.85) : SportsColors.gold)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tickerMode.accessibilityLabel)
+                    .accessibilityHint("Cycles off, fade with controls, always on")
                     chromeIconButton(systemName: "list.bullet") {
                         showStreamSheet = true
                     }

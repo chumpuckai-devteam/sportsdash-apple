@@ -66,6 +66,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import coil.compose.AsyncImage
 import com.samirpatel.sportsdash.core.model.IptvChannel
+import com.samirpatel.sportsdash.core.player.ScoresTickerMode
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
 import com.samirpatel.sportsdash.core.player.createVlcVideoLayout
 import com.samirpatel.sportsdash.core.sports.Game
@@ -90,7 +91,7 @@ fun PlayerScreen(
     engineLabel: String,
     liveGames: List<Game>,
     currentGameId: String?,
-    showScoresTicker: Boolean,
+    tickerMode: ScoresTickerMode = ScoresTickerMode.FADE,
     nowTitle: String?,
     nextTitle: String?,
     onClose: () -> Unit,
@@ -229,8 +230,13 @@ fun PlayerScreen(
                     )
                 }
 
-                // Ticker is part of chrome — hide with controls so video stays clean
-                if (showScoresTicker && chromeVisible) {
+                // Off | Fade-with-chrome | Persistent
+                val showTicker = when (tickerMode) {
+                    ScoresTickerMode.OFF -> false
+                    ScoresTickerMode.FADE -> chromeVisible
+                    ScoresTickerMode.PERSISTENT -> true
+                }
+                if (showTicker) {
                     LiveScoresTicker(
                         games = liveGames,
                         currentGameId = currentGameId,
@@ -305,27 +311,38 @@ fun PlayerScreen(
                                 modifier = Modifier.size(18.dp),
                             )
                         }
-                        CircleControl(
-                            onClick = {
-                                noteChromeInteraction()
-                                onToggleScoresTicker()
-                            },
-                            contentDescription = if (showScoresTicker) {
-                                "Hide scores ticker"
-                            } else {
-                                "Show scores ticker"
-                            },
-                            background = if (showScoresTicker) {
-                                Gold.copy(alpha = 0.85f)
-                            } else {
-                                Color.Transparent
-                            },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Sports,
-                                contentDescription = null,
-                                tint = if (showScoresTicker) VoidBlack else Color.White,
-                                modifier = Modifier.size(20.dp),
+                        // Same sports control — cycles Off → Fade → Pin; label shows mode
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircleControl(
+                                onClick = {
+                                    noteChromeInteraction()
+                                    onToggleScoresTicker()
+                                },
+                                contentDescription = tickerMode.contentDescription + ". Tap to change.",
+                                background = when (tickerMode) {
+                                    ScoresTickerMode.OFF -> Color.Transparent
+                                    ScoresTickerMode.FADE -> Gold.copy(alpha = 0.55f)
+                                    ScoresTickerMode.PERSISTENT -> Gold.copy(alpha = 0.92f)
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sports,
+                                    contentDescription = null,
+                                    tint = when (tickerMode) {
+                                        ScoresTickerMode.OFF -> Color.White
+                                        else -> VoidBlack
+                                    },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            Text(
+                                text = tickerMode.shortLabel,
+                                color = when (tickerMode) {
+                                    ScoresTickerMode.OFF -> Color.White.copy(alpha = 0.85f)
+                                    else -> Gold
+                                },
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                         CircleControl(

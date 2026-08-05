@@ -170,6 +170,41 @@ enum LaunchTab: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+// MARK: - Scores ticker (player)
+
+/// Off → Fade with controls → Persistent. Cycles on the sports button.
+enum ScoresTickerMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case off
+    case fade
+    case persistent
+
+    var id: String { rawValue }
+
+    var shortLabel: String {
+        switch self {
+        case .off: return "OFF"
+        case .fade: return "FADE"
+        case .persistent: return "PIN"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .off: return "Scores ticker off"
+        case .fade: return "Scores ticker fades with controls"
+        case .persistent: return "Scores ticker always on"
+        }
+    }
+
+    func next() -> ScoresTickerMode {
+        switch self {
+        case .off: return .fade
+        case .fade: return .persistent
+        case .persistent: return .off
+        }
+    }
+}
+
 // MARK: - Combined prefs (persisted)
 
 /// Player + general + UI preferences (UHF-inspired).
@@ -194,12 +229,14 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
     var guideLayout: GuideLayoutMode = .list
     var cleanUpNames: Bool = true
     var launchTab: LaunchTab = .scores
+    /// Player scores ticker: off / fade with chrome / always on.
+    var scoresTickerMode: ScoresTickerMode = .fade
 
     enum CodingKeys: String, CodingKey {
         case aspect, primaryPlayer, fallbackPlayers, bufferSeconds
         case adaptiveFrameRate, hardwareDecode, asynchronousDecompression
         case userAgent, preferredLiveFormat, playlistRefresh
-        case theme, guideLayout, cleanUpNames, launchTab
+        case theme, guideLayout, cleanUpNames, launchTab, scoresTickerMode
         case engine
     }
 
@@ -219,6 +256,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         guideLayout = try c.decodeIfPresent(GuideLayoutMode.self, forKey: .guideLayout) ?? .list
         cleanUpNames = try c.decodeIfPresent(Bool.self, forKey: .cleanUpNames) ?? true
         launchTab = try c.decodeIfPresent(LaunchTab.self, forKey: .launchTab) ?? .scores
+        scoresTickerMode = try c.decodeIfPresent(ScoresTickerMode.self, forKey: .scoresTickerMode) ?? .fade
 
         // Decode as String so unknown/legacy values (vlc, auto) don't fail the whole prefs blob.
         if let raw = try c.decodeIfPresent(String.self, forKey: .primaryPlayer) {
@@ -270,6 +308,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         try c.encode(guideLayout, forKey: .guideLayout)
         try c.encode(cleanUpNames, forKey: .cleanUpNames)
         try c.encode(launchTab, forKey: .launchTab)
+        try c.encode(scoresTickerMode, forKey: .scoresTickerMode)
     }
 
     /// Clamped buffer seconds for hard engine caching.

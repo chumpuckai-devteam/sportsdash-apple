@@ -32,6 +32,7 @@ private val Context.dataStore by preferencesDataStore(name = "sportsdash_prefs")
 class PrefsStore(private val context: Context) {
     private val keyPlaylist = stringPreferencesKey("playlist_json")
     private val keyShowTicker = booleanPreferencesKey("player_show_scores_ticker")
+    private val keyTickerMode = stringPreferencesKey("player_scores_ticker_mode")
     private val keyFavoriteChannels = stringPreferencesKey("favorite_channel_ids_json")
     private val keyFavoriteTeams = stringPreferencesKey("favorite_team_ids_json")
     private val keyFavoriteTeamsMeta = stringPreferencesKey("favorite_teams_meta_json")
@@ -54,12 +55,20 @@ class PrefsStore(private val context: Context) {
         resolvePlaylistReadOnly(prefs[keyPlaylist])
     }.distinctUntilChanged()
 
-    val showScoresTickerFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[keyShowTicker]
-            ?: backupPrefs.getBoolean(BACKUP_TICKER_KEY, true).takeIf {
-                backupPrefs.contains(BACKUP_TICKER_KEY)
-            }
-            ?: true
+    val scoresTickerModeFlow: Flow<com.samirpatel.sportsdash.core.player.ScoresTickerMode> =
+        context.dataStore.data.map { prefs ->
+            val raw = prefs[keyTickerMode]
+                ?: backupPrefs.getString(BACKUP_TICKER_MODE_KEY, null)
+            val legacy = prefs[keyShowTicker]
+                ?: backupPrefs.getBoolean(BACKUP_TICKER_KEY, true).takeIf {
+                    backupPrefs.contains(BACKUP_TICKER_KEY)
+                }
+            com.samirpatel.sportsdash.core.player.ScoresTickerMode.fromStorage(raw, legacy)
+        }
+
+    /** @deprecated use scoresTickerModeFlow */
+    val showScoresTickerFlow: Flow<Boolean> = scoresTickerModeFlow.map {
+        it != com.samirpatel.sportsdash.core.player.ScoresTickerMode.OFF
     }
 
     val favoriteChannelIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
@@ -124,25 +133,39 @@ class PrefsStore(private val context: Context) {
         }.onFailure { Log.w(TAG, "Failed to clear playlist backups", it) }
     }
 
-    suspend fun setShowScoresTicker(show: Boolean) {
-        // SP commit first — process death right after toggle still sticks (S-AND.FB.11).
-        val spOk = backupPrefs.edit().putBoolean(BACKUP_TICKER_KEY, show).commit()
-        if (!spOk) Log.w(TAG, "SP commit failed player_show_scores_ticker=$show")
-        context.dataStore.edit { it[keyShowTicker] = show }
-        Log.d(TAG, "setShowScoresTicker show=$show spOk=$spOk")
+    suspend fun setScoresTickerMode(mode: com.samirpatel.sportsdash.core.player.ScoresTickerMode) {
+        val name = mode.name
+        val spOk = backupPrefs.edit()
+            .putString(BACKUP_TICKER_MODE_KEY, name)
+            .putBoolean(BACKUP_TICKER_KEY, mode != com.samirpatel.sportsdash.core.player.ScoresTickerMode.OFF)
+            .commit()
+        if (!spOk) Log.w(TAG, "SP commit failed ticker_mode=$name")
+        context.dataStore.edit {
+            it[keyTickerMode] = name
+            it[keyShowTicker] = mode != com.samirpatel.sportsdash.core.player.ScoresTickerMode.OFF
+        }
+        Log.d(TAG, "setScoresTickerMode mode=$name spOk=$spOk")
     }
 
-    /** Cold-start read before DataStore flow warms (player open). */
-    suspend fun peekShowScoresTicker(): Boolean {
-        val fromDs = runCatching {
-            context.dataStore.data.first()[keyShowTicker]
-        }.getOrNull()
-        if (fromDs != null) return fromDs
-        if (backupPrefs.contains(BACKUP_TICKER_KEY)) {
-            return backupPrefs.getBoolean(BACKUP_TICKER_KEY, true)
-        }
-        return true
+    suspend fun setShowScoresTicker(show: Boolean) {
+        setScoresTickerMode(
+            if (show) com.samirpatel.sportsdash.core.player.ScoresTickerMode.FADE
+            else com.samirpatel.sportsdash.core.player.ScoresTickerMode.OFF,
+        )
     }
+
+    suspend fun peekScoresTickerMode(): com.samirpatel.sportsdash.core.player.ScoresTickerMode {
+        val prefs = runCatching { context.dataStore.data.first() }.getOrNull()
+        val raw = prefs?.get(keyTickerMode) ?: backupPrefs.getString(BACKUP_TICKER_MODE_KEY, null)
+        val legacy = prefs?.get(keyShowTicker)
+            ?: backupPrefs.getBoolean(BACKUP_TICKER_KEY, true).takeIf {
+                backupPrefs.contains(BACKUP_TICKER_KEY)
+            }
+        return com.samirpatel.sportsdash.core.player.ScoresTickerMode.fromStorage(raw, legacy)
+    }
+
+    suspend fun peekShowScoresTicker(): Boolean =
+        peekScoresTickerMode() != com.samirpatel.sportsdash.core.player.ScoresTickerMode.OFF
 
     suspend fun setFavoriteChannelIds(ids: Set<String>) {
         context.dataStore.edit {
@@ -388,6 +411,7 @@ class PrefsStore(private val context: Context) {
         private const val BACKUP_PREFS = "sportsdash_secure_backup"
         private const val BACKUP_PLAYLIST_KEY = "playlist_json"
         private const val BACKUP_TICKER_KEY = "player_show_scores_ticker"
+        private const val BACKUP_TICKER_MODE_KEY = "player_scores_ticker_mode"
         private const val PLAYLIST_BACKUP_NAME = "playlist_config_backup.json"
     }
 }
