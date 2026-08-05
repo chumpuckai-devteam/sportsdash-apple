@@ -10,7 +10,7 @@ struct PlayerView: View {
     @State private var alternates: [ChannelMatch]
     @StateObject private var playback = PlaybackController()
     @State private var showChrome = true
-        @State private var showStreamSheet = false
+    @State private var showStreamSheet = false
     @State private var showGamePicker: Game?
     @State private var showMoreMenu = false
     @State private var chromeTask: Task<Void, Never>?
@@ -21,6 +21,18 @@ struct PlayerView: View {
         _channel = State(initialValue: channel)
         _game = State(initialValue: game)
         _alternates = State(initialValue: alternateMatches)
+    }
+
+    private var tickerMode: ScoresTickerMode {
+        appModel.playerPrefs.scoresTickerMode
+    }
+
+    private var shouldShowTicker: Bool {
+        switch tickerMode {
+        case .off: return false
+        case .fade: return showChrome
+        case .persistent: return true
+        }
     }
 
     private var currentProgram: EpgProgram? {
@@ -250,19 +262,9 @@ struct PlayerView: View {
                                 .foregroundStyle(tickerMode == .off ? Color.white : SportsColors.voidBlack)
                                 .frame(width: 44, height: 44)
                                 .contentShape(Circle())
-                                .background(
-                                    Group {
-                                        switch tickerMode {
-                                        case .off:
-                                            Color.clear
-                                        case .fade:
-                                            SportsColors.gold.opacity(0.55)
-                                        case .persistent:
-                                            SportsColors.gold.opacity(0.92)
-                                        }
-                                    },
-                                    in: Circle()
-                                )
+                                .background {
+                                    Circle().fill(tickerButtonFill)
+                                }
                                 .sportsGlass(in: Circle())
                             Text(tickerMode.shortLabel)
                                 .font(.system(size: 9, weight: .bold))
