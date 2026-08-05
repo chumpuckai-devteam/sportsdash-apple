@@ -35,6 +35,14 @@ struct PlayerView: View {
         }
     }
 
+    private var tickerButtonFill: Color {
+        switch tickerMode {
+        case .off: return Color.clear
+        case .fade: return SportsColors.gold.opacity(0.55)
+        case .persistent: return SportsColors.gold.opacity(0.92)
+        }
+    }
+
     private var currentProgram: EpgProgram? {
         let programs = appModel.epgByChannel[channel.id] ?? []
         return programs.first(where: \.isNow) ?? programs.first
