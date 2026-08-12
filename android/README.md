@@ -164,3 +164,15 @@ Full write-up: [`../docs/android-login-persist.md`](../docs/android-login-persis
 ## License
 
 libVLC Android — LGPL. See `../docs/LGPL-NOTICE.md`.
+
+## Android TV (1.2.0-tv+)
+
+Same debug APK appears on the **TV home row** (`LEANBACK_LAUNCHER`).
+Touchscreen/leanback features are **not required**, so phone installs still work.
+
+```bash
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+See `docs/tv-surfaces.md`.
