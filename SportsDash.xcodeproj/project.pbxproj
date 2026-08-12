@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		56A33070A8E049DBB857AA62 /* ScoresTVGameCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC852DD8EFA6446DA92D8ED0 /* ScoresTVGameCard.swift */; };
+		9E30B52E718249089996B822 /* ScoresTVGameCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC852DD8EFA6446DA92D8ED0 /* ScoresTVGameCard.swift */; };
 		296D8F7B6BC3412C851CEADC /* GameNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE73686544945F181E7CAC9 /* GameNotificationService.swift */; };
 		CDC307F5A9CC40F6AEABDBB2 /* GameNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE73686544945F181E7CAC9 /* GameNotificationService.swift */; };
 		9C62AB2248724C57AAC1A1C2 /* AVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */; };
@@ -96,6 +98,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FC852DD8EFA6446DA92D8ED0 /* ScoresTVGameCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoresTVGameCard.swift; sourceTree = "<group>"; };
 		4AE73686544945F181E7CAC9 /* GameNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameNotificationService.swift; sourceTree = "<group>"; };
 		1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerEngine.swift; sourceTree = "<group>"; };
 		E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCPlayerController.swift; sourceTree = "<group>"; };
@@ -247,6 +250,7 @@
 			children = (
 				46644F4CFC505A9A0C711D84 /* GameCardView.swift */,
 				E1GAMEROW01A55E7001C0DE01 /* GameMatchupRow.swift */,
+				FC852DD8EFA6446DA92D8ED0 /* ScoresTVGameCard.swift */,
 				E24C42B15674881585E8FF1D /* GameDetailSheet.swift */,
 				B10AA78C5B9DC0D57E5CA7F4 /* ScoresView.swift */,
 			);
@@ -435,6 +439,7 @@
 				E3731096DEF391C521AA4BE3 /* Game.swift in Sources */,
 				E1GAMEROW01A55E7001C0DE02 /* GameCardView.swift in Sources */,
 				E1GAMEROW01A55E7001C0DE02 /* GameMatchupRow.swift in Sources */,
+				56A33070A8E049DBB857AA62 /* ScoresTVGameCard.swift in Sources */,
 				PLACEHOLDER
 				9D9B700CAE82A22395D44A10 /* GameDetailSheet.swift in Sources */,
 				ADC2F1D4BAA6CDD131BEA0B8 /* GeneralSettingsView.swift in Sources */,
@@ -485,6 +490,7 @@
 				3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */,
 				2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */,
 				E1GAMEROW01A55E7001C0DE03 /* GameMatchupRow.swift in Sources */,
+				9E30B52E718249089996B822 /* ScoresTVGameCard.swift in Sources */,
 				B6CB6ED9D1811F26026C0BAC /* GameDetailSheet.swift in Sources */,
 				9D5B6A2B85120E8B8197D13A /* GeneralSettingsView.swift in Sources */,
 				BF4FA82CEE4A6BE44C4CA694 /* GuideView.swift in Sources */,

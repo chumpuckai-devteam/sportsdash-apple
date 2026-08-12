@@ -161,6 +161,9 @@ struct ScoresView: View {
             favoriteTeamIds: appModel.favoriteTeamIds
         )
 
+        #if os(tvOS)
+        return tvNetflixBrowse(pin: pin, sections: sections)
+        #else
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if SetupChecklist.isIncomplete(appModel) {
@@ -193,7 +196,61 @@ struct ScoresView: View {
         .sportsHideScrollBackground()
         .background(Color.clear)
         .sportsRefreshable { await appModel.refreshScores() }
+        #endif
     }
+
+    #if os(tvOS)
+    /// Netflix-style horizontal card rails for Apple TV.
+    private func tvNetflixBrowse(pin: [Game], sections: [SportScoreSection]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 36) {
+                if SetupChecklist.isIncomplete(appModel) {
+                    SetupChecklistCard()
+                        .padding(.horizontal, 48)
+                        .padding(.top, 8)
+                }
+
+                if pin.isEmpty && sections.isEmpty {
+                    ContentUnavailableView(
+                        emptyTitle,
+                        systemImage: "sportscourt",
+                        description: Text(emptySubtitle)
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.horizontal, 48)
+                } else {
+                    if !pin.isEmpty {
+                        ScoresTVRail(
+                            title: "My Games",
+                            emoji: "⭐",
+                            games: pin,
+                            favoriteTeamIds: appModel.favoriteTeamIds,
+                            onSelect: { selectedGame = $0 }
+                        )
+                        .focusSection()
+                    }
+                    ForEach(sections) { section in
+                        let games = section.leagues.flatMap(\.games)
+                        if !games.isEmpty {
+                            ScoresTVRail(
+                                title: section.sportTitle,
+                                emoji: section.emoji,
+                                games: games,
+                                favoriteTeamIds: appModel.favoriteTeamIds,
+                                onSelect: { selectedGame = $0 }
+                            )
+                            .focusSection()
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 20)
+            .padding(.bottom, 60)
+        }
+        .sportsHideScrollBackground()
+        .background(SportsColors.voidBlack)
+    }
+    #endif
 
     #if os(iOS)
     private var favoriteTeamsRail: some View {

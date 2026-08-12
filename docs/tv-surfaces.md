@@ -85,3 +85,14 @@ Run scheme **SportsDashTV** on Apple TV **sim or hardware** after pull. Mark PAS
 - Dedicated Leanback BrowseFragment / sidemenu redesign
 - Separate `applicationId` TV flavor
 - Device stick dogfood sign-off (needs hardware / AVD session from Samir)
+
+## Scores dashboard — Netflix-style rails (TV)
+
+On **Apple TV** and **Android TV**, Scores uses horizontal card rails (not phone dense lists):
+
+- **My Games** rail first (favorites)
+- One rail per sport section (emoji + title + LIVE badge)
+- Large focusable cards: logos, status, gold **WATCH**, scores when live/final
+- D-pad: left/right within rail, up/down between rails
+
+Phone layout unchanged (dense one-row chrome + vertical list).

@@ -16,8 +16,8 @@ packages: {}
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.2.2"
-    CURRENT_PROJECT_VERSION: "25"
+    MARKETING_VERSION: "1.2.3"
+    CURRENT_PROJECT_VERSION: "26"
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_CFBundleDisplayName: SportsDash
