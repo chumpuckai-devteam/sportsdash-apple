@@ -52,6 +52,7 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusGroup
 import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -83,6 +84,7 @@ fun GuideTimeline(
     ratingFor: (IptvChannel) -> com.samirpatel.sportsdash.core.ratings.MovieRating? = { null },
     ratingLoadingFor: (IptvChannel) -> Boolean = { false },
     onRequestRating: (IptvChannel) -> Unit = {},
+    tvFocus: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val hScroll = rememberScrollState()
@@ -97,7 +99,8 @@ fun GuideTimeline(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .tvFocusGroup(enabled = tvFocus),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { onShiftHours(-3) }) {
@@ -203,6 +206,7 @@ fun GuideTimeline(
                         rating = ratingFor(channel),
                         ratingLoading = ratingLoadingFor(channel),
                         onRequestRating = { onRequestRating(channel) },
+                        tvFocus = tvFocus,
                         onPlay = { onPlay(channel) },
                         onLongPress = { onLongPressChannel(channel) },
                     )
@@ -228,6 +232,7 @@ private fun TimelineRow(
     rating: com.samirpatel.sportsdash.core.ratings.MovieRating?,
     ratingLoading: Boolean,
     onRequestRating: () -> Unit,
+    tvFocus: Boolean = false,
     onPlay: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -260,7 +265,7 @@ private fun TimelineRow(
                 .width(ChannelColWidth)
                 .fillMaxHeight()
                 .background(Panel)
-                .tvFocusRing(enabled = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(10.dp))
                 .combinedClickable(onClick = onPlay, onLongClick = onLongPress)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -306,7 +311,7 @@ private fun TimelineRow(
                 .width(timelineWidthDp)
                 .fillMaxHeight()
                 .background(VoidBlack)
-                .tvFocusRing(enabled = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(10.dp))
                 .combinedClickable(onClick = onPlay, onLongClick = onLongPress),
         ) {
             Box(

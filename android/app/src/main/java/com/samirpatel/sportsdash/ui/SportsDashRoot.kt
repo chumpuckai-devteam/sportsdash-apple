@@ -41,6 +41,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.Muted

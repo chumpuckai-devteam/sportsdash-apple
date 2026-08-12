@@ -67,6 +67,7 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusGroup
 import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 
 /**
@@ -101,6 +102,7 @@ fun GuideScreen(
                 vm = vm,
                 state = state,
                 landscape = landscape,
+                isTelevision = isTelevision,
                 onGoScores = onGoScores,
             )
         }
@@ -113,6 +115,7 @@ private fun GuideBrowseBody(
     vm: AppViewModel,
     state: AppUiState,
     landscape: Boolean,
+    isTelevision: Boolean = false,
     onGoScores: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -123,6 +126,7 @@ private fun GuideBrowseBody(
         GuideActionBar(
             state = state,
             landscape = landscape,
+            isTelevision = isTelevision,
             onFavorites = { vm.selectGroup(FAVORITES_GROUP) },
             onHourGuide = { vm.setGuideLayout(GuideLayout.LIST) },
             onGrid = { vm.setGuideLayout(GuideLayout.GRID) },
@@ -174,6 +178,7 @@ private fun GuideBrowseBody(
                                     channelName = ch.name,
                                 )
                             },
+                            tvFocus = isTelevision,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -241,6 +246,7 @@ private fun GuideBrowseBody(
             GuideCategoryMenuSheet(
                 categories = vm.guideCategoryGroups(),
                 selectedGroup = state.selectedGroup,
+                tvFocus = isTelevision,
                 onSelectGroup = {
                     vm.selectGroup(it)
                     showMenu = false
@@ -288,6 +294,7 @@ private fun GuideBrowseBody(
 private fun GuideActionBar(
     state: AppUiState,
     landscape: Boolean,
+    isTelevision: Boolean = false,
     onFavorites: () -> Unit,
     onHourGuide: () -> Unit,
     onGrid: () -> Unit,
@@ -299,7 +306,8 @@ private fun GuideActionBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(VoidBlack)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+            .padding(horizontal = 6.dp, vertical = 4.dp)
+            .tvFocusGroup(enabled = isTelevision),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -360,6 +368,7 @@ private fun GuideActionBar(
 private fun GuideCategoryMenuSheet(
     categories: List<String>,
     selectedGroup: String,
+    tvFocus: Boolean = false,
     onSelectGroup: (String) -> Unit,
     onRefresh: () -> Unit,
     onClose: () -> Unit,
@@ -401,6 +410,7 @@ private fun GuideCategoryMenuSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(10.dp))
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selected) Gold.copy(alpha = 0.22f) else VoidBlack)
                         .combinedClickable(onClick = { onSelectGroup(group) })

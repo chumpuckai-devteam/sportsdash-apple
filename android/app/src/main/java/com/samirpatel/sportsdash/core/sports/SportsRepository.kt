@@ -76,14 +76,15 @@ class SportsRepository(
             val sport = sports.optJSONObject(si) ?: continue
             val leagues = sport.optJSONArray("leagues") ?: continue
             for (li in 0 until leagues.length()) {
-                val league = leagues.optJSONObject(li) ?: continue
-                val teams = league.optJSONArray("teams") ?: continue
+                val leagueJson = leagues.optJSONObject(li) ?: continue
+                val teams = leagueJson.optJSONArray("teams") ?: continue
                 for (ti in 0 until teams.length()) {
                     val wrap = teams.optJSONObject(ti) ?: continue
                     val team = wrap.optJSONObject("team") ?: wrap
                     val raw = jsonId(team, "id").ifBlank { jsonId(team, "uid") }
                     // Never fall back to abbreviation — TB collides Bucs vs Rays.
                     if (raw.isBlank()) continue
+                    // Use SportLeague param (not JSONObject) — ids are league-scoped.
                     val id = stableTeamId(league, raw)
                     if (id.isBlank() || !seen.add(id)) continue
                     val logos = team.optJSONArray("logos")

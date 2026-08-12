@@ -82,6 +82,7 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusGroup
 import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 
 private sealed class ScoreRow {
@@ -215,6 +216,7 @@ fun ScoresScreen(
                                 is ScoreRow.SportHeader -> SportSectionHeader(
                                     section = row.section,
                                     collapsed = row.collapsed,
+                                    tvFocus = isTelevision,
                                     onToggle = { toggleSport(row.section.sportKey) },
                                 )
                                 is ScoreRow.LeagueHeader -> LeagueSectionHeader(shelf = row.shelf)
@@ -405,7 +407,8 @@ private fun ScoresTopChrome(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .tvFocusGroup(enabled = isTelevision),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -418,6 +421,7 @@ private fun ScoresTopChrome(
             onTeamClick = onTeamClick,
             compact = true,
             logosOnly = true,
+            tvFocus = isTelevision,
             modifier = Modifier.weight(1f),
         )
     }
@@ -430,6 +434,7 @@ private fun FavoriteTeamsRail(
     onTeamClick: (TeamInfo) -> Unit = {},
     compact: Boolean = false,
     logosOnly: Boolean = false,
+    tvFocus: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val mark = if (logosOnly || compact) 30.dp else 40.dp
@@ -445,6 +450,7 @@ private fun FavoriteTeamsRail(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .width(cell)
+                    .tvFocusRing(enabled = tvFocus, shape = CircleShape, scaleFocused = 1.08f)
                     .clickable { onTeamClick(team) },
             ) {
                 Box(
@@ -474,6 +480,7 @@ private fun FavoriteTeamsRail(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .width(cell)
+                    .tvFocusRing(enabled = tvFocus, shape = CircleShape, scaleFocused = 1.08f)
                     .clickable(onClick = onOpenPicker),
             ) {
                 Box(
@@ -707,6 +714,7 @@ private fun PickerRow(
 private fun SportSectionHeader(
     section: SportScoreSection,
     collapsed: Boolean,
+    tvFocus: Boolean = false,
     onToggle: () -> Unit,
 ) {
     val shape = RoundedCornerShape(14.dp)
@@ -714,6 +722,7 @@ private fun SportSectionHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
+            .tvFocusRing(enabled = tvFocus, shape = shape)
             .clip(shape)
             .background(Panel.copy(alpha = 0.72f))
             .clickable(onClick = onToggle)
@@ -872,6 +881,7 @@ fun StreamPickerDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
+                                    .tvFocusRing(enabled = true, shape = RoundedCornerShape(12.dp))
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(VoidBlack)
                                     .clickable { onPlay(match) }

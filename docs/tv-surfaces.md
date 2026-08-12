@@ -64,24 +64,24 @@ Run scheme **SportsDashTV** on Apple TV **sim or hardware** after pull. Mark PAS
 | Detection | `DeviceProfile.isTelevision` |
 | Shell | TopAppBar + bottom nav **always** on TV (D-pad); phone landscape still hides shell |
 
-### D-pad focus (1.2.1-tv-focus + residual)
-- `ui/tv/TvFocus.kt` — gold focus ring + scale on focused items
-- Scores filter chips + game rows
-- Guide grid cards + timeline rows
-- Player: media play/pause; DPAD reveals chrome when hidden; CENTER/ENTER only intercept when chrome down; Back hides chrome first; circle controls + ticker use `tvFocusCircle` / `tvFocusRing`
+### D-pad focus (**1.2.1-tv-focus** · S-TV.AND.2)
+| Surface | Focus law |
+|---------|-----------|
+| Helpers | `ui/tv/TvFocus.kt` — `tvFocusRing` / `tvFocusCircle` / `tvFocusGroup` (gold + scale; no double-`focusable` with clickable) |
+| Shell | TopAppBar + bottom nav **always** on TV |
+| Scores | Live/Upcoming/Final chips, favorite rail, sport headers, game rows, stream picker rows |
+| Guide | Action bar focus group; Hour timeline channel col + row; Grid cards; category sheet rows |
+| Player | Media play/pause keys; DPAD reveals chrome when hidden; CENTER only intercepts when chrome down; Back hides chrome first; circle controls + ticker pills |
+| Phone | All rings gated by `DeviceProfile.isTelevision` — phone UX unchanged |
+
+### Emulator dogfood checklist
+1. Install debug APK on **TV AVD 1080p** · open from leanback row (banner)
+2. Scores — D-pad chips → game row gold ring → select opens stream picker → play
+3. Guide Hour — earlier/now/later; channel column focus → play; Grid cards focus → play
+4. Player — transport + mute/ticker focus; media key play/pause; Back hides chrome then exits
+5. Bottom nav — Scores/Guide/Settings always reachable (shell not landscape-hidden)
 
 ### Not yet (follow-on)
 - Dedicated Leanback BrowseFragment / sidemenu redesign
-- Deeper Guide browse / sidemenu redesign beyond grid rings
 - Separate `applicationId` TV flavor
-
-### Emulator dogfood
-```bash
-cd android && ./gradlew :app:assembleDebug
-# AVD: TV (1080p) API 34 · install APK · open from TV home row
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-## Kanban
-- **S-PARITY.C4** `t_8867a2a0` — parent TV track (docs/gates + Android leanback start)
-- **S-TV.APPLE.2** `t_15eb6d91` / **S-TV.APPLE.2b** `t_57811b44` — residual Apple TV My Games + player chrome + CI after 1.2.0
+- Device stick dogfood sign-off (needs hardware / AVD session from Samir)

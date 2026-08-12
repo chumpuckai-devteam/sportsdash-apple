@@ -165,14 +165,19 @@ Full write-up: [`../docs/android-login-persist.md`](../docs/android-login-persis
 
 libVLC Android — LGPL. See `../docs/LGPL-NOTICE.md`.
 
-## Android TV (1.2.0-tv+)
+## Android TV (1.2.0-tv+ / D-pad 1.2.1-tv-focus)
 
 Same debug APK appears on the **TV home row** (`LEANBACK_LAUNCHER`).
 Touchscreen/leanback features are **not required**, so phone installs still work.
 
+**D-pad (1.2.1-tv-focus):** gold `tvFocusRing` / `tvFocusCircle` on Scores rows+filters,
+Guide grid+timeline, Player transport/ticker. Shell chrome stays on TV.
+Media play/pause keys; DPAD reveals player chrome when hidden.
+
 ```bash
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
+# AVD: TV 1080p · open from leanback row
 ```
 
 See `docs/tv-surfaces.md`.

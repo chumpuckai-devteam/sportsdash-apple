@@ -186,14 +186,14 @@ fun PlayerScreen(
                 when (code) {
                     android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (repeat == 0) {
-                            if (isPlaying) controller.pause() else controller.play()
+                            if (isPlaying) controller.pause() else controller.resume()
                             isPlaying = controller.isPlaying
                             noteChromeInteraction()
                         }
                         true
                     }
                     android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                        controller.play(); isPlaying = true; noteChromeInteraction(); true
+                        controller.resume(); isPlaying = true; noteChromeInteraction(); true
                     }
                     android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                         controller.pause(); isPlaying = false; noteChromeInteraction(); true
