@@ -144,6 +144,7 @@ struct SportsCategoryPickerScreen: View {
                                 .buttonStyle(.plain)
                                 .listRowBackground(rowBackground(selected: name == selection))
                                 .listRowSeparatorTint(SportsColors.border.opacity(0.5))
+                                .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
                                 #endif
                             }
                         }
@@ -304,6 +305,7 @@ struct SportsCategoryPickerScreen: View {
 
     private func categoryRow(name: String, focused: Bool) -> some View {
         let selected = name == selection
+        #if os(tvOS)
         return HStack(spacing: 20) {
             Text(name)
                 .font(.body.weight(.semibold))
@@ -320,7 +322,6 @@ struct SportsCategoryPickerScreen: View {
         .padding(.horizontal, 16)
         .frame(minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
         .contentShape(Rectangle())
-        #if os(tvOS)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(focused ? SportsColors.gold : (selected ? SportsColors.panelElevated : SportsColors.panel))
@@ -335,10 +336,31 @@ struct SportsCategoryPickerScreen: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
         .animation(SportsTVFocusMotion.animation, value: focused)
+        #else
+        // Phone: dense rows — text-sized chrome, not TV 66pt focus targets.
+        return HStack(spacing: 10) {
+            Text(name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SportsColors.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if selected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(SportsColors.gold)
+                    .imageScale(.medium)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 40, alignment: .leading)
+        .contentShape(Rectangle())
         #endif
     }
 
     private func rowBackground(selected: Bool) -> some View {
+        #if os(tvOS)
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .fill(selected ? SportsColors.panelElevated : SportsColors.panel)
             .overlay {
@@ -349,5 +371,17 @@ struct SportsCategoryPickerScreen: View {
                     )
             }
             .padding(.vertical, 3)
+        #else
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(selected ? SportsColors.panelElevated : SportsColors.panel)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                        selected ? SportsColors.gold.opacity(0.55) : SportsColors.border.opacity(0.28),
+                        lineWidth: selected ? 1.25 : 0.75
+                    )
+            }
+            .padding(.vertical, 1)
+        #endif
     }
 }
