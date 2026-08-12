@@ -1,9 +1,16 @@
 package com.samirpatel.sportsdash.ui
 
 import android.content.res.Configuration
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,6 +36,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +45,7 @@ import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
+import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -159,40 +169,80 @@ fun SportsDashRoot(vm: AppViewModel) {
             }
         },
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .padding(padding)
                 .then(if (landscape) Modifier.statusBarsPadding() else Modifier)
                 .fillMaxSize(),
         ) {
-            when (tab) {
-                0 -> ScoresScreen(
-                    vm = vm,
-                    state = state,
-                    landscape = landscape,
-                    onGoSettings = { tab = 2 },
-                )
-                1 -> GuideScreen(
-                    vm = vm,
-                    state = state,
-                    landscape = landscape,
-                    onGoSettings = { tab = 2 },
-                    onGoScores = { tab = 0 },
-                )
-                else -> SettingsScreen(vm = vm, state = state)
+            if (landscape) {
+                LandscapeTabStrip(tab = tab, onSelect = { tab = it })
             }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                when (tab) {
+                    0 -> ScoresScreen(
+                        vm = vm,
+                        state = state,
+                        landscape = landscape,
+                        onGoSettings = { tab = 2 },
+                    )
+                    1 -> GuideScreen(
+                        vm = vm,
+                        state = state,
+                        landscape = landscape,
+                        onGoSettings = { tab = 2 },
+                        onGoScores = { tab = 0 },
+                    )
+                    else -> SettingsScreen(vm = vm, state = state)
+                }
 
-            // Floating mini-player over tabs (iOS pop-out parity)
-            if (state.floating && playing != null && playUrl != null) {
-                FloatingPlayerBar(
-                    channel = playing,
-                    url = playUrl,
-                    title = vm.displayChannelName(playing.name),
-                    onExpand = { vm.expandFloatingPlayer() },
-                    onDismiss = { vm.dismissFloatingPlayer() },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
+                // Floating mini-player over tabs (iOS pop-out parity)
+                if (state.floating && playing != null && playUrl != null) {
+                    FloatingPlayerBar(
+                        channel = playing,
+                        url = playUrl,
+                        title = vm.displayChannelName(playing.name),
+                        onExpand = { vm.expandFloatingPlayer() },
+                        onDismiss = { vm.dismissFloatingPlayer() },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeTabStrip(tab: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Panel)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(
+            0 to "Scores",
+            1 to "Guide",
+            2 to "Settings",
+        ).forEach { (idx, label) ->
+            val selected = tab == idx
+            Text(
+                text = label,
+                color = if (selected) VoidBlack else TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) Gold else Color.Transparent)
+                    .clickable { onSelect(idx) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
         }
     }
 }

@@ -703,7 +703,7 @@ struct ScoresView: View {
         switch appModel.dashboardFilter {
         case .live: return "No live games"
         case .upcoming: return "No upcoming games"
-        case .all: return "No games"
+        case .all: return "No final games"
         }
     }
 
@@ -719,7 +719,7 @@ struct ScoresView: View {
         case .live:
             return "Nothing in progress right now. Check Upcoming or pull to refresh. Star a team on a matchup to pin their games first."
         case .all:
-            return "Pull to refresh or enable more leagues in Settings. Tap ★ on a team logo to favorite that team."
+            return "No completed games in the current slate. Check Live or Upcoming, or pull to refresh."
         }
     }
 }

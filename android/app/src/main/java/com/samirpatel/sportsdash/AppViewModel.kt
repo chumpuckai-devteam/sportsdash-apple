@@ -394,11 +394,70 @@ class AppViewModel(
     }
 
     fun isTeamFavorite(teamId: String): Boolean =
-        teamId in _state.value.favoriteTeamIds
+        teamId.isNotBlank() && teamId in _state.value.favoriteTeamIds
 
     fun gameHasFavoriteTeam(game: Game): Boolean {
         val favs = _state.value.favoriteTeamIds
         return game.home.id in favs || game.away.id in favs
+    }
+
+    /**
+     * Rewrite bare ESPN ids (e.g. "27") to league-scoped ids using live board names.
+     * Prevents Buccaneers (nfl:27) starring Rockies (mlb:27).
+     */
+    fun migrateLegacyFavoriteTeamIds(board: List<Game> = _state.value.games) {
+        val teams = _state.value.favoriteTeams
+        if (teams.none { !it.id.contains(":") }) return
+        val byBare = linkedMapOf<String, MutableList<TeamInfo>>()
+        for (g in board) {
+            for (t in listOf(g.home, g.away)) {
+                if (!t.id.contains(":")) continue
+                val bare = t.id.substringAfterLast(':')
+                if (bare.isBlank()) continue
+                byBare.getOrPut(bare) { mutableListOf() }.add(t)
+            }
+        }
+        var changed = false
+        val next = ArrayList<TeamInfo>()
+        for (t in teams) {
+            if (t.id.contains(":")) {
+                next.add(t)
+                continue
+            }
+            val candidates = byBare[t.id].orEmpty()
+            val match = candidates.firstOrNull {
+                it.name.equals(t.name, ignoreCase = true) ||
+                    it.abbreviation.equals(t.abbreviation, ignoreCase = true)
+            } ?: candidates.singleOrNull()
+            if (match != null) {
+                next.add(
+                    t.copy(
+                        id = match.id,
+                        name = t.name.ifBlank { match.name },
+                        abbreviation = t.abbreviation.ifBlank { match.abbreviation },
+                        logoUrl = t.logoUrl ?: match.logoUrl,
+                        shortName = t.shortName ?: match.shortName,
+                    ),
+                )
+                changed = true
+                continue
+            }
+            if (t.name.isNotBlank()) {
+                val nameHits = board.flatMap { listOf(it.home, it.away) }
+                    .filter { it.id.contains(":") && it.name.equals(t.name, ignoreCase = true) }
+                val ids = nameHits.map { it.id }.toSet()
+                if (ids.size == 1) {
+                    next.add(t.copy(id = nameHits.first().id))
+                    changed = true
+                    continue
+                }
+            }
+            // Drop ambiguous bare id
+            changed = true
+        }
+        if (!changed) return
+        val distinct = next.distinctBy { it.id }
+        persistFavoriteTeams(distinct)
     }
 
     fun toggleTeamFavorite(teamId: String) {
@@ -870,6 +929,7 @@ class AppViewModel(
                             scoresError = null,
                         )
                     }
+                    migrateLegacyFavoriteTeamIds(games)
                 }
                 .onFailure { e ->
                     _state.update {

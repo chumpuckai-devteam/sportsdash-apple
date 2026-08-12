@@ -41,9 +41,17 @@ struct GuideView: View {
         [AppModel.favoritesChannelGroup] + appModel.channelGroupNames
     }
 
+    /// Prefer first **populated** category — never strand on empty ★ Favorites.
+    private var defaultGuideGroup: String {
+        let fav = AppModel.favoritesChannelGroup
+        let favCount = appModel.channels(inGroup: fav).count
+        if favCount > 0 { return fav }
+        return appModel.channelGroupNames.first ?? fav
+    }
+
     private var activeChannels: [IptvChannel] {
         guard !selectedGroup.isEmpty else {
-            return appModel.channels(inGroup: groupNames.first ?? "")
+            return appModel.channels(inGroup: defaultGuideGroup)
         }
         return appModel.channels(inGroup: selectedGroup)
     }
@@ -185,7 +193,7 @@ struct GuideView: View {
             }
             .task {
                 if selectedGroup.isEmpty {
-                    selectedGroup = groupNames.first ?? ""
+                    selectedGroup = defaultGuideGroup
                 }
                 // Always open on the current hour (left edge of timeline).
                 windowStart = Self.snappedCurrentHour()
@@ -204,12 +212,18 @@ struct GuideView: View {
             }
             .onChange(of: appModel.channelGroupNames) { _, names in
                 if selectedGroup.isEmpty || !names.contains(selectedGroup) {
-                    selectedGroup = names.first ?? ""
+                    selectedGroup = defaultGuideGroup
+                }
+                // If parked on empty Favorites after unstar-all, jump to a real category.
+                if selectedGroup == AppModel.favoritesChannelGroup,
+                   appModel.channels(inGroup: selectedGroup).isEmpty,
+                   let first = appModel.channelGroupNames.first {
+                    selectedGroup = first
                 }
             }
             .onChange(of: appModel.channels.count) { _, _ in
                 if selectedGroup.isEmpty {
-                    selectedGroup = groupNames.first ?? ""
+                    selectedGroup = defaultGuideGroup
                 }
             }
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in

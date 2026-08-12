@@ -9,7 +9,7 @@
 |------|----------|
 | Nav | Scores · Guide · Settings |
 | Hard player | VLC / libVLC, TS-first |
-| Scores | ESPN Live / Upcoming / Final (Android) · Live / Upcoming / All (iOS); favorite **teams** pin first |
+| Scores | ESPN Live / Upcoming / Final (both); favorite **teams** pin first via **league-scoped ESPN ids** (`nfl:27`) |
 | Watch from Scores | Tap game → match channels → play |
 | Guide | Hour timeline + Grid; provider category order; EPG download-once |
 | Guide favorites | Star **channels** (Android long-press; iOS optional follow-up) |
@@ -53,6 +53,7 @@
 ## Dogfood AC (baseline green)
 
 - [ ] Load Xtream; 2nd launch paints cached channels quickly  
+- [ ] **Android update:** install new APK **over** existing app (no uninstall) → Xtream host/user still in Settings; blank password = kept (see `docs/android-login-persist.md`)  
 - [ ] Long-press Scores game → star home/away team → those games pin first under Live/Upcoming  
 - [ ] Favorite-team games sort first under Live (no separate ★ Faves filter)  
 - [ ] Guide: Hour/Grid, Movies filter, category ☰, channel ★ favorites  

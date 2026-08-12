@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -934,7 +935,9 @@ private fun GameRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(if (isFavoriteMatch) Gold.copy(alpha = 0.12f) else Panel)
+            .background(
+                if (isFavoriteMatch) Gold.copy(alpha = 0.10f) else Color.Transparent,
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(14.dp),
     ) {
@@ -962,14 +965,18 @@ private fun GameRow(
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,
                     )
-                } else {
-                    Text(
-                        text = "TAP TO WATCH",
-                        color = Gold,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
                 }
+                // Gold WATCH on all watchable rows (live/final/upcoming)
+                Text(
+                    text = "WATCH",
+                    color = VoidBlack,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .background(Gold, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
             }
             TeamCell(team = game.home, modifier = Modifier.weight(1f), alignEnd = true, starred = isHomeFavorite)
         }

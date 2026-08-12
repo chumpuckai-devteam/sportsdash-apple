@@ -343,17 +343,18 @@ enum ChannelNameCleanup {
 // MARK: - Dashboard filter
 
 enum DashboardFilter: String, CaseIterable, Identifiable, Sendable {
-    /// Live / Upcoming / All only — no separate favorite-games filter (S-PARITY.FAV.3).
+    /// Live / Upcoming / Final — no separate favorite-games filter (S-PARITY.FAV.3).
     /// Favorite **teams** pin first inside each filter (S-PARITY.FAV.2).
+    /// `.all` rawValue kept for prefs decode; product label is Final (Android parity).
     case live, upcoming, all
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .live: return "LIVE"
-        case .upcoming: return "UPCOMING"
-        case .all: return "ALL"
+        case .live: return "Live"
+        case .upcoming: return "Upcoming"
+        case .all: return "Final"
         }
     }
 }

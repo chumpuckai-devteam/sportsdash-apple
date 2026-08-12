@@ -503,7 +503,7 @@ struct PlayerView: View {
     private func scheduleChromeHide() {
         chromeTask?.cancel()
         chromeTask = Task {
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            try? await Task.sleep(nanoseconds: 4_500_000_000)
             if !Task.isCancelled {
                 await MainActor.run { showChrome = false }
             }

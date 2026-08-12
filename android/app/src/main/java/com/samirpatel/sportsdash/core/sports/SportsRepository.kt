@@ -23,6 +23,26 @@ class SportsRepository(
         .readTimeout(25, TimeUnit.SECONDS)
         .build(),
 ) {
+    companion object {
+        /**
+         * ESPN team ids collide across sports (NFL 27 = Buccaneers, MLB 27 = Rockies).
+         * Always scope with league id: `nfl:27`.
+         */
+        fun stableTeamId(league: SportLeague, rawId: String): String {
+            val raw = rawId.trim()
+            if (raw.isEmpty()) return ""
+            if (raw.contains(":")) return raw
+            return "${league.id}:$raw"
+        }
+
+        fun jsonId(obj: org.json.JSONObject, key: String): String {
+            if (!obj.has(key) || obj.isNull(key)) return ""
+            return when (val v = obj.get(key)) {
+                is Number -> v.toLong().toString()
+                else -> v.toString().trim()
+            }
+        }
+    }
     suspend fun fetchGames(leagues: List<SportLeague>): List<Game> = withContext(Dispatchers.IO) {
         coroutineScope {
             leagues.map { league ->
@@ -44,10 +64,10 @@ class SportsRepository(
         val url = "https://site.api.espn.com/apis/site/v2/sports/${league.sportPath}/${league.leaguePath}/teams?limit=400"
         val body = runCatching { httpGet(url) }.getOrDefault("")
         if (body.isBlank()) return@withContext emptyList()
-        parseTeams(body)
+        parseTeams(body, league)
     }
 
-    private fun parseTeams(body: String): List<TeamInfo> {
+    private fun parseTeams(body: String, league: SportLeague): List<TeamInfo> {
         val root = runCatching { JSONObject(body) }.getOrNull() ?: return emptyList()
         val sports = root.optJSONArray("sports") ?: return emptyList()
         val out = ArrayList<TeamInfo>()
@@ -61,9 +81,10 @@ class SportsRepository(
                 for (ti in 0 until teams.length()) {
                     val wrap = teams.optJSONObject(ti) ?: continue
                     val team = wrap.optJSONObject("team") ?: wrap
-                    val id = team.optString("id").ifBlank {
-                        team.optString("uid").ifBlank { team.optString("abbreviation") }
-                    }
+                    val raw = jsonId(team, "id").ifBlank { jsonId(team, "uid") }
+                    // Never fall back to abbreviation — TB collides Bucs vs Rays.
+                    if (raw.isBlank()) continue
+                    val id = stableTeamId(league, raw)
                     if (id.isBlank() || !seen.add(id)) continue
                     val logos = team.optJSONArray("logos")
                     var logo: String? = null
@@ -189,8 +210,9 @@ class SportsRepository(
                         is String -> scoreRaw.trim().toIntOrNull()
                         else -> null
                     }
+                    val rawTid = jsonId(team, "id").ifBlank { jsonId(team, "uid") }
                     val info = TeamInfo(
-                        id = team.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+                        id = stableTeamId(league, rawTid).ifBlank { java.util.UUID.randomUUID().toString() },
                         name = team.optString("displayName")
                             .ifBlank { team.optString("name") }
                             .ifBlank { "Team" },

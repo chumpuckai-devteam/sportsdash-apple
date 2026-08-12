@@ -210,11 +210,13 @@ final class AppModel: ObservableObject {
                 if richer {
                     self.games = partial
                     self.lastUpdated = Date()
+                    self.migrateLegacyFavoriteTeamIds(using: partial)
                 }
             }
         }
         games = result
         lastUpdated = Date()
+        migrateLegacyFavoriteTeamIds(using: result)
     }
 
     private static func upcomingCount(_ games: [Game]) -> Int {
@@ -685,6 +687,68 @@ final class AppModel: ObservableObject {
         !teamId.isEmpty && favoriteTeamIds.contains(teamId)
     }
 
+    /// ESPN ids collide across sports (nfl:27 Bucs vs mlb:27 Rockies). Rewrite bare numeric ids.
+    func migrateLegacyFavoriteTeamIds(using boardGames: [Game] = []) {
+        let board = boardGames.isEmpty ? games : boardGames
+        var byBare: [String: [TeamInfo]] = [:]
+        for g in board {
+            for t in [g.home, g.away] where t.id.contains(":") {
+                let bare = String(t.id.split(separator: ":").last ?? "")
+                guard !bare.isEmpty else { continue }
+                byBare[bare, default: []].append(t)
+            }
+        }
+        var next: [TeamInfo] = []
+        var changed = false
+        for t in favoriteTeams {
+            if t.id.contains(":") {
+                next.append(t)
+                continue
+            }
+            let bare = t.id
+            let candidates = byBare[bare] ?? []
+            if let match = candidates.first(where: {
+                $0.name.caseInsensitiveCompare(t.name) == .orderedSame
+                    || $0.abbreviation.caseInsensitiveCompare(t.abbreviation) == .orderedSame
+            }) ?? (candidates.count == 1 ? candidates.first : nil) {
+                next.append(TeamInfo(
+                    id: match.id,
+                    name: t.name.isEmpty ? match.name : t.name,
+                    abbreviation: t.abbreviation.isEmpty ? match.abbreviation : t.abbreviation,
+                    score: nil,
+                    logoURL: t.logoURL ?? match.logoURL,
+                    colorHex: t.colorHex ?? match.colorHex,
+                    alternateColorHex: t.alternateColorHex ?? match.alternateColorHex,
+                    shortName: t.shortName ?? match.shortName
+                ))
+                changed = true
+            } else if !t.name.isEmpty {
+                // Drop ambiguous bare ids that we cannot prove — prevents Rockies star from Bucs.
+                // Keep only if name uniquely appears on board with stable id.
+                let nameHits = board.flatMap { [$0.home, $0.away] }.filter {
+                    $0.id.contains(":") && $0.name.caseInsensitiveCompare(t.name) == .orderedSame
+                }
+                if let only = nameHits.first, Set(nameHits.map(\.id)).count == 1 {
+                    var copy = t
+                    copy.id = only.id
+                    next.append(copy)
+                    changed = true
+                } else {
+                    changed = true // drop unmigratable bare id
+                }
+            } else {
+                changed = true
+            }
+        }
+        // Dedupe
+        var seen = Set<String>()
+        next = next.filter { seen.insert($0.id).inserted }
+        guard changed else { return }
+        favoriteTeams = next
+        favoriteTeamIds = Set(next.map(\.id))
+        storage.setFavoriteTeams(next)
+    }
+
     /// True when either side is a starred team (row chrome / pin sort).
     func isFavorite(_ game: Game) -> Bool {
         isTeamFavorite(game.home.id) || isTeamFavorite(game.away.id)
@@ -739,7 +803,8 @@ final class AppModel: ObservableObject {
         case .upcoming:
             base = games.filter(\.isUpcoming)
         case .all:
-            base = games
+            // Product label "Final" — completed slate (Android parity).
+            base = games.filter(\.isFinal)
         }
         return Self.pinFavoriteGames(base, favoriteTeamIds: favoriteTeamIds)
     }

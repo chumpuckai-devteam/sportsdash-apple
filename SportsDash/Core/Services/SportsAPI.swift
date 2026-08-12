@@ -238,8 +238,17 @@ actor SportsAPI {
             var away = TeamInfo(id: "", name: "Away", abbreviation: "AWAY")
             for c in competitors {
                 let team = c["team"] as? [String: Any] ?? [:]
+                let rawTid: String = {
+                    let a = Self.espnJsonId(team["id"])
+                    if !a.isEmpty { return a }
+                    return Self.espnJsonId(team["uid"])
+                }()
+                let stableId: String = {
+                    let s = Self.stableTeamId(league: league, rawId: rawTid)
+                    return s.isEmpty ? UUID().uuidString : s
+                }()
                 let info = TeamInfo(
-                    id: (team["id"] as? String) ?? UUID().uuidString,
+                    id: stableId,
                     name: (team["displayName"] as? String) ?? (team["name"] as? String) ?? "Team",
                     abbreviation: (team["abbreviation"] as? String) ?? "TBD",
                     score: Int(c["score"] as? String ?? "") ?? (c["score"] as? Int),
@@ -301,27 +310,33 @@ actor SportsAPI {
             guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 return []
             }
-            return Self.parseTeams(data)
+            return Self.parseTeams(data, league: league)
         } catch {
             return []
         }
     }
 
-    nonisolated private static func parseTeams(_ data: Data) -> [TeamInfo] {
+    nonisolated private static func parseTeams(_ data: Data, league: SportLeague) -> [TeamInfo] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let sports = root["sports"] as? [[String: Any]] else { return [] }
         var out: [TeamInfo] = []
         var seen = Set<String>()
         for sport in sports {
             guard let leagues = sport["leagues"] as? [[String: Any]] else { continue }
-            for league in leagues {
-                guard let teams = league["teams"] as? [[String: Any]] else { continue }
+            for _leagueObj in leagues {
+                guard let teams = _leagueObj["teams"] as? [[String: Any]] else { continue }
                 for wrap in teams {
                     let team = (wrap["team"] as? [String: Any]) ?? wrap
-                    let id = (team["id"] as? String)
-                        ?? (team["uid"] as? String)
-                        ?? (team["abbreviation"] as? String)
-                        ?? ""
+                    let raw = {
+                        let a = espnJsonId(team["id"])
+                        if !a.isEmpty { return a }
+                        let b = espnJsonId(team["uid"])
+                        if !b.isEmpty { return b }
+                        return ""
+                    }()
+                    // Never fall back to abbreviation — TB collides Bucs/Rays across sports.
+                    guard !raw.isEmpty else { continue }
+                    let id = stableTeamId(league: league, rawId: raw)
                     guard !id.isEmpty, seen.insert(id).inserted else { continue }
                     var logo: String?
                     if let logos = team["logos"] as? [[String: Any]],
@@ -351,6 +366,30 @@ actor SportsAPI {
             }
         }
         return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+
+    /// ESPN team ids are only unique **within** a sport/league (NFL 27 = Bucs, MLB 27 = Rockies).
+    nonisolated static func stableTeamId(league: SportLeague, rawId: String) -> String {
+        let raw = rawId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return "" }
+        if raw.contains(":") { return raw }
+        return "\(league.rawValue):\(raw)"
+    }
+
+    nonisolated static func espnJsonId(_ value: Any?) -> String {
+        switch value {
+        case let s as String:
+            return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        case let i as Int:
+            return String(i)
+        case let i as Int64:
+            return String(i)
+        case let n as NSNumber:
+            return n.stringValue
+        default:
+            return ""
+        }
     }
 
     /// ESPN scoreboard dates vary: with/without seconds, with/without fractional seconds, `Z` or offset.

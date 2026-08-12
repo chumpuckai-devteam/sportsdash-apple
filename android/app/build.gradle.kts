@@ -13,8 +13,8 @@ android {
         minSdk = 26
         // 34 sideloads more predictably on some Samsung One UI builds than 35
         targetSdk = 34
-        versionCode = 24
-        versionName = "1.1.17-ticker-3mode"
+        versionCode = 25
+        versionName = "1.1.18-goal-p0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         // Phone ABIs only — smaller universal APK for friends
