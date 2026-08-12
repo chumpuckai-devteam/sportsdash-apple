@@ -191,13 +191,13 @@ private fun GuideBrowseBody(
                         ) {
                             gridItems(items = channels, key = { it.id }) { ch ->
                                 ChannelGridCard(
-                        tvFocus = isTelevision,
                                     channel = ch,
                                     displayName = vm.displayChannelName(ch.name),
                                     nowTitle = vm.nowTitle(ch.id),
                                     rating = vm.ratingForTitle(vm.nowTitle(ch.id)),
                                     ratingLoading = vm.isRatingLoading(vm.nowTitle(ch.id)),
                                     isFavorite = ch.id in state.favoriteChannelIds,
+                                    tvFocus = isTelevision,
                                     onPlay = { vm.play(ch) },
                                     onLongPress = { favoriteTarget = ch },
                                     onRequestRating = {
@@ -438,7 +438,6 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelGridCard(
-                        tvFocus = isTelevision,
     channel: IptvChannel,
     displayName: String = channel.name,
     nowTitle: String?,

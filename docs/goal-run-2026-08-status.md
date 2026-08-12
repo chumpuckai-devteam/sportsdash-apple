@@ -53,6 +53,6 @@ open SportsDash.xcworkspace
 
 ## TV goal (Samir unlocked)
 
-- Apple TV: compile gates + focus law documented; scheme SportsDashTV
+- Apple TV: SportsDashTV scheme; S-TV.1 focus law; residual after 1.2.0 — shared My Games, favorites sheet on TV, player chrome focus, CI SportsDashTV build (`docs/tv-surfaces.md` checklist)
 - Android TV: leanback launcher + banner + DeviceProfile + shell chrome kept on TV (`1.2.0-tv`)
 - See `docs/tv-surfaces.md`

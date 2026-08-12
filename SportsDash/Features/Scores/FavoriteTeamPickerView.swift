@@ -61,6 +61,9 @@ struct FavoriteTeamPickerView: View {
                                             .foregroundStyle(SportsColors.gold)
                                     }
                                 }
+                                #if os(tvOS)
+                                .sportsTVFocusClean()
+                                #endif
                             }
                         }
                     }
@@ -96,6 +99,9 @@ struct FavoriteTeamPickerView: View {
                                                 .foregroundStyle(SportsColors.gold)
                                         }
                                     }
+                                    #if os(tvOS)
+                                    .sportsTVFocusClean()
+                                    #endif
                                 }
                             }
                         }

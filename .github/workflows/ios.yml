@@ -50,3 +50,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
             build
+      - name: Build tvOS SportsDashTV (workspace)
+        run: |
+          xcodebuild \
+            -workspace SportsDash.xcworkspace \
+            -scheme SportsDashTV \
+            -destination 'generic/platform=tvOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            build

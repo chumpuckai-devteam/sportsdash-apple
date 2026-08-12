@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -79,6 +82,8 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusCircle
+import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 import kotlinx.coroutines.delay
 
 /**
@@ -152,38 +157,75 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler(onBack = onClose)
-
-    // Android TV / remote media keys
-    val focusModifier = if (isTelevision) {
-        Modifier.onPreviewKeyEvent { event ->
-            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-            when (event.nativeKeyEvent.keyCode) {
-                android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                android.view.KeyEvent.KEYCODE_ENTER,
-                -> {
-                    if (event.nativeKeyEvent.repeatCount == 0) {
-                        if (isPlaying) controller.pause() else controller.play()
-                        isPlaying = controller.isPlaying
-                        noteChromeInteraction()
-                    }
-                    true
-                }
-                android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                    controller.play(); isPlaying = true; noteChromeInteraction(); true
-                }
-                android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                    controller.pause(); isPlaying = false; noteChromeInteraction(); true
-                }
-                android.view.KeyEvent.KEYCODE_BACK -> {
-                    onClose(); true
-                }
-                else -> false
-            }
+    // TV: back hides chrome first, then exits.
+    BackHandler(onBack = {
+        if (isTelevision && chromeVisible) {
+            chromeVisible = false
+        } else {
+            onClose()
         }
-    } else Modifier
+    })
 
+    val rootFocus = remember { FocusRequester() }
+    LaunchedEffect(isTelevision) {
+        if (isTelevision) {
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+
+    // Media keys always. DPAD reveals chrome when hidden.
+    // CENTER/ENTER only intercept when chrome is down so focused controls stay usable.
+    val focusModifier = if (isTelevision) {
+        Modifier
+            .focusRequester(rootFocus)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val code = event.nativeKeyEvent.keyCode
+                val repeat = event.nativeKeyEvent.repeatCount
+                when (code) {
+                    android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                        if (repeat == 0) {
+                            if (isPlaying) controller.pause() else controller.play()
+                            isPlaying = controller.isPlaying
+                            noteChromeInteraction()
+                        }
+                        true
+                    }
+                    android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                        controller.play(); isPlaying = true; noteChromeInteraction(); true
+                    }
+                    android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                        controller.pause(); isPlaying = false; noteChromeInteraction(); true
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                    android.view.KeyEvent.KEYCODE_ENTER,
+                    -> {
+                        if (!chromeVisible && repeat == 0) {
+                            noteChromeInteraction()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_UP,
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+                    -> {
+                        if (!chromeVisible) {
+                            noteChromeInteraction()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    else -> false
+                }
+            }
+    } else {
+        Modifier
+    }
 
     DisposableEffect(url) {
         if (url.isNotBlank()) {
@@ -253,6 +295,7 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CircleControl(
+                    tvFocus = isTelevision,
                     onClick = onClose,
                     contentDescription = "Exit player",
                     size = 44.dp,
@@ -278,6 +321,7 @@ fun PlayerScreen(
                         currentGameId = currentGameId,
                         favoriteTeamIds = favoriteTeamIds,
                         compact = true,
+                        tvFocus = isTelevision,
                         onGameTap = { game ->
                             noteChromeInteraction()
                             onTickerGame(game)
@@ -293,6 +337,7 @@ fun PlayerScreen(
                 if (chromeVisible) {
                     Chip(text = engineLabel.substringBefore(" ·").ifBlank { "VLC" }, filled = false)
                     CircleControl(
+                        tvFocus = isTelevision,
                         onClick = onClose,
                         contentDescription = "Close player",
                         size = 40.dp,
@@ -333,6 +378,7 @@ fun PlayerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         CircleControl(
+                            tvFocus = isTelevision,
                             onClick = {
                                 noteChromeInteraction()
                                 onPopOut()
@@ -350,6 +396,7 @@ fun PlayerScreen(
                         // Same sports control — cycles Off → Fade → Pin; label shows mode
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircleControl(
+                                tvFocus = isTelevision,
                                 onClick = {
                                     noteChromeInteraction()
                                     onToggleScoresTicker()
@@ -382,6 +429,7 @@ fun PlayerScreen(
                             )
                         }
                         CircleControl(
+                            tvFocus = isTelevision,
                             onClick = {
                                 noteChromeInteraction()
                                 controller.toggleMute()
@@ -413,6 +461,7 @@ fun PlayerScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircleControl(
+                    tvFocus = isTelevision,
                     onClick = {
                         noteChromeInteraction()
                         onReplay()
@@ -430,6 +479,7 @@ fun PlayerScreen(
                     )
                 }
                 CircleControl(
+                    tvFocus = isTelevision,
                     onClick = {
                         noteChromeInteraction()
                         controller.togglePlayPause()
@@ -522,11 +572,13 @@ private fun CircleControl(
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 48.dp,
     background: Color = Color.Transparent,
+    tvFocus: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Box(
         modifier = modifier
             .size(size)
+            .tvFocusCircle(enabled = tvFocus)
             .clip(CircleShape)
             .background(background)
             .clickable(
@@ -568,6 +620,7 @@ private fun LiveScoresTicker(
     currentGameId: String?,
     favoriteTeamIds: Set<String> = emptySet(),
     compact: Boolean,
+    tvFocus: Boolean = false,
     onGameTap: (Game) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -627,6 +680,7 @@ private fun LiveScoresTicker(
             Row(
                 modifier = Modifier
                     .height(pillH)
+                    .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(10.dp), scaleFocused = 1.06f)
                     .clip(RoundedCornerShape(10.dp))
                     .background(
                         // Opaque pill only — row itself stays transparent

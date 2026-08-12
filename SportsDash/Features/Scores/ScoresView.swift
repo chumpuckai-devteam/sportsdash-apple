@@ -17,8 +17,14 @@ struct ScoresView: View {
                 .sportsNavTitleMode(large: true)
                 #endif
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        #if os(tvOS)
+                    #if os(tvOS)
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        SportsTVIconButton(
+                            systemName: "star",
+                            accessibilityLabelText: "Favorite teams"
+                        ) {
+                            showFavoritePicker = true
+                        }
                         if appModel.isLoadingScores {
                             ProgressView().controlSize(.small).tint(SportsColors.gold)
                         } else {
@@ -30,7 +36,9 @@ struct ScoresView: View {
                             }
                             .disabled(appModel.isLoadingScores)
                         }
-                        #else
+                    }
+                    #else
+                    ToolbarItem(placement: .primaryAction) {
                         Button {
                             Task { await appModel.refreshScores() }
                         } label: {
@@ -42,22 +50,22 @@ struct ScoresView: View {
                         }
                         .disabled(appModel.isLoadingScores)
                         .sportsToolbarControl()
-                        #endif
                     }
+                    #endif
                 }
                 .sheet(item: $selectedGame) { game in
                     GameDetailSheet(game: game)
                         .environmentObject(appModel)
                         .sportsSheetChrome()
                 }
-                #if os(iOS)
-                .navigationDestination(isPresented: $showLeaguesSettings) {
-                    ScoresSettingsView()
-                }
                 .sheet(isPresented: $showFavoritePicker) {
                     FavoriteTeamPickerView()
                         .environmentObject(appModel)
                         .sportsSheetChrome()
+                }
+                #if os(iOS)
+                .navigationDestination(isPresented: $showLeaguesSettings) {
+                    ScoresSettingsView()
                 }
                 #endif
         }
@@ -239,7 +247,9 @@ struct ScoresView: View {
         .padding(2)
         .background(SportsColors.panel, in: Circle())
     }
+    #endif
 
+    /// Shared iOS + tvOS — must not sit under `#if os(iOS)` (SportsDashTV compile break after 1.2.0 pin path).
     private func myGamesSection(_ games: [Game]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -255,24 +265,63 @@ struct ScoresView: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(SportsColors.live)
                 }
+                #if os(tvOS)
+                Spacer(minLength: 8)
+                Button {
+                    showFavoritePicker = true
+                } label: {
+                    SportsTVFocused { focused in
+                        HStack(spacing: 6) {
+                            Image(systemName: "star")
+                                .font(.caption.weight(.bold))
+                            Text("Edit favorites")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: SportsTVMetrics.minFocusSize * 0.72)
+                        .background {
+                            Capsule(style: .continuous)
+                                .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
+                        }
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4), lineWidth: focused ? 2 : 1)
+                        }
+                        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                        .animation(SportsTVFocusMotion.animation, value: focused)
+                    }
+                }
+                .sportsTVFocusClean()
+                .accessibilityLabel("Edit favorite teams")
+                #endif
             }
             .padding(.horizontal, 10)
 
-            ForEach(games) { game in
-                GameScoreFocusRow(
-                    game: game,
-                    isFavorite: appModel.isFavorite(game),
-                    isAwayFavorite: appModel.isTeamFavorite(game.away.id),
-                    isHomeFavorite: appModel.isTeamFavorite(game.home.id),
-                    onSelect: { selectedGame = game },
-                    onToggleAwayFavorite: { appModel.toggleFavorite(team: game.away) },
-                    onToggleHomeFavorite: { appModel.toggleFavorite(team: game.home) }
-                )
-                .padding(.horizontal, 10)
+            VStack(spacing: 10) {
+                ForEach(games) { game in
+                    GameScoreFocusRow(
+                        game: game,
+                        isFavorite: appModel.isFavorite(game),
+                        isAwayFavorite: appModel.isTeamFavorite(game.away.id),
+                        isHomeFavorite: appModel.isTeamFavorite(game.home.id),
+                        onSelect: { selectedGame = game },
+                        onToggleAwayFavorite: { appModel.toggleFavorite(team: game.away) },
+                        onToggleHomeFavorite: { appModel.toggleFavorite(team: game.home) }
+                    )
+                }
             }
+            #if os(tvOS)
+            .frame(maxWidth: SportsTVMetrics.scoreCardMaxWidth)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
+            .focusSection()
+            #else
+            .padding(.horizontal, 10)
+            #endif
         }
     }
-    #endif
 
     /// Always-visible: leagues (truncated) · Updated time + Edit leagues (S-UX.P0.2).
     private var scoresContextStrip: some View {

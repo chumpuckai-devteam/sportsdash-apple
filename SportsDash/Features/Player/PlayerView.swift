@@ -238,81 +238,8 @@ struct PlayerView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Single style of circle controls — scrollable horizontally if needed
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    chromeIconButton(systemName: playback.isPlaying ? "pause.fill" : "play.fill") {
-                        playback.togglePlayPause()
-                        scheduleChromeHide()
-                    }
-                    chromeIconButton(systemName: "dot.radiowaves.left.and.right") {
-                        playback.jumpToLive()
-                        scheduleChromeHide()
-                    }
-                    chromeIconButton(systemName: "rectangle.inset.filled.and.person.filled") {
-                        popOutToFloatingPlayer()
-                    }
-                    chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
-                        playback.toggleMute()
-                        scheduleChromeHide()
-                    }
-                    chromeIconButton(systemName: "aspectratio") {
-                        cycleAspect()
-                        scheduleChromeHide()
-                    }
-                    // Same sports button — 3-way: Off → Fade → Pin; label shows mode
-                    Button {
-                        var prefs = appModel.playerPrefs
-                        prefs.scoresTickerMode = prefs.scoresTickerMode.next()
-                        appModel.setPlayerPrefs(prefs)
-                        scheduleChromeHide()
-                    } label: {
-                        VStack(spacing: 2) {
-                            Image(systemName: tickerMode == .off ? "sportscourt" : "sportscourt.fill")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(tickerMode == .off ? Color.white : SportsColors.voidBlack)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Circle())
-                                .background {
-                                    Circle().fill(tickerButtonFill)
-                                }
-                                .sportsGlass(in: Circle())
-                            Text(tickerMode.shortLabel)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(tickerMode == .off ? Color.white.opacity(0.85) : SportsColors.gold)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(tickerMode.accessibilityLabel)
-                    .accessibilityHint("Cycles off, fade with controls, always on")
-                    chromeIconButton(systemName: "list.bullet") {
-                        showStreamSheet = true
-                    }
-                    #if os(iOS)
-                    // Match chromeIconButton glass circle
-                    AirPlayRoutePicker()
-                        .frame(width: 28, height: 28)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                        .sportsGlass(in: Circle())
-                        .accessibilityLabel("AirPlay")
-                    #endif
-                    chromeIconButton(systemName: "captions.bubble") {
-                        playback.cycleSubtitleTrack()
-                        scheduleChromeHide()
-                    }
-                    chromeIconButton(systemName: "ellipsis") {
-                        showMoreMenu = true
-                    }
-                    Text(engineChip)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.12), in: Capsule())
-                }
-                .padding(.horizontal, 4)
-            }
+            // Circle controls — iOS: horizontal scroll; tvOS: plain HStack (ScrollView eats focus).
+            playerChromeControlsRow
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -340,26 +267,155 @@ struct PlayerView: View {
             .background(color, in: Capsule(style: .continuous))
     }
 
-    /// Circular floating control — Liquid Glass on iOS 26+, material fallback earlier.
+    /// Bottom control strip — iOS scrolls; tvOS plain HStack + focusSection (ScrollView eats D-pad).
+    @ViewBuilder
+    private var playerChromeControlsRow: some View {
+        let row = HStack(spacing: 12) {
+            chromeIconButton(systemName: playback.isPlaying ? "pause.fill" : "play.fill") {
+                playback.togglePlayPause()
+                scheduleChromeHide()
+            }
+            chromeIconButton(systemName: "dot.radiowaves.left.and.right") {
+                playback.jumpToLive()
+                scheduleChromeHide()
+            }
+            chromeIconButton(systemName: "rectangle.inset.filled.and.person.filled") {
+                popOutToFloatingPlayer()
+            }
+            chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
+                playback.toggleMute()
+                scheduleChromeHide()
+            }
+            chromeIconButton(systemName: "aspectratio") {
+                cycleAspect()
+                scheduleChromeHide()
+            }
+            Button {
+                var prefs = appModel.playerPrefs
+                prefs.scoresTickerMode = prefs.scoresTickerMode.next()
+                appModel.setPlayerPrefs(prefs)
+                scheduleChromeHide()
+            } label: {
+                #if os(tvOS)
+                SportsTVFocused { focused in
+                    tickerModeLabel(focused: focused)
+                }
+                #else
+                tickerModeLabel(focused: false)
+                #endif
+            }
+            #if os(tvOS)
+            .sportsTVFocusClean()
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .accessibilityLabel(tickerMode.accessibilityLabel)
+            .accessibilityHint("Cycles off, fade with controls, always on")
+            chromeIconButton(systemName: "list.bullet") {
+                showStreamSheet = true
+            }
+            #if os(iOS)
+            AirPlayRoutePicker()
+                .frame(width: 28, height: 28)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .sportsGlass(in: Circle())
+                .accessibilityLabel("AirPlay")
+            #endif
+            chromeIconButton(systemName: "captions.bubble") {
+                playback.cycleSubtitleTrack()
+                scheduleChromeHide()
+            }
+            chromeIconButton(systemName: "ellipsis") {
+                showMoreMenu = true
+            }
+            Text(engineChip)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.12), in: Capsule())
+        }
+        .padding(.horizontal, 4)
+
+        #if os(tvOS)
+        row.focusSection()
+        #else
+        ScrollView(.horizontal, showsIndicators: false) {
+            row
+        }
+        #endif
+    }
+
+    private func tickerModeLabel(focused: Bool) -> some View {
+        VStack(spacing: 2) {
+            Image(systemName: tickerMode == .off ? "sportscourt" : "sportscourt.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(
+                    focused
+                        ? SportsColors.voidBlack
+                        : (tickerMode == .off ? Color.white : SportsColors.voidBlack)
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .background {
+                    Circle().fill(focused ? SportsColors.gold : tickerButtonFill)
+                }
+                #if os(iOS)
+                .sportsGlass(in: Circle())
+                #endif
+            Text(tickerMode.shortLabel)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(
+                    focused
+                        ? SportsColors.gold
+                        : (tickerMode == .off ? Color.white.opacity(0.85) : SportsColors.gold)
+                )
+        }
+    }
+
+    /// Circular floating control — Liquid Glass on iOS 26+, S-TV.1 gold focus on tvOS.
     private func chromeIconButton(
         systemName: String,
         accessibilityLabel: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
+            #if os(tvOS)
+            SportsTVFocused { focused in
+                Image(systemName: systemName)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(focused ? SportsColors.voidBlack : .white)
+                    .frame(width: SportsTVMetrics.minFocusSize, height: SportsTVMetrics.minFocusSize)
+                    .contentShape(Circle())
+                    .background {
+                        Circle().fill(focused ? SportsColors.gold : Color.white.opacity(0.14))
+                    }
+                    .overlay {
+                        Circle().stroke(
+                            focused ? SportsColors.goldDim : Color.white.opacity(0.25),
+                            lineWidth: focused ? 2 : 1
+                        )
+                    }
+                    .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+                    .animation(SportsTVFocusMotion.animation, value: focused)
+            }
+            #else
             Image(systemName: systemName)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
                 .sportsGlass(in: Circle())
+            #endif
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel ?? chromeIconAccessibilityLabel(for: systemName))
-        .accessibilityAddTraits(.isButton)
         #if os(tvOS)
         .sportsTVFocusClean()
+        #else
+        .buttonStyle(.plain)
         #endif
+        .accessibilityLabel(accessibilityLabel ?? chromeIconAccessibilityLabel(for: systemName))
+        .accessibilityAddTraits(.isButton)
     }
 
     private func chromeIconAccessibilityLabel(for systemName: String) -> String {
