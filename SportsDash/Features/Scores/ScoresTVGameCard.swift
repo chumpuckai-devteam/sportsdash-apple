@@ -8,8 +8,11 @@ struct ScoresTVGameCard: View {
     var isFavoriteMatch: Bool = false
     var onSelect: () -> Void
 
-    private let cardWidth: CGFloat = 340
-    private let cardHeight: CGFloat = 200
+    /// Wide enough for logos + fixed center WATCH band + scores.
+    private let cardWidth: CGFloat = 400
+    private let cardHeight: CGFloat = 228
+    /// Dedicated center column — never squeeze WATCH into a vertical stack of letters.
+    private let centerBand: CGFloat = 128
 
     var body: some View {
         Button(action: onSelect) {
@@ -26,26 +29,40 @@ struct ScoresTVGameCard: View {
         "\(game.away.rowLabel) \(game.away.displayScore) at \(game.home.rowLabel) \(game.home.displayScore). \(game.statusLine)"
     }
 
+    private var showScores: Bool { game.isLive || game.isFinal }
+
     private func cardChrome(focused: Bool) -> some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                teamBlock(game.away, score: game.isLive || game.isFinal ? game.away.displayScore : nil)
-                Spacer(minLength: 4)
-                VStack(spacing: 6) {
-                    Text(game.statusLine)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(game.isLive ? SportsColors.live : SportsColors.muted)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Text("WATCH")
-                        .font(.caption2.weight(.black))
-                        .foregroundStyle(SportsColors.voidBlack)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(SportsColors.gold, in: Capsule())
+        VStack(spacing: 12) {
+            // Top: teams + center status/WATCH (fixed widths so WATCH never collapses)
+            HStack(alignment: .top, spacing: 10) {
+                teamColumn(game.away)
+                    .frame(maxWidth: .infinity)
+
+                centerStatusBand
+                    .frame(width: centerBand)
+
+                teamColumn(game.home)
+                    .frame(maxWidth: .infinity)
+            }
+
+            // Scores row — full breathing room under logos (not jammed in center)
+            if showScores {
+                HStack {
+                    Text(game.away.displayScore)
+                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(SportsColors.text)
+                        .frame(maxWidth: .infinity)
+                    Text("–")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(SportsColors.muted)
+                    Text(game.home.displayScore)
+                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(SportsColors.text)
+                        .frame(maxWidth: .infinity)
                 }
-                Spacer(minLength: 4)
-                teamBlock(game.home, score: game.isLive || game.isFinal ? game.home.displayScore : nil)
+                .padding(.horizontal, 8)
             }
 
             Text(game.matchupLabel)
@@ -53,7 +70,8 @@ struct ScoresTVGameCard: View {
                 .foregroundStyle(SportsColors.muted)
                 .lineLimit(1)
         }
-        .padding(16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
         .frame(width: cardWidth, height: cardHeight)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -71,35 +89,51 @@ struct ScoresTVGameCard: View {
                 Image(systemName: "star.fill")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(SportsColors.gold)
-                    .padding(10)
+                    .padding(12)
             }
         }
-        .scaleEffect(focused ? 1.06 : 1.0)
+        .scaleEffect(focused ? 1.05 : 1.0)
         .animation(SportsTVFocusMotion.animation, value: focused)
         .shadow(color: focused ? SportsColors.gold.opacity(0.35) : .clear, radius: 18, y: 8)
     }
 
-    private func teamBlock(_ team: TeamInfo, score: String?) -> some View {
-        VStack(spacing: 6) {
+    /// Status + WATCH with guaranteed horizontal room.
+    private var centerStatusBand: some View {
+        VStack(spacing: 10) {
+            Text(game.statusLine)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(game.isLive ? SportsColors.live : SportsColors.muted)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
+
+            Text("WATCH")
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(SportsColors.voidBlack)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(SportsColors.gold, in: Capsule(style: .continuous))
+                .fixedSize(horizontal: true, vertical: true)
+        }
+        .frame(width: centerBand)
+    }
+
+    private func teamColumn(_ team: TeamInfo) -> some View {
+        VStack(spacing: 8) {
             teamLogo(team)
             Text(team.rowLabel)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(SportsColors.text)
                 .lineLimit(1)
-                .frame(maxWidth: 110)
-            if let score {
-                Text(score)
-                    .font(.title.weight(.heavy))
-                    .foregroundStyle(SportsColors.text)
-                    .monospacedDigit()
-            }
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity)
         }
-        .frame(minWidth: 100)
     }
 
     @ViewBuilder
     private func teamLogo(_ team: TeamInfo) -> some View {
-        let size: CGFloat = 52
+        let size: CGFloat = 56
         if let urlStr = team.logoURL, let url = URL(string: urlStr) {
             AsyncImage(url: url) { phase in
                 switch phase {
@@ -153,7 +187,7 @@ struct ScoresTVRail: View {
             .padding(.horizontal, 48)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 22) {
+                LazyHStack(spacing: 24) {
                     ForEach(games) { game in
                         ScoresTVGameCard(
                             game: game,
@@ -164,7 +198,7 @@ struct ScoresTVRail: View {
                     }
                 }
                 .padding(.horizontal, 48)
-                .padding(.vertical, 12)
+                .padding(.vertical, 14)
             }
             .focusSection()
         }

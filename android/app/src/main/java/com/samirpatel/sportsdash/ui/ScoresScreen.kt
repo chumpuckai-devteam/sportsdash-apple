@@ -1286,8 +1286,8 @@ private fun ScoresTVGameCard(
             color = if (isFavoriteMatch) Gold.copy(alpha = 0.45f) else Muted.copy(alpha = 0.25f),
         ),
         modifier = Modifier
-            .width(320.dp)
-            .height(188.dp)
+            .width(380.dp)
+            .height(210.dp)
             .tvFocusRing(shape = RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics {
@@ -1325,12 +1325,14 @@ private fun ScoresTVGameCard(
                         Text(
                             text = "WATCH",
                             color = VoidBlack,
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(Gold)
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
                     ScoresTVTeamBlock(
