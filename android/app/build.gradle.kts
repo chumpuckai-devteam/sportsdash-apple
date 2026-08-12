@@ -13,13 +13,14 @@ android {
         minSdk = 26
         // 34 sideloads more predictably on some Samsung One UI builds than 35
         targetSdk = 34
-        versionCode = 26
-        versionName = "1.1.19-goal-parity"
+        versionCode = 27
+        versionName = "1.2.0-tv"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         // Phone ABIs only — smaller universal APK for friends
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            // Phone + Android TV emulator (x86_64). Physical TV is usually arm64.
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
     }
 

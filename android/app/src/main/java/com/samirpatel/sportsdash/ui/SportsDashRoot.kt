@@ -50,7 +50,10 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SportsDashRoot(vm: AppViewModel) {
+fun SportsDashRoot(
+    vm: AppViewModel,
+    isTelevision: Boolean = false,
+) {
     val state by vm.state.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
 
@@ -95,6 +98,8 @@ fun SportsDashRoot(vm: AppViewModel) {
 
     val landscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Android TV is always "leanback landscape" — keep shell chrome for D-pad nav.
+    val hideShellChrome = landscape && !isTelevision
 
     val navColors = NavigationBarItemDefaults.colors(
         selectedIconColor = Gold,
@@ -110,10 +115,14 @@ fun SportsDashRoot(vm: AppViewModel) {
         containerColor = VoidBlack,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (!landscape) {
+            if (!hideShellChrome) {
                 TopAppBar(
                     title = {
-                        Text("SportsDash", fontWeight = FontWeight.Bold, color = Gold)
+                        Text(
+                            if (isTelevision) "SportsDash TV" else "SportsDash",
+                            fontWeight = FontWeight.Bold,
+                            color = Gold,
+                        )
                     },
                     actions = {
                         IconButton(
@@ -139,7 +148,7 @@ fun SportsDashRoot(vm: AppViewModel) {
             }
         },
         bottomBar = {
-            if (!landscape) {
+            if (!hideShellChrome) {
                 NavigationBar(
                     containerColor = Panel,
                     windowInsets = WindowInsets.safeDrawing,
@@ -172,10 +181,10 @@ fun SportsDashRoot(vm: AppViewModel) {
         Column(
             modifier = Modifier
                 .padding(padding)
-                .then(if (landscape) Modifier.statusBarsPadding() else Modifier)
+                .then(if (hideShellChrome) Modifier.statusBarsPadding() else Modifier)
                 .fillMaxSize(),
         ) {
-            if (landscape) {
+            if (hideShellChrome) {
                 LandscapeTabStrip(tab = tab, onSelect = { tab = it })
             }
             Box(
@@ -187,13 +196,13 @@ fun SportsDashRoot(vm: AppViewModel) {
                     0 -> ScoresScreen(
                         vm = vm,
                         state = state,
-                        landscape = landscape,
+                        landscape = landscape || isTelevision,
                         onGoSettings = { tab = 2 },
                     )
                     1 -> GuideScreen(
                         vm = vm,
                         state = state,
-                        landscape = landscape,
+                        landscape = landscape || isTelevision,
                         onGoSettings = { tab = 2 },
                         onGoScores = { tab = 0 },
                     )

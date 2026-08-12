@@ -49,3 +49,10 @@ open SportsDash.xcworkspace
 1. After upgrade, re-star teams if stars look odd (legacy bare ids migrate/drop).
 2. Buccaneers only → Rockies off; Rays@Rockies not in My Games.
 3. Landscape: tab strip still switches Scores/Guide/Settings.
+
+
+## TV goal (Samir unlocked)
+
+- Apple TV: compile gates + focus law documented; scheme SportsDashTV
+- Android TV: leanback launcher + banner + DeviceProfile + shell chrome kept on TV (`1.2.0-tv`)
+- See `docs/tv-surfaces.md`

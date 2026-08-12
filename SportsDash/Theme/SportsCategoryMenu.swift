@@ -39,8 +39,10 @@ struct SportsCategoryMenu: View {
                 options: options,
                 onDone: { showPicker = false }
             )
+            #if os(iOS)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+            #endif
         }
         #endif
     }

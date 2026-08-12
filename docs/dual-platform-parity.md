@@ -42,7 +42,7 @@
 | S-PARITY.C1 | Movies Now + rating chips | **Movies Now + OMDb/TMDB chips shipped** (keys in Settings) |
 | S-PARITY.C2 | iOS channel favorites | **shipped** (context menu / long-press + ★ Favorites group) |
 | S-PARITY.C3 | AirPlay / Cast | **blocked** Apple AV / Android Cast later |
-| S-PARITY.C4 | TV (tvOS / Android TV) | **blocked** separate track |
+| S-PARITY.C4 | TV (tvOS / Android TV) | **in progress** — tvOS dogfood path complete; Android TV leanback launcher started `1.2.0-tv` |
 
 ## Intentional remaining deltas
 

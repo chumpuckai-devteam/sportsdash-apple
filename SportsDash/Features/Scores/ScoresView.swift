@@ -182,7 +182,7 @@ struct ScoresView: View {
             .padding(.bottom, 28)
             .background(Color.clear)
         }
-        .scrollContentBackground(.hidden)
+        .sportsHideScrollBackground()
         .background(Color.clear)
         .sportsRefreshable { await appModel.refreshScores() }
     }
