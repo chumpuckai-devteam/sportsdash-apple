@@ -36,7 +36,7 @@ open SportsDash.xcworkspace
 | Scores | `myGamesSection` lived under `#if os(iOS)` but called from shared `scoresContent` → **SportsDashTV compile break** when My Games pin path is compiled | Shared `myGamesSection` + TV focus inset / `.focusSection()` |
 | Scores | Favorite picker sheet iOS-only; row star actions disabled on TV | Toolbar ★ + My Games “Edit favorites” → `FavoriteTeamPickerView` sheet |
 | Favorites sheet | League/team rows missing TV focus clean | `.sportsTVFocusClean()` on all picker steps |
-| Player | Horizontal `ScrollView` chrome + plain buttons → weak/no D-pad focus | TV: plain `HStack` + S-TV.1 gold focus on chrome icons + ticker |
+| Player | Horizontal `ScrollView` chrome + plain buttons → weak/no D-pad focus | Fixed: `fullScreenCover` + `sportsPlayerCover`. Plain `HStack` + focus helpers. |
 | CI | Only iOS scheme built | Add SportsDashTV simulator build |
 
 ### Device / sim dogfood checklist (Samir)
@@ -93,6 +93,7 @@ On **Apple TV** and **Android TV**, Scores uses horizontal card rails (not phone
 - **My Games** rail first (favorites)
 - One rail per sport section (emoji + title + LIVE badge)
 - Large focusable cards: logos, status, gold **WATCH**, scores when live/final
+- Recent polish: wider cards + fixed center band for status/WATCH to prevent truncation
 - D-pad: left/right within rail, up/down between rails
 
 Phone layout unchanged (dense one-row chrome + vertical list).

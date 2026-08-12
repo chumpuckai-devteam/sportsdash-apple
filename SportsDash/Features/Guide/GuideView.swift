@@ -245,26 +245,15 @@ struct GuideView: View {
             .sheet(isPresented: $showGuideSettings) {
                 guideSettingsSheet
             }
-            #if os(tvOS)
-            .fullScreenCover(isPresented: $showCategoryPicker) {
-                SportsCategoryPickerScreen(
-                    selection: $selectedGroup,
-                    options: groupNames,
-                    onDone: { showCategoryPicker = false }
-                )
-                .background(SportsColors.voidBlack.ignoresSafeArea())
-            }
-            #else
             .sheet(isPresented: $showCategoryPicker) {
                 SportsCategoryPickerScreen(
                     selection: $selectedGroup,
                     options: groupNames,
                     onDone: { showCategoryPicker = false }
                 )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .sportsLargePresentation()
+                .background(SportsColors.voidBlack.ignoresSafeArea())
             }
-            #endif
         }
     }
 

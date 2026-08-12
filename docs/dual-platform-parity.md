@@ -61,6 +61,24 @@
 - [ ] Clean names ON strips HD/4K noise  
 - [ ] EPG full download once; titles on timeline  
 
+
+
+## Player Engine Strategy (Intentional Delta)
+
+**Apple (iOS + tvOS)**
+- `PlaybackController` with auto selection:
+  - TS / unknown container → VLCKit (MobileVLCKit / TVVLCKit)
+  - Clean HLS → AVPlayer
+- User can override in Settings (primary + fallback toggle).
+- Floating mini-player supported on phone.
+
+**Android**
+- `VlcPlayerController` (libVLC-all 3.6.0)
+- Single engine for now (matches the "hard engine" family used on Apple).
+- TextureView + proper rebind on stream switch.
+
+This delta is accepted. Full dual-engine parity on Android is not currently planned.
+
 ## New features rule
 
-Do **not** start Cast, multiview, push, or TV work until Wave C intentional deltas are accepted or closed.
+TV work is active (unblocked). Cast / multiview remain blocked unless explicitly requested.

@@ -9,10 +9,10 @@ struct ScoresTVGameCard: View {
     var onSelect: () -> Void
 
     /// Wide enough for logos + fixed center WATCH band + scores.
-    private let cardWidth: CGFloat = 400
-    private let cardHeight: CGFloat = 228
+    private let cardWidth: CGFloat = 420
+    private let cardHeight: CGFloat = 236
     /// Dedicated center column — never squeeze WATCH into a vertical stack of letters.
-    private let centerBand: CGFloat = 128
+    private let centerBand: CGFloat = 140
 
     var body: some View {
         Button(action: onSelect) {
@@ -32,7 +32,7 @@ struct ScoresTVGameCard: View {
     private var showScores: Bool { game.isLive || game.isFinal }
 
     private func cardChrome(focused: Bool) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             // Top: teams + center status/WATCH (fixed widths so WATCH never collapses)
             HStack(alignment: .top, spacing: 10) {
                 teamColumn(game.away)
@@ -62,7 +62,8 @@ struct ScoresTVGameCard: View {
                         .foregroundStyle(SportsColors.text)
                         .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
             }
 
             Text(game.matchupLabel)

@@ -356,7 +356,10 @@ enum ChannelNameCleanup {
 enum DashboardFilter: String, CaseIterable, Identifiable, Sendable {
     /// Live / Upcoming / Final — no separate favorite-games filter (S-PARITY.FAV.3).
     /// Favorite **teams** pin first inside each filter (S-PARITY.FAV.2).
-    /// `.all` rawValue kept for prefs decode; product label is Final (Android parity).
+    /// `.all` rawValue kept for prefs decode; product label is "Final".
+    ///
+    /// Android side uses `ScoresFilter { LIVE, UPCOMING, FINAL }`.
+    /// Keep the mapping in sync in AppModel / AppViewModel filtering logic.
     case live, upcoming, all
 
     var id: String { rawValue }

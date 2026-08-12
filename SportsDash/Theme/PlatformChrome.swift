@@ -72,6 +72,28 @@ extension View {
     ) -> some View {
         self.fullScreenCover(item: item, content: content)
     }
+
+    /// Use for major sheets/pickers that should be large on phone but full on TV.
+    @ViewBuilder
+    func sportsLargePresentation() -> some View {
+        #if os(tvOS)
+        self
+        #else
+        self
+            .presentationDetents([.large, .medium])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
+        #endif
+    }
+
+    /// Returns true when running on tvOS (10-foot UI).
+    var isTelevision: Bool {
+        #if os(tvOS)
+        true
+        #else
+        false
+        #endif
+    }
 }
 
 enum SportsToolbarPlacement {

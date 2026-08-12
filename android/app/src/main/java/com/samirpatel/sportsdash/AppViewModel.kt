@@ -43,6 +43,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
+/**
+ * Scores filter for Android.
+ * iOS/Swift side uses `DashboardFilter` (.live, .upcoming, .all) with label "Final".
+ * Keep filtering behavior and UI labels in sync for parity.
+ */
 enum class ScoresFilter { LIVE, UPCOMING, FINAL }
 
 /** LIST = hour timeline (iOS Guide list); GRID = channel cards. */

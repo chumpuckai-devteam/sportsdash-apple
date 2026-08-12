@@ -29,7 +29,7 @@ settings:
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
     INFOPLIST_KEY_UIBackgroundModes: "audio"
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: "2H57Y8GR9D"
+    DEVELOPMENT_TEAM: "2H57Y8GR9D"  # Dogfood team ID. For release builds, prefer code signing config or CI secrets.
     # Required for CocoaPods embed of large VLC frameworks
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     STRING_CATALOG_GENERATE_SYMBOLS: YES
@@ -54,7 +54,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        DEVELOPMENT_TEAM: "2H57Y8GR9D"  # Dogfood team ID. For release builds, prefer code signing config or CI secrets.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
@@ -75,7 +75,7 @@ targets:
         INFOPLIST_KEY_CFBundleIconName: AppIcon
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        DEVELOPMENT_TEAM: "2H57Y8GR9D"  # Dogfood team ID. For release builds, prefer code signing config or CI secrets.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
