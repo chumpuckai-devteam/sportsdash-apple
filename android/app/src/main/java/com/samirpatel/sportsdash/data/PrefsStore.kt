@@ -38,6 +38,9 @@ class PrefsStore(private val context: Context) {
     private val keyFavoriteTeamsMeta = stringPreferencesKey("favorite_teams_meta_json")
     private val keyCleanNames = booleanPreferencesKey("clean_up_channel_names")
     private val keyMoviesNow = booleanPreferencesKey("guide_movies_now")
+    private val keyNotifications = booleanPreferencesKey("notify_enabled")
+    private val keyNotifyStarts = booleanPreferencesKey("notify_game_starts")
+    private val keyNotifyGoals = booleanPreferencesKey("notify_goals")
     private val keyChannelCache = stringPreferencesKey("channel_cache_json")
     private val keyCategoryOrder = stringPreferencesKey("category_order_json")
     private val keyOmdb = stringPreferencesKey("omdb_api_key")
@@ -91,6 +94,10 @@ class PrefsStore(private val context: Context) {
                 emptyList()
             }
         }
+
+    val notificationsEnabledFlow: Flow<Boolean> = context.dataStore.data.map { it[keyNotifications] ?: false }
+    val notifyGameStartsFlow: Flow<Boolean> = context.dataStore.data.map { it[keyNotifyStarts] ?: true }
+    val notifyGoalsFlow: Flow<Boolean> = context.dataStore.data.map { it[keyNotifyGoals] ?: true }
 
     val cleanUpNamesFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[keyCleanNames] ?: true
@@ -187,6 +194,16 @@ class PrefsStore(private val context: Context) {
             prefs[keyFavoriteTeamsMeta] = encodeFavoriteTeams(distinct)
             prefs[keyFavoriteTeams] = encodeIdSet(distinct.map { it.id }.toSet())
         }
+    }
+
+    suspend fun setNotificationsEnabled(v: Boolean) {
+        context.dataStore.edit { it[keyNotifications] = v }
+    }
+    suspend fun setNotifyGameStarts(v: Boolean) {
+        context.dataStore.edit { it[keyNotifyStarts] = v }
+    }
+    suspend fun setNotifyGoals(v: Boolean) {
+        context.dataStore.edit { it[keyNotifyGoals] = v }
     }
 
     suspend fun setCleanUpNames(enabled: Boolean) {

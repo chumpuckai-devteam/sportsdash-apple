@@ -84,6 +84,53 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle(isOn: PrefsBinding.field(appModel, get: { $0.notificationsEnabled }, set: { $0.notificationsEnabled = $1 })) {
+                        settingsRow(
+                            icon: "bell.fill",
+                            tint: SportsColors.gold,
+                            title: "Game alerts",
+                            subtitle: "Favorite teams only · start + goals"
+                        )
+                    }
+                    .listRowBackground(SportsColors.panel)
+                    .tint(SportsColors.gold)
+                    .onChange(of: appModel.playerPrefs.notificationsEnabled) { _, enabled in
+                        Task {
+                            if enabled {
+                                let ok = await GameNotificationService.shared.requestAuthorizationIfNeeded()
+                                if !ok {
+                                    var p = appModel.playerPrefs
+                                    p.notificationsEnabled = false
+                                    appModel.setPlayerPrefs(p)
+                                }
+                            } else {
+                                // Drop scheduled starts immediately (process also clears on next poll).
+                                await GameNotificationService.shared.process(
+                                    games: appModel.games,
+                                    favoriteTeamIds: appModel.favoriteTeamIds,
+                                    notifyStarts: false,
+                                    notifyGoals: false,
+                                    masterEnabled: false
+                                )
+                            }
+                        }
+                    }
+
+                    if appModel.playerPrefs.notificationsEnabled {
+                        Toggle(
+                            "Game starting soon",
+                            isOn: PrefsBinding.field(appModel, get: { $0.notifyGameStarts }, set: { $0.notifyGameStarts = $1 })
+                        )
+                        .listRowBackground(SportsColors.panel)
+                        .tint(SportsColors.gold)
+                        Toggle(
+                            "Goals / score changes",
+                            isOn: PrefsBinding.field(appModel, get: { $0.notifyGoals }, set: { $0.notifyGoals = $1 })
+                        )
+                        .listRowBackground(SportsColors.panel)
+                        .tint(SportsColors.gold)
+                    }
+
                     NavigationLink {
                         GeneralSettingsView()
                     } label: {
@@ -113,6 +160,8 @@ struct SettingsView: View {
                     .listRowBackground(SportsColors.panel)
                 } header: {
                     Text("App")
+                } footer: {
+                    Text("Game alerts are local only (no push server), favorite teams only, and off by default. Not a Sprint 1 release requirement.")
                 }
 
                 Section {

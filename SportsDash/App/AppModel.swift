@@ -211,12 +211,25 @@ final class AppModel: ObservableObject {
                     self.games = partial
                     self.lastUpdated = Date()
                     self.migrateLegacyFavoriteTeamIds(using: partial)
+                    await self.processGameNotifications(using: partial)
                 }
             }
         }
         games = result
         lastUpdated = Date()
         migrateLegacyFavoriteTeamIds(using: result)
+        await processGameNotifications(using: result)
+    }
+
+    private func processGameNotifications(using games: [Game]) async {
+        let p = playerPrefs
+        await GameNotificationService.shared.process(
+            games: games,
+            favoriteTeamIds: favoriteTeamIds,
+            notifyStarts: p.notifyGameStarts,
+            notifyGoals: p.notifyGoals,
+            masterEnabled: p.notificationsEnabled
+        )
     }
 
     private static func upcomingCount(_ games: [Game]) -> Int {

@@ -29,6 +29,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +53,9 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 
 @Composable
 fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
+    val notifPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* state flows from system */ }
     var mode by remember { mutableIntStateOf(0) }
     var name by remember { mutableStateOf("My IPTV") }
     var serverUrl by remember { mutableStateOf("") }
@@ -304,6 +312,75 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
                 color = Muted,
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Game alerts",
+                color = Gold,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Favorite teams only. Alerts when scores refresh (start + goals). No spam server.",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Panel)
+                    .clickable {
+                        val turningOn = !state.notificationsEnabled
+                        if (turningOn && Build.VERSION.SDK_INT >= 33) {
+                            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        vm.setNotificationsEnabled(turningOn)
+                    }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Enable alerts", color = TextPrimary, modifier = Modifier.weight(1f))
+                Text(
+                    text = if (state.notificationsEnabled) "ON" else "OFF",
+                    color = if (state.notificationsEnabled) Gold else Muted,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            if (state.notificationsEnabled) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Panel)
+                        .clickable { vm.setNotifyGameStarts(!state.notifyGameStarts) }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Game starting", color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(
+                        text = if (state.notifyGameStarts) "ON" else "OFF",
+                        color = if (state.notifyGameStarts) Gold else Muted,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Panel)
+                        .clickable { vm.setNotifyGoals(!state.notifyGoals) }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Goals / score changes", color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(
+                        text = if (state.notifyGoals) "ON" else "OFF",
+                        color = if (state.notifyGoals) Gold else Muted,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
         }
         item {
             Spacer(modifier = Modifier.height(12.dp))

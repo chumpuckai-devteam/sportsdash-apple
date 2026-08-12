@@ -1,5 +1,8 @@
 package com.samirpatel.sportsdash
 
+import android.app.Application
+import com.samirpatel.sportsdash.core.notifications.GameNotificationHelper
+
 import com.samirpatel.sportsdash.core.player.ScoresTickerMode
 
 import android.content.Context
@@ -107,6 +110,9 @@ data class AppUiState(
     val cleanUpNames: Boolean = true,
     /** Guide filter: movie-like now-playing only. */
     val moviesNow: Boolean = false,
+    val notificationsEnabled: Boolean = false,
+    val notifyGameStarts: Boolean = true,
+    val notifyGoals: Boolean = true,
 
     /**
      * Mini-player over tabs (iOS floating player).
@@ -123,6 +129,7 @@ data class AppUiState(
 
 class AppViewModel(
     private val prefs: PrefsStore,
+    private val appContext: android.content.Context,
     private val iptv: IptvRepository = IptvRepository(),
     private val sports: SportsRepository = SportsRepository(),
     private val matching: MatchingService = MatchingService(),
@@ -130,6 +137,7 @@ class AppViewModel(
     private val ratingsRepo: MovieRatingsRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AppUiState())
+    private val notifHelper = GameNotificationHelper(appContext.applicationContext)
     val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     private var omdbKey: String? = null
@@ -197,6 +205,21 @@ class AppViewModel(
         viewModelScope.launch {
             prefs.cleanUpNamesFlow.collect { on ->
                 _state.update { it.copy(cleanUpNames = on) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.notificationsEnabledFlow.collect { v ->
+                _state.update { it.copy(notificationsEnabled = v) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.notifyGameStartsFlow.collect { v ->
+                _state.update { it.copy(notifyGameStarts = v) }
+            }
+        }
+        viewModelScope.launch {
+            prefs.notifyGoalsFlow.collect { v ->
+                _state.update { it.copy(notifyGoals = v) }
             }
         }
         viewModelScope.launch {
@@ -508,6 +531,19 @@ class AppViewModel(
             .entries
             .sortedBy { it.key }
             .map { it.key to it.value }
+    }
+
+    fun setNotificationsEnabled(v: Boolean) {
+        _state.update { it.copy(notificationsEnabled = v) }
+        viewModelScope.launch { prefs.setNotificationsEnabled(v) }
+    }
+    fun setNotifyGameStarts(v: Boolean) {
+        _state.update { it.copy(notifyGameStarts = v) }
+        viewModelScope.launch { prefs.setNotifyGameStarts(v) }
+    }
+    fun setNotifyGoals(v: Boolean) {
+        _state.update { it.copy(notifyGoals = v) }
+        viewModelScope.launch { prefs.setNotifyGoals(v) }
     }
 
     fun setCleanUpNames(enabled: Boolean) {
@@ -930,6 +966,14 @@ class AppViewModel(
                         )
                     }
                     migrateLegacyFavoriteTeamIds(games)
+                    val s = _state.value
+                    notifHelper.process(
+                        games = games,
+                        favoriteTeamIds = s.favoriteTeamIds,
+                        masterEnabled = s.notificationsEnabled,
+                        notifyStarts = s.notifyGameStarts,
+                        notifyGoals = s.notifyGoals,
+                    )
                 }
                 .onFailure { e ->
                     _state.update {
@@ -1115,6 +1159,7 @@ class AppViewModel(
                     val ratingsCache = File(app.cacheDir, "ratings")
                     return AppViewModel(
                         prefs = PrefsStore(app),
+                        appContext = app,
                         epg = EpgRepository(cacheDir = epgCache),
                         ratingsRepo = MovieRatingsRepository(cacheDir = ratingsCache),
                     ) as T

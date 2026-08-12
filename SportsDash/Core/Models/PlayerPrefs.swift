@@ -231,12 +231,17 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
     var launchTab: LaunchTab = .scores
     /// Player scores ticker: off / fade with chrome / always on.
     var scoresTickerMode: ScoresTickerMode = .fade
+    /// Master switch for favorite-team game alerts.
+    var notificationsEnabled: Bool = false
+    var notifyGameStarts: Bool = true
+    var notifyGoals: Bool = true
 
     enum CodingKeys: String, CodingKey {
         case aspect, primaryPlayer, fallbackPlayers, bufferSeconds
         case adaptiveFrameRate, hardwareDecode, asynchronousDecompression
         case userAgent, preferredLiveFormat, playlistRefresh
         case theme, guideLayout, cleanUpNames, launchTab, scoresTickerMode
+        case notificationsEnabled, notifyGameStarts, notifyGoals
         case engine
     }
 
@@ -257,6 +262,9 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         cleanUpNames = try c.decodeIfPresent(Bool.self, forKey: .cleanUpNames) ?? true
         launchTab = try c.decodeIfPresent(LaunchTab.self, forKey: .launchTab) ?? .scores
         scoresTickerMode = try c.decodeIfPresent(ScoresTickerMode.self, forKey: .scoresTickerMode) ?? .fade
+        notificationsEnabled = try c.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? false
+        notifyGameStarts = try c.decodeIfPresent(Bool.self, forKey: .notifyGameStarts) ?? true
+        notifyGoals = try c.decodeIfPresent(Bool.self, forKey: .notifyGoals) ?? true
 
         // Decode as String so unknown/legacy values (vlc, auto) don't fail the whole prefs blob.
         if let raw = try c.decodeIfPresent(String.self, forKey: .primaryPlayer) {
@@ -309,6 +317,9 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
         try c.encode(cleanUpNames, forKey: .cleanUpNames)
         try c.encode(launchTab, forKey: .launchTab)
         try c.encode(scoresTickerMode, forKey: .scoresTickerMode)
+        try c.encode(notificationsEnabled, forKey: .notificationsEnabled)
+        try c.encode(notifyGameStarts, forKey: .notifyGameStarts)
+        try c.encode(notifyGoals, forKey: .notifyGoals)
     }
 
     /// Clamped buffer seconds for hard engine caching.
