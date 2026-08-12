@@ -293,8 +293,10 @@ class PrefsStore(private val context: Context) {
     }
 
     private fun writePlaylistBackups(encoded: String) {
+        // commit() so creds are on disk before process death (apply is fire-and-forget).
         runCatching {
-            backupPrefs.edit().putString(BACKUP_PLAYLIST_KEY, encoded).apply()
+            val ok = backupPrefs.edit().putString(BACKUP_PLAYLIST_KEY, encoded).commit()
+            if (!ok) Log.w(TAG, "SP commit failed playlist backup")
         }.onFailure { Log.w(TAG, "Failed SharedPreferences playlist backup", it) }
         runCatching {
             val tmp = File(context.filesDir, "$PLAYLIST_BACKUP_NAME.tmp")

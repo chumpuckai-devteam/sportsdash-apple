@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -58,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -931,103 +933,159 @@ private fun GameRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(
-                if (isFavoriteMatch) Gold.copy(alpha = 0.10f) else Color.Transparent,
-            )
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(14.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TeamCell(team = game.away, modifier = Modifier.weight(1f), alignEnd = false, starred = isAwayFavorite)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            ) {
-                Text(
-                    text = game.statusLine,
-                    color = if (game.isLive) LiveMint else Muted,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+    val a11y = buildString {
+        append(game.away.rowLabel)
+        append(" ")
+        if (game.isLive || game.isFinal) append(game.away.displayScore)
+        append(" at ")
+        append(game.home.rowLabel)
+        append(" ")
+        if (game.isLive || game.isFinal) append(game.home.displayScore)
+        append(". ")
+        append(game.statusLine)
+        append(". Double tap to watch.")
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isFavoriteMatch) Gold.copy(alpha = 0.08f) else Color.Transparent,
                 )
-                if (game.isLive || game.isFinal) {
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = a11y
+                }
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeamSide(
+                    team = game.away,
+                    score = if (game.isLive || game.isFinal) game.away.displayScore else null,
+                    starred = isAwayFavorite,
+                    alignEnd = false,
+                    modifier = Modifier.weight(1f),
+                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .widthIn(min = 72.dp),
+                ) {
                     Text(
-                        text = "${game.away.displayScore}  -  ${game.home.displayScore}",
-                        color = TextPrimary,
+                        text = "WATCH",
+                        color = VoidBlack,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp,
+                        modifier = Modifier
+                            .background(Gold, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                    Text(
+                        text = game.statusLine,
+                        color = if (game.isLive) LiveMint else Muted,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-                // Gold WATCH on all watchable rows (live/final/upcoming)
-                Text(
-                    text = "WATCH",
-                    color = VoidBlack,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                        .background(Gold, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                TeamSide(
+                    team = game.home,
+                    score = if (game.isLive || game.isFinal) game.home.displayScore else null,
+                    starred = isHomeFavorite,
+                    alignEnd = true,
+                    modifier = Modifier.weight(1f),
                 )
             }
-            TeamCell(team = game.home, modifier = Modifier.weight(1f), alignEnd = true, starred = isHomeFavorite)
         }
         if (game.broadcasts.isNotEmpty()) {
             Text(
                 text = game.broadcasts.take(3).joinToString(" · "),
                 color = Muted,
                 fontSize = 11.sp,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
             )
         }
     }
 }
 
+/** iOS-style side: outside-corner star + logo + short label + large score. */
 @Composable
-private fun TeamCell(
+private fun TeamSide(
     team: TeamInfo,
-    modifier: Modifier,
+    score: String?,
+    starred: Boolean,
     alignEnd: Boolean,
-    starred: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
-    ) {
-        if (!alignEnd) {
-            TeamLogo(url = team.logoUrl, abbrev = team.abbreviation)
-            Spacer(modifier = Modifier.width(8.dp))
-        }
-        Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (starred && alignEnd) {
-                    Text("★", color = Gold, fontSize = 11.sp, modifier = Modifier.padding(end = 2.dp))
+    Box(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
+        ) {
+            if (!alignEnd) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 34.dp)
+                    Text(
+                        text = team.rowLabel,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 72.dp),
+                    )
                 }
-                Text(
-                    text = team.rowLabel,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (starred && !alignEnd) {
-                    Text("★", color = Gold, fontSize = 11.sp, modifier = Modifier.padding(start = 2.dp))
+                if (score != null) {
+                    Text(
+                        text = score,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+            } else {
+                if (score != null) {
+                    Text(
+                        text = score,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TeamLogo(url = team.logoUrl, abbrev = team.abbreviation, size = 34.dp)
+                    Text(
+                        text = team.rowLabel,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 72.dp),
+                    )
                 }
             }
-            Text(text = team.abbreviation, color = Muted, fontSize = 11.sp)
         }
-        if (alignEnd) {
-            Spacer(modifier = Modifier.width(8.dp))
-            TeamLogo(url = team.logoUrl, abbrev = team.abbreviation)
+        if (starred) {
+            Text(
+                text = "★",
+                color = Gold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(if (alignEnd) Alignment.TopEnd else Alignment.TopStart),
+            )
         }
     }
 }

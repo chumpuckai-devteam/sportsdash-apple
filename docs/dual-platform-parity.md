@@ -1,6 +1,6 @@
 # Dual-platform parity matrix (baseline freeze)
 
-**Repo:** `sportsdash-apple` · **Board:** `sportsdash` · **Updated:** 2026-08 parity sprint  
+**Repo:** `sportsdash-apple` · **Board:** `sportsdash` · **Updated:** 2026-08 goal run (league-scoped fav ids + row parity + a11y)  
 **Law:** Ship Android + iOS to the **same product story** before net-new features.
 
 ## Shared baseline (both platforms)

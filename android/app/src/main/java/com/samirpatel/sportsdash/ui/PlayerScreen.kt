@@ -601,6 +601,21 @@ private fun LiveScoresTicker(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) { onGameTap(game) }
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = buildString {
+                            append(game.away.rowLabel)
+                            append(' ')
+                            append(game.away.displayScore)
+                            append(", ")
+                            append(game.home.rowLabel)
+                            append(' ')
+                            append(game.home.displayScore)
+                            append(", ")
+                            append(game.statusLine)
+                            if (current) append(", current game")
+                            append(". Open stream options")
+                        }
+                    }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -632,7 +647,7 @@ private fun TickerTeamLogo(url: String?, abbrev: String) {
     if (!url.isNullOrBlank()) {
         AsyncImage(
             model = url,
-            contentDescription = abbrev,
+            contentDescription = null,
             modifier = Modifier
                 .size(18.dp)
                 .clip(CircleShape),

@@ -154,7 +154,10 @@ object ScoreboardGrouping {
         else -> "🏟️"
     }
 
-    fun sportSections(games: List<Game>): List<SportScoreSection> {
+    fun sportSections(
+        games: List<Game>,
+        favoriteTeamIds: Set<String> = emptySet(),
+    ): List<SportScoreSection> {
         if (games.isEmpty()) return emptyList()
         val buckets = games.groupBy { it.league }
         val shelves = ArrayList<LeagueShelf>()
@@ -162,7 +165,13 @@ object ScoreboardGrouping {
             val list = buckets[league] ?: continue
             if (list.isEmpty()) continue
             val sorted = list.sortedWith(
-                compareByDescending<Game> { it.isLive }.thenBy { it.startTimeMs },
+                compareBy<Game> { g ->
+                    if (favoriteTeamIds.isNotEmpty() &&
+                        (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds)
+                    ) 0 else 1
+                }
+                    .thenByDescending { it.isLive }
+                    .thenBy { it.startTimeMs },
             )
             shelves.add(
                 LeagueShelf(
@@ -177,7 +186,13 @@ object ScoreboardGrouping {
         for ((league, list) in buckets) {
             if (shelves.any { it.key == league.id } || list.isEmpty()) continue
             val sorted = list.sortedWith(
-                compareByDescending<Game> { it.isLive }.thenBy { it.startTimeMs },
+                compareBy<Game> { g ->
+                    if (favoriteTeamIds.isNotEmpty() &&
+                        (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds)
+                    ) 0 else 1
+                }
+                    .thenByDescending { it.isLive }
+                    .thenBy { it.startTimeMs },
             )
             shelves.add(
                 LeagueShelf(

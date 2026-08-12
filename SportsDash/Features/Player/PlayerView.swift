@@ -338,7 +338,11 @@ struct PlayerView: View {
     }
 
     /// Circular floating control — Liquid Glass on iOS 26+, material fallback earlier.
-    private func chromeIconButton(systemName: String, action: @escaping () -> Void) -> some View {
+    private func chromeIconButton(
+        systemName: String,
+        accessibilityLabel: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.body.weight(.semibold))
@@ -348,7 +352,26 @@ struct PlayerView: View {
                 .sportsGlass(in: Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel ?? chromeIconAccessibilityLabel(for: systemName))
         .accessibilityAddTraits(.isButton)
+    }
+
+    private func chromeIconAccessibilityLabel(for systemName: String) -> String {
+        switch systemName {
+        case "chevron.left": return "Back"
+        case "xmark": return "Close player"
+        case "play.fill": return "Play"
+        case "pause.fill": return "Pause"
+        case "dot.radiowaves.left.and.right": return "Go live"
+        case "rectangle.inset.filled.and.person.filled": return "Pop out player"
+        case "speaker.slash.fill": return "Unmute"
+        case "speaker.wave.2.fill": return "Mute"
+        case "aspectratio": return "Change aspect ratio"
+        case "list.bullet": return "Stream options"
+        case "captions.bubble": return "Change subtitles"
+        case "ellipsis": return "More player options"
+        default: return "Player control"
+        }
     }
 
     private func utilityButton(systemName: String, tint: Color, action: @escaping () -> Void) -> some View {

@@ -53,6 +53,19 @@ File: **`app-debug.apk`** (debug-signed — fine for dogfood, not Play Store)
 - AirDrop / Drive / Dropbox — send the **`.apk` file only** (not a zip of the whole project).
 - Prefer **Google Drive “anyone with link”** over SMS (SMS can corrupt large APKs).
 
+## Updating (keep Xtream login) — read this first
+
+**Do not uninstall SportsDash to install a newer dogfood APK.**
+
+| Path | Xtream / M3U login |
+|------|--------------------|
+| **Install over** (open new APK while old app is still installed, or `adb install -r`) | **Kept** — same `applicationId` `com.samirpatel.sportsdash` |
+| **Uninstall → install** | **Wiped** — Android deletes app private storage (DataStore + backups) |
+
+Friends who uninstall and reinstall will always need to re-enter credentials. That is normal Android behavior, not a regression.
+
+Details: [`../docs/android-login-persist.md`](../docs/android-login-persist.md)
+
 ## Install on Samsung — “App not installed”
 
 Do these **in order**. Step 1 fixes most modern Galaxy phones.
@@ -72,9 +85,11 @@ Samsung blocks many sideloaded APKs with a generic **App not installed** when th
 If a shield notification appears: **More details → Install anyway**  
 (or Play Store → profile → Play Protect → settings → briefly disable scanning)
 
-### 4. Remove any old SportsDash
+### 4. Prefer install-over (keep login)
 
-Long-press icon → Uninstall (or Settings → Apps → SportsDash → Uninstall)
+Leave the existing SportsDash app installed. Open the new `app-debug.apk` and choose **Update** / install.
+
+**Only uninstall** if install fails with signature mismatch (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) or a truly broken install — then you **will** need to re-enter Xtream.
 
 ### 5. Use a full APK (not a tiny file)
 
@@ -92,7 +107,7 @@ cd ~/agency/sportsdash-apple
 git pull origin main
 cd android
 ./gradlew :app:clean :app:assembleDebug
-adb uninstall com.samirpatel.sportsdash   # ok if it says not found
+# Install OVER the existing app (keeps login). Do NOT adb uninstall first.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -100,11 +115,11 @@ If it fails, `adb` prints a code like:
 
 | Code | Meaning |
 |------|---------|
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Uninstall old SportsDash first |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Different signing key — uninstall old app, then install (login lost) |
 | `INSTALL_FAILED_INVALID_APK` | Bad/corrupt file — rebuild + re-copy |
 | `INSTALL_FAILED_NO_MATCHING_ABIS` | Wrong CPU APK (rebuild after latest pull) |
 | `INSTALL_FAILED_USER_RESTRICTED` | Auto Blocker / unknown apps still on |
-| `INSTALL_FAILED_VERSION_DOWNGRADE` | Newer version already installed |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | Newer version already installed — ship a higher `versionCode` |
 
 Copy/paste that `INSTALL_FAILED_…` line back to me.
 
@@ -137,12 +152,14 @@ android/
 
 ## Playlist login persistence
 
-- Xtream host/user/password and M3U URL live in **DataStore** (`sportsdash_prefs`) and are dual-written to:
-  - **SharedPreferences** `sportsdash_secure_backup`
-  - **`filesDir/playlist_config_backup.json`**
-- **APK update-install** (same `applicationId` `com.samirpatel.sportsdash`) keeps private storage — login should load without re-entry.
+Full write-up: [`../docs/android-login-persist.md`](../docs/android-login-persist.md)
+
+- Xtream host/user/password and M3U URL live in **DataStore** (`sportsdash_prefs`) and are multi-written to:
+  - **SharedPreferences** `sportsdash_secure_backup` (sync `commit`)
+  - **`filesDir/playlist_config_backup.json`** (atomic rewrite)
+- **APK update-install** (same `applicationId` `com.samirpatel.sportsdash`, rising `versionCode`) keeps private storage — login loads without re-entry.
 - Settings shows saved host/user; **password field stays blank** meaning “keep existing” on Save.
-- **Uninstall** clears app private storage (DataStore + backups). Expected Android behavior.
+- **Uninstall** clears app private storage (DataStore + backups). Expected Android behavior — not fixed by dual-write.
 
 ## License
 

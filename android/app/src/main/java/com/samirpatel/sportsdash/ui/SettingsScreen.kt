@@ -54,21 +54,23 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var m3u by remember { mutableStateOf("") }
-    // Which playlist id we last copied into the form (re-hydrate when id changes).
-    var hydratedPlaylistId by remember { mutableStateOf<String?>(null) }
+    // Stable key for last form hydrate (id may be blank on very old saves).
+    var hydratedPlaylistKey by remember { mutableStateOf<String?>(null) }
 
-    // When playlist loads from disk (after update / cold start), fill the form once per id.
+    // When playlist loads from disk (after update / cold start), fill the form once per key.
     // Password stays blank intentionally — blank save keeps existing password.
     LaunchedEffect(state.playlist?.id, state.playlist?.host, state.playlist?.username, state.playlist?.m3uUrl) {
         val pl = state.playlist ?: return@LaunchedEffect
-        if (hydratedPlaylistId == pl.id) return@LaunchedEffect
+        val key = pl.id.takeIf { it.isNotBlank() }
+            ?: "${pl.type.name}|${pl.host}|${pl.username}|${pl.m3uUrl}"
+        if (hydratedPlaylistKey == key) return@LaunchedEffect
         name = pl.name.ifBlank { "My IPTV" }
         serverUrl = pl.host
         user = pl.username
         m3u = pl.m3uUrl
         mode = if (pl.type == PlaylistType.M3U) 1 else 0
         pass = ""
-        hydratedPlaylistId = pl.id
+        hydratedPlaylistKey = key
     }
 
     val fields = OutlinedTextFieldDefaults.colors(
@@ -105,6 +107,12 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
             Text(
                 text = "Paste your Xtream server URL (https://host:port) or full player_api link. " +
                     "libVLC hard engine — same family as iOS.",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = "Updates: install the new APK over this app — do not uninstall first, " +
+                    "or Android wipes your login.",
                 color = Muted,
                 style = MaterialTheme.typography.bodySmall,
             )

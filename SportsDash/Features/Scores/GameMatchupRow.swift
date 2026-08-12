@@ -324,7 +324,15 @@ struct GameScoreFocusRow: View {
         }
         #endif
         .compositingGroup()
+        .accessibilityLabel(scoreRowAccessibilityLabel)
         .accessibilityHint("Opens game details and streams. Long-press to favorite a team.")
+    }
+
+    private var scoreRowAccessibilityLabel: String {
+        if game.usesMatchupLayout {
+            return "\(game.away.rowLabel) \(game.away.displayScore), \(game.home.rowLabel) \(game.home.displayScore), \(game.statusLine). Watch"
+        }
+        return "\(game.eventName ?? game.league.label), \(game.statusLine). Watch"
     }
 
     @ViewBuilder
