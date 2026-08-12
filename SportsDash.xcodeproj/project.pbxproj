@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		296D8F7B6BC3412C851CEADC /* GameNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE73686544945F181E7CAC9 /* GameNotificationService.swift */; };
+		CDC307F5A9CC40F6AEABDBB2 /* GameNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE73686544945F181E7CAC9 /* GameNotificationService.swift */; };
 		9C62AB2248724C57AAC1A1C2 /* AVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */; };
 		BAB289F5ADFA47A080608610 /* AVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */; };
 		1DBB170F9EFA4ED28CED588F /* VLCPlayerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */; };
@@ -94,6 +96,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		4AE73686544945F181E7CAC9 /* GameNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameNotificationService.swift; sourceTree = "<group>"; };
 		1473811FF1054E36AE9F8913 /* AVPlayerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVPlayerEngine.swift; sourceTree = "<group>"; };
 		E5BC1B738FF941D2B409967E /* VLCPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VLCPlayerController.swift; sourceTree = "<group>"; };
 		3EFD94717FC24627A16029D9 /* StreamContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamContainer.swift; sourceTree = "<group>"; };
@@ -193,6 +196,7 @@
 			isa = PBXGroup;
 			children = (
 				5F4B40BC7655CA8A503E933B /* EpgService.swift */,
+				4AE73686544945F181E7CAC9 /* GameNotificationService.swift */,
 				471471EC528E70A5EA1F34F4 /* IptvService.swift */,
 				10AB69783C0F768691CA6E21 /* KeychainStore.swift */,
 				E7974E8727B3CE9311C7030D /* SportsAPI.swift */,
@@ -426,6 +430,7 @@
 				5312254B0F471BDB953A12F5 /* AppModel.swift in Sources */,
 				32761960E9FED5FC0E6B05A3 /* EpgProgram.swift in Sources */,
 				DB6463BD97C03A2EFD1710BC /* EpgService.swift in Sources */,
+				296D8F7B6BC3412C851CEADC /* GameNotificationService.swift in Sources */,
 				04EBC6E2BBAF08167B6CC401 /* FloatingPlayerView.swift in Sources */,
 				E3731096DEF391C521AA4BE3 /* Game.swift in Sources */,
 				E1GAMEROW01A55E7001C0DE02 /* GameCardView.swift in Sources */,
@@ -475,6 +480,7 @@
 				7B6153EEDD6FC35C0442BE8D /* AppModel.swift in Sources */,
 				DE706435C9488D505489ABE8 /* EpgProgram.swift in Sources */,
 				F8C0D58D45A7685372A3AD43 /* EpgService.swift in Sources */,
+				CDC307F5A9CC40F6AEABDBB2 /* GameNotificationService.swift in Sources */,
 				1B888563419D547484DB7D00 /* FloatingPlayerView.swift in Sources */,
 				3C37EC33E8B603DD80B3EB65 /* Game.swift in Sources */,
 				2859CAF1D00F60B59C6AE6B8 /* GameCardView.swift in Sources */,
