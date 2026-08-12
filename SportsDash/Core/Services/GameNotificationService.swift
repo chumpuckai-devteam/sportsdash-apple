@@ -1,31 +1,64 @@
 import Foundation
-import UserNotifications
 
-/// Local **UserNotifications** for favorite-team game starts and score increases (“goals”).
+#if canImport(UserNotifications)
+import UserNotifications
+#endif
+
+/// Local notifications for favorite-team game starts and score increases (“goals”).
 ///
+/// - **iOS only** — `UNMutableNotificationContent` title/body/sound are unavailable on tvOS.
 /// - No remote push server — compares scoreboard polls and schedules calendar start alerts.
-/// - Master off by default (`PlayerPrefs.notificationsEnabled`); not a Sprint 1 release gate.
-/// - Non-favorites never notify. Cooldown + stable identifiers limit spam.
+/// - Master off by default (`PlayerPrefs.notificationsEnabled`).
 ///
 /// See `docs/game-notifications.md`.
 @MainActor
 final class GameNotificationService {
     static let shared = GameNotificationService()
 
+    private init() {}
+
+    func requestAuthorizationIfNeeded() async -> Bool {
+        #if os(iOS)
+        return await IOSImpl.shared.requestAuthorizationIfNeeded()
+        #else
+        return false
+        #endif
+    }
+
+    /// Call after each scores refresh (partial or final).
+    func process(
+        games: [Game],
+        favoriteTeamIds: Set<String>,
+        notifyStarts: Bool,
+        notifyGoals: Bool,
+        masterEnabled: Bool
+    ) async {
+        #if os(iOS)
+        await IOSImpl.shared.process(
+            games: games,
+            favoriteTeamIds: favoriteTeamIds,
+            notifyStarts: notifyStarts,
+            notifyGoals: notifyGoals,
+            masterEnabled: masterEnabled
+        )
+        #else
+        _ = (games, favoriteTeamIds, notifyStarts, notifyGoals, masterEnabled)
+        #endif
+    }
+}
+
+#if os(iOS)
+
+@MainActor
+private final class IOSImpl {
+    static let shared = IOSImpl()
+
     private let center = UNUserNotificationCenter.current()
-
-    /// Last known score/status by game id (full board snapshot, not favorites-only).
     private var lastScores: [String: Snapshot] = [:]
-    /// Last goal/score-change fire time per game (rate limit).
     private var lastGoalFire: [String: Date] = [:]
-    /// Delivered immediate “game started” ids this session (dedupe rapid polls).
     private var deliveredStartNow: Set<String> = []
-    /// Delivered goal notification ids this session (dedupe same score line).
     private var deliveredGoals: Set<String> = []
-
-    /// Minimum gap between score-change alerts for the same game.
     private let goalCooldown: TimeInterval = 45
-    /// How far before tip-off to fire the scheduled “starting soon” alert.
     private let startLead: TimeInterval = 5 * 60
 
     private struct Snapshot {
@@ -35,8 +68,6 @@ final class GameNotificationService {
     }
 
     private init() {}
-
-    // MARK: - Auth
 
     func requestAuthorizationIfNeeded() async -> Bool {
         let settings = await center.notificationSettings()
@@ -50,9 +81,6 @@ final class GameNotificationService {
         }
     }
 
-    // MARK: - Entry
-
-    /// Call after each scores refresh (partial or final).
     func process(
         games: [Game],
         favoriteTeamIds: Set<String>,
@@ -62,16 +90,18 @@ final class GameNotificationService {
     ) async {
         guard masterEnabled else {
             lastScores = snapshotMap(games)
-            await clearManagedPending()
+            await clearPendingStarts()
             return
         }
         guard !favoriteTeamIds.isEmpty else {
             lastScores = snapshotMap(games)
-            await clearManagedPending()
+            await clearPendingStarts()
             return
         }
 
-        let favGames = games.filter { isFavorite($0, favoriteTeamIds: favoriteTeamIds) }
+        let favGames = games.filter {
+            favoriteTeamIds.contains($0.home.id) || favoriteTeamIds.contains($0.away.id)
+        }
 
         if notifyGoals {
             await emitGoals(favGames: favGames)
@@ -87,39 +117,24 @@ final class GameNotificationService {
         pruneDeliveryMemory()
     }
 
-    // MARK: - Favorites
-
-    private func isFavorite(_ game: Game, favoriteTeamIds: Set<String>) -> Bool {
-        favoriteTeamIds.contains(game.home.id) || favoriteTeamIds.contains(game.away.id)
-    }
-
-    // MARK: - Goals / score increases
-
     private func emitGoals(favGames: [Game]) async {
         let now = Date()
         for g in favGames where g.isLive {
             guard let prev = lastScores[g.id] else { continue }
-
             let h = g.home.score ?? 0
             let a = g.away.score ?? 0
             let ph = prev.home ?? 0
             let pa = prev.away ?? 0
-
-            // Only score *increases* (goals / points). Corrections downward are ignored.
             let homeUp = h > ph
             let awayUp = a > pa
             guard homeUp || awayUp else { continue }
-
             if let last = lastGoalFire[g.id], now.timeIntervalSince(last) < goalCooldown {
                 continue
             }
-
             let id = "goal-\(g.id)-\(h)-\(a)"
             if deliveredGoals.contains(id) { continue }
-
             lastGoalFire[g.id] = now
             deliveredGoals.insert(id)
-
             let scorer: String
             if homeUp && !awayUp {
                 scorer = g.home.rowLabel
@@ -128,7 +143,6 @@ final class GameNotificationService {
             } else {
                 scorer = "Score update"
             }
-
             await post(
                 id: id,
                 title: "Score · \(g.matchupLabel)",
@@ -137,20 +151,14 @@ final class GameNotificationService {
         }
     }
 
-    // MARK: - Starts
-
     private func emitJustStarted(favGames: [Game]) async {
         for g in favGames where g.isLive {
             guard let prev = lastScores[g.id] else { continue }
             guard prev.status == .upcoming || prev.status == .unknown else { continue }
-
             let id = "start-now-\(g.id)"
             if deliveredStartNow.contains(id) { continue }
             deliveredStartNow.insert(id)
-
-            // Drop the scheduled “starting soon” once live.
             center.removePendingNotificationRequests(withIdentifiers: ["start-\(g.id)"])
-
             await post(
                 id: id,
                 title: "Game started",
@@ -166,7 +174,6 @@ final class GameNotificationService {
         for g in favGames {
             let fire = g.startTime.addingTimeInterval(-startLead)
             guard fire > Date() else { continue }
-
             let id = "start-\(g.id)"
             center.removePendingNotificationRequests(withIdentifiers: [id])
 
@@ -187,21 +194,14 @@ final class GameNotificationService {
         }
     }
 
-    // MARK: - Post + cleanup
-
     private func post(id: String, title: String, body: String) async {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         content.threadIdentifier = id.hasPrefix("goal-") ? "game-goal" : "game-start"
-        // Immediate delivery (app must be backgrounded / not foreground-suppressed by system).
         let req = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         try? await center.add(req)
-    }
-
-    private func clearManagedPending() async {
-        await clearPendingStarts()
     }
 
     private func clearPendingStarts() async {
@@ -229,7 +229,6 @@ final class GameNotificationService {
     }
 
     private func pruneDeliveryMemory() {
-        // Bound memory if the user leaves the app running across many games.
         if deliveredGoals.count > 200 {
             deliveredGoals.removeAll(keepingCapacity: true)
         }
@@ -242,3 +241,5 @@ final class GameNotificationService {
         }
     }
 }
+
+#endif

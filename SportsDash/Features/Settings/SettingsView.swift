@@ -84,6 +84,7 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    #if os(iOS)
                     Toggle(isOn: PrefsBinding.field(appModel, get: { $0.notificationsEnabled }, set: { $0.notificationsEnabled = $1 })) {
                         settingsRow(
                             icon: "bell.fill",
@@ -130,6 +131,8 @@ struct SettingsView: View {
                         .listRowBackground(SportsColors.panel)
                         .tint(SportsColors.gold)
                     }
+
+                                        #endif
 
                     NavigationLink {
                         GeneralSettingsView()
