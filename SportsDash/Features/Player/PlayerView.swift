@@ -59,6 +59,7 @@ struct PlayerView: View {
             Color.black.ignoresSafeArea()
 
             PlayerSurface(playback: playback)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
                 .onTapGesture { toggleChrome() }
 
@@ -118,7 +119,9 @@ struct PlayerView: View {
         .confirmationDialog("Player options", isPresented: $showMoreMenu, titleVisibility: .visible) {
             Button("Cycle aspect (\(appModel.playerPrefs.aspect.label))") { cycleAspect() }
             Button("Jump to LIVE") { playback.jumpToLive() }
-            Button("Pop out player") { popOutToFloatingPlayer() }
+            #if os(iOS)
+                Button("Pop out player") { popOutToFloatingPlayer() }
+                #endif
             Button("System Picture in Picture") { playback.togglePictureInPicture() }
             Button("Alternate streams") { showStreamSheet = true }
             Button("Cycle subtitles") { playback.cycleSubtitleTrack() }
@@ -620,10 +623,16 @@ struct PlayerView: View {
 
     /// Leave fullscreen and show UHF-style floating player over tabs.
     private func popOutToFloatingPlayer() {
+        #if os(tvOS)
+        // Phone-only. TV stays full-screen (sheet/float collapse was unusable on simulator).
+        return
+        #else
         isPoppingOut = true
         // Release fullscreen decoder; floating session starts its own player.
         playback.stop()
         appModel.popOutPlayer(channel: channel, game: game)
         dismiss()
+        #endif
     }
 }
+

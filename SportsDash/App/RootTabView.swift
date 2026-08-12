@@ -43,12 +43,14 @@ struct RootTabView: View {
                 // Keep tabs mounted under splash so they warm up.
                 .opacity(showSplash ? 0.001 : 1)
 
-            // UHF-style pop-out player above tabs
+            // UHF-style pop-out player above tabs (phone only — TV uses fullScreenCover only)
+            #if os(iOS)
             if appModel.floatingPlayer != nil, !showSplash {
                 FloatingPlayerView(playback: appModel.floatingPlayback)
                     .environmentObject(appModel)
                     .zIndex(100)
             }
+            #endif
 
             if showSplash {
                 SplashView(isFinishing: splashFinishing)

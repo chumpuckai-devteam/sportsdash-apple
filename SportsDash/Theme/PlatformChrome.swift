@@ -62,17 +62,15 @@ extension View {
         #endif
     }
 
-    /// Full-screen cover on iOS; sheet on tvOS.
+    /// Full-screen player on **both** iOS and tvOS.
+    /// tvOS used to use `.sheet`, which on the simulator shrinks to a tiny floating card
+    /// and can collapse until only chrome remains visible.
     @ViewBuilder
     func sportsPlayerCover<Item: Identifiable, Content: View>(
         item: Binding<Item?>,
         @ViewBuilder content: @escaping (Item) -> Content
     ) -> some View {
-        #if os(iOS)
         self.fullScreenCover(item: item, content: content)
-        #else
-        self.sheet(item: item, content: content)
-        #endif
     }
 }
 
