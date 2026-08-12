@@ -82,6 +82,7 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 
 private sealed class ScoreRow {
     data class SportHeader(val section: SportScoreSection, val collapsed: Boolean) : ScoreRow()
@@ -95,6 +96,7 @@ fun ScoresScreen(
     vm: AppViewModel,
     state: AppUiState,
     landscape: Boolean = false,
+    isTelevision: Boolean = false,
     onGoSettings: () -> Unit = {},
 ) {
     var teamFavGame by remember { mutableStateOf<Game?>(null) }
@@ -121,6 +123,7 @@ fun ScoresScreen(
             // portrait = one tight row of filters then compact faves rail.
             ScoresTopChrome(
                 landscape = landscape,
+                isTelevision = isTelevision,
                 filter = state.scoresFilter,
                 status = state.scoresStatus,
                 teams = vm.favoriteTeamsRail(),
@@ -220,6 +223,7 @@ fun ScoresScreen(
                                     isFavoriteMatch = vm.gameHasFavoriteTeam(row.game),
                                     isAwayFavorite = vm.isTeamFavorite(row.game.away.id),
                                     isHomeFavorite = vm.isTeamFavorite(row.game.home.id),
+                                    tvFocus = isTelevision,
                                     onClick = { vm.openStreamPicker(row.game) },
                                     onLongClick = { teamFavGame = row.game },
                                 )
@@ -389,6 +393,7 @@ private fun MyTeamsSectionHeader(liveCount: Int = 0) {
 @Composable
 private fun ScoresTopChrome(
     landscape: Boolean,
+    isTelevision: Boolean = false,
     filter: ScoresFilter,
     status: String?,
     teams: List<TeamInfo>,
@@ -404,9 +409,9 @@ private fun ScoresTopChrome(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) }, compact = true)
-        ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) }, compact = true)
-        ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) }, compact = true)
+        ScoreFilterChip(label = "Live", selected = filter == ScoresFilter.LIVE, onClick = { onFilter(ScoresFilter.LIVE) }, compact = true, tvFocus = isTelevision)
+        ScoreFilterChip(label = "Upcoming", selected = filter == ScoresFilter.UPCOMING, onClick = { onFilter(ScoresFilter.UPCOMING) }, compact = true, tvFocus = isTelevision)
+        ScoreFilterChip(label = "Final", selected = filter == ScoresFilter.FINAL, onClick = { onFilter(ScoresFilter.FINAL) }, compact = true, tvFocus = isTelevision)
         FavoriteTeamsRail(
             teams = teams,
             onOpenPicker = onOpenPicker,
@@ -903,6 +908,7 @@ private fun ScoreFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
     compact: Boolean = false,
+    tvFocus: Boolean = false,
 ) {
     // Custom compact chip — Material FilterChip is too tall for dense chrome.
     val shape = RoundedCornerShape(50)
@@ -913,6 +919,7 @@ private fun ScoreFilterChip(
         fontSize = if (compact) 11.sp else 12.sp,
         maxLines = 1,
         modifier = Modifier
+            .tvFocusRing(enabled = tvFocus, shape = shape)
             .clip(shape)
             .background(if (selected) Gold else Panel)
             .clickable(onClick = onClick)
@@ -930,6 +937,7 @@ private fun GameRow(
     isFavoriteMatch: Boolean,
     isAwayFavorite: Boolean = false,
     isHomeFavorite: Boolean = false,
+    tvFocus: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -949,6 +957,7 @@ private fun GameRow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
                 .background(
                     if (isFavoriteMatch) Gold.copy(alpha = 0.08f) else Color.Transparent,

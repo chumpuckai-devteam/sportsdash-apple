@@ -48,6 +48,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -92,6 +95,7 @@ fun PlayerScreen(
     liveGames: List<Game>,
     currentGameId: String?,
     tickerMode: ScoresTickerMode = ScoresTickerMode.FADE,
+    isTelevision: Boolean = false,
     nowTitle: String?,
     nextTitle: String?,
     onClose: () -> Unit,
@@ -150,6 +154,37 @@ fun PlayerScreen(
 
     BackHandler(onBack = onClose)
 
+    // Android TV / remote media keys
+    val focusModifier = if (isTelevision) {
+        Modifier.onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (event.nativeKeyEvent.keyCode) {
+                android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                android.view.KeyEvent.KEYCODE_ENTER,
+                -> {
+                    if (event.nativeKeyEvent.repeatCount == 0) {
+                        if (isPlaying) controller.pause() else controller.play()
+                        isPlaying = controller.isPlaying
+                        noteChromeInteraction()
+                    }
+                    true
+                }
+                android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                    controller.play(); isPlaying = true; noteChromeInteraction(); true
+                }
+                android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                    controller.pause(); isPlaying = false; noteChromeInteraction(); true
+                }
+                android.view.KeyEvent.KEYCODE_BACK -> {
+                    onClose(); true
+                }
+                else -> false
+            }
+        }
+    } else Modifier
+
+
     DisposableEffect(url) {
         if (url.isNotBlank()) {
             controller.play(url)
@@ -164,6 +199,7 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .then(focusModifier)
             .background(Color.Black),
     ) {
         // 1) Full-window video — always max size

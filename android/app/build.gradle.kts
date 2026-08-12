@@ -13,8 +13,8 @@ android {
         minSdk = 26
         // 34 sideloads more predictably on some Samsung One UI builds than 35
         targetSdk = 34
-        versionCode = 27
-        versionName = "1.2.0-tv"
+        versionCode = 28
+        versionName = "1.2.1-tv-focus"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         // Phone ABIs only — smaller universal APK for friends

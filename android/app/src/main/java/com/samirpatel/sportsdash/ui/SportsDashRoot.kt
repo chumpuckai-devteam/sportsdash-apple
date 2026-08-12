@@ -69,6 +69,7 @@ fun SportsDashRoot(
                 liveGames = vm.liveGamesForTicker(),
                 currentGameId = state.playingGameId,
                 tickerMode = state.scoresTickerMode,
+                isTelevision = isTelevision,
                 nowTitle = vm.nowTitle(playing.id),
                 nextTitle = vm.nextTitle(playing.id),
                 onClose = { vm.stopPlayback() },
@@ -197,12 +198,14 @@ fun SportsDashRoot(
                         vm = vm,
                         state = state,
                         landscape = landscape || isTelevision,
+                        isTelevision = isTelevision,
                         onGoSettings = { tab = 2 },
                     )
                     1 -> GuideScreen(
                         vm = vm,
                         state = state,
                         landscape = landscape || isTelevision,
+                        isTelevision = isTelevision,
                         onGoSettings = { tab = 2 },
                         onGoScores = { tab = 0 },
                     )

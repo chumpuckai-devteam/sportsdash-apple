@@ -39,6 +39,12 @@ open SportsDash.xcworkspace
 | Detection | `DeviceProfile.isTelevision` |
 | Shell | TopAppBar + bottom nav **always** on TV (D-pad); phone landscape still hides shell |
 
+### D-pad focus (1.2.1-tv-focus)
+- `ui/tv/TvFocus.kt` — gold focus ring + scale on focused items
+- Scores filter chips + game rows
+- Guide grid cards + timeline rows  
+- Player: media play/pause, DPAD center, enter, back keys
+
 ### Not yet (follow-on)
 - Dedicated Leanback BrowseFragment / sidemenu redesign
 - D-pad focus audit on every Guide cell

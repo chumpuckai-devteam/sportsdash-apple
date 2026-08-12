@@ -197,6 +197,9 @@ struct PlayerView: View {
         .padding(.top, 8)
         .padding(.bottom, 4)
         .background(Color.clear)
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     /// Program info (left) + horizontal scroll of circle controls (right/under).
@@ -354,6 +357,9 @@ struct PlayerView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel ?? chromeIconAccessibilityLabel(for: systemName))
         .accessibilityAddTraits(.isButton)
+        #if os(tvOS)
+        .sportsTVFocusClean()
+        #endif
     }
 
     private func chromeIconAccessibilityLabel(for systemName: String) -> String {

@@ -67,6 +67,7 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 
 /**
  * Guide: no search. Main bar = ★ / Hour / Grid + one ☰ categories menu.
@@ -77,6 +78,7 @@ fun GuideScreen(
     vm: AppViewModel,
     state: AppUiState,
     landscape: Boolean = false,
+    isTelevision: Boolean = false,
     onGoSettings: () -> Unit = {},
     onGoScores: () -> Unit = {},
 ) {
@@ -189,6 +191,7 @@ private fun GuideBrowseBody(
                         ) {
                             gridItems(items = channels, key = { it.id }) { ch ->
                                 ChannelGridCard(
+                        tvFocus = isTelevision,
                                     channel = ch,
                                     displayName = vm.displayChannelName(ch.name),
                                     nowTitle = vm.nowTitle(ch.id),
@@ -435,18 +438,21 @@ private fun chipColors() = FilterChipDefaults.filterChipColors(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelGridCard(
+                        tvFocus = isTelevision,
     channel: IptvChannel,
     displayName: String = channel.name,
     nowTitle: String?,
     rating: com.samirpatel.sportsdash.core.ratings.MovieRating? = null,
     ratingLoading: Boolean = false,
     isFavorite: Boolean,
+    tvFocus: Boolean = false,
     onPlay: () -> Unit,
     onLongPress: () -> Unit,
     onRequestRating: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
+            .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
             .background(Panel)
             .combinedClickable(onClick = onPlay, onLongClick = onLongPress)

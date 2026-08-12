@@ -52,6 +52,7 @@ import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -259,6 +260,7 @@ private fun TimelineRow(
                 .width(ChannelColWidth)
                 .fillMaxHeight()
                 .background(Panel)
+                .tvFocusRing(enabled = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
                 .combinedClickable(onClick = onPlay, onLongClick = onLongPress)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -304,6 +306,7 @@ private fun TimelineRow(
                 .width(timelineWidthDp)
                 .fillMaxHeight()
                 .background(VoidBlack)
+                .tvFocusRing(enabled = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
                 .combinedClickable(onClick = onPlay, onLongClick = onLongPress),
         ) {
             Box(
