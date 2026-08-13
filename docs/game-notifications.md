@@ -1,6 +1,6 @@
 # Favorite-team game notifications
 
-SportsDash game alerts are local-only. There is no push server, remote notification pipeline, WorkManager job, or Android alarm in this release.
+SportsDash game alerts are local-only. There is no push server, remote notification pipeline, WorkManager job (Android), or Android alarm in this release. Alerts are best-effort within OS local-notification and background limits.
 
 ## Product contract
 
@@ -10,32 +10,44 @@ All alerts require the Game alerts master switch, OS notification permission, th
 
 | Alert | iOS | Android |
 |---|---|---|
-| Game starting soon | Schedules a one-shot local notification about five minutes before a known upcoming start | Not supported; no alarm or background scheduler is installed |
-| Game just started | Emitted when the foreground score poll observes upcoming/unknown → live | Emitted only when an app-driven score refresh observes upcoming/unknown → live transition (score changes observed on refresh include live game state)
-| Goal / score change | Emitted when the foreground score poll observes a live score increase; per-game cooldown ~45s | Emitted only when an app-driven score refresh observes a live score increase (helper applies ~45s cooldown); score state changes observed during live games |
+| Game starting soon | Schedules a one-shot local notification about five minutes before a known upcoming start (UNCalendarNotificationTrigger). Can fire when app suspended/killed. | Not supported; no alarm or background scheduler is installed |
+| Game just started | Emitted when the foreground score poll observes upcoming/unknown → live (BG does score-ups only, not just-started) | Emitted only when an app-driven score refresh (or in-process ticker) observes upcoming/unknown → live transition |
+| Goal / score change | Emitted when poll/BG observes a live score increase; per-game cooldown ~45s. Uses persisted last score snapshot for cold-start catch-up. | Emitted only when refresh/ticker observes live score increase (helper applies ~45s cooldown + persisted snapshot for catch-up on open) |
 
-## Refresh ownership
+## Refresh ownership (best-effort)
 
 ### iOS
+`AppModel.startScoresPolling()` starts a 45-second in-process timer (RunLoop.main + .common modes) while the app is running/foreground. When `scenePhase == .active` a silent `refreshScores` is triggered.
 
-`AppModel.startScoresPolling()` starts a 45-second in-process timer while the app is running. Each `refreshScores` result is passed to `GameNotificationService`. Upcoming favorite-team games also create OS-scheduled, one-shot start-soon notifications, which may fire after the app leaves the foreground once they have been scheduled.
+When master + (goals or starts) enabled: registers `BGAppRefreshTask` ("com.samirpatel.sportsdash.scores-refresh") best-effort (15min+ earliest). iOS may throttle or skip.
 
-This is not live push. Just-started and score-change alerts depend on the app's foreground polling and may be delayed or absent when iOS suspends the app.
+`lastScores` snapshots are persisted to UserDefaults (pruned >48h) so relaunch/cold-start can detect increases since last successful process. Do not notify on first observation of a game.
+
+Upcoming favorite-team games also create OS-scheduled, one-shot start-soon notifications (calendar), which survive app death.
+
+Score-change (goals) alerts depend on poll or BG task; just-started only from foreground poll. May be delayed/absent when iOS suspends the app.
 
 ### Android
+`AppViewModel` runs a ViewModel-scoped repeating ~45s coroutine ticker (while process alive and master + goals/starts on) that calls `refreshScores()`. Cancels on toggle off or clear.
 
-`AppViewModel.refreshScores()` invokes `GameNotificationHelper` after refreshes caused by app initialization, user refresh, or other existing in-app refresh paths. Android does not currently run a recurring foreground poll and does not install WorkManager, an alarm, or push delivery in this slice. Therefore Android alerts are refresh-observed, not scheduled or background-reliable.
+`lastScores` snapshots persisted via SharedPreferences for catch-up on cold open / process death.
+
+`AppViewModel.refreshScores()` invokes `GameNotificationHelper` after init, manual refresh, league toggle, etc. No WorkManager / Alarm (none added per constraints). Alerts are observed during app-driven or ticker refreshes.
 
 ## Settings
 
 - Game alerts: master opt-in; requests OS permission.
-- Game starting soon: enables start-transition alerts on both phones and scheduled five-minute reminders on iOS only.
-- Goals / score changes: enables refresh-observed score-increase alerts.
+- Game starting soon: enables start-transition alerts + scheduled 5min reminders on iOS only.
+- Goals / score changes: enables score-increase alerts. **Score changes require the app to refresh scores (open the app or iOS background refresh best-effort). Start-soon can still fire from iOS schedule.**
 - Defaults remain off until the user opts in.
 - tvOS uses a no-op `GameNotificationService` surface; notification controls are iOS-only.
 
 ## Limits and non-goals
 
-- No remote push, server, WorkManager, Android alarm, or guaranteed background score monitoring.
-- No alert parity claim: iOS has scheduled start-soon plus a 45-second foreground poll; Android has app-refresh-observed alerts.
+- No remote push, server, guaranteed delivery, WorkManager, or Android alarm.
+- No alert parity claim: iOS has scheduled start-soon + 45s poll + BG best-effort + disk snapshot; Android has in-process ticker + app-refresh + snapshot catch-up.
 - Cast and multiview remain out of scope.
+- ~45s per-game cooldown; increases only.
+- Master off by default; starts + goals subtype toggles.
+
+See code: `GameNotificationService.swift`, `GameNotificationHelper.kt`, `AppModel.swift`, `AppViewModel.kt`, `RootTabView.swift`, `SportsDashApp.swift`.

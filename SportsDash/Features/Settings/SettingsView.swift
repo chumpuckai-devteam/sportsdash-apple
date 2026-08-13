@@ -103,6 +103,8 @@ struct SettingsView: View {
                                     var p = appModel.playerPrefs
                                     p.notificationsEnabled = false
                                     appModel.setPlayerPrefs(p)
+                                } else {
+                                    appModel.scheduleScoresBackgroundRefresh()
                                 }
                             } else {
                                 // Drop scheduled starts immediately (process also clears on next poll).
@@ -113,6 +115,7 @@ struct SettingsView: View {
                                     notifyGoals: false,
                                     masterEnabled: false
                                 )
+                                appModel.scheduleScoresBackgroundRefresh()
                             }
                         }
                     }
@@ -124,12 +127,18 @@ struct SettingsView: View {
                         )
                         .listRowBackground(SportsColors.panel)
                         .tint(SportsColors.gold)
+                        .onChange(of: appModel.playerPrefs.notifyGameStarts) { _, _ in
+                            appModel.scheduleScoresBackgroundRefresh()
+                        }
                         Toggle(
                             "Goals / score changes",
                             isOn: PrefsBinding.field(appModel, get: { $0.notifyGoals }, set: { $0.notifyGoals = $1 })
                         )
                         .listRowBackground(SportsColors.panel)
                         .tint(SportsColors.gold)
+                        .onChange(of: appModel.playerPrefs.notifyGoals) { _, _ in
+                            appModel.scheduleScoresBackgroundRefresh()
+                        }
                     }
 
                                         #endif
@@ -164,7 +173,7 @@ struct SettingsView: View {
                 } header: {
                     Text("App")
                 } footer: {
-                    Text("Game alerts are local only (no push server), favorite teams only, and off by default. Not a Sprint 1 release requirement.")
+                    Text("Game alerts are local only (no push server), favorite teams only, off by default. Score changes require the app to refresh scores (open app or best-effort BG refresh on iOS). Start-soon uses iOS calendar schedule and can fire when suspended.")
                 }
 
                 Section {

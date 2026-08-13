@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -199,6 +201,7 @@ class AppViewModel(
     private val leagueWriteChannel = Channel<LeagueWriteRequest>(Channel.CONFLATED)
 
     private var scoresGeneration = 0L
+    private var scoresRefreshJob: Job? = null
 
     init {
         // League selection: sequential init (peek + one refresh) BEFORE starting collector/writer to avoid
@@ -213,6 +216,7 @@ class AppViewModel(
             }
             refreshScores()  // exactly one initial
             startLeagueSelectionCoordinator()
+            startNotificationScoresTickerIfNeeded()
         }
 
         // Cold-start: restore playlist ASAP so Settings/Guide don't look "logged out"
@@ -276,16 +280,19 @@ class AppViewModel(
         viewModelScope.launch {
             prefs.notificationsEnabledFlow.collect { v ->
                 _state.update { it.copy(notificationsEnabled = v) }
+                startNotificationScoresTickerIfNeeded()
             }
         }
         viewModelScope.launch {
             prefs.notifyGameStartsFlow.collect { v ->
                 _state.update { it.copy(notifyGameStarts = v) }
+                startNotificationScoresTickerIfNeeded()
             }
         }
         viewModelScope.launch {
             prefs.notifyGoalsFlow.collect { v ->
                 _state.update { it.copy(notifyGoals = v) }
+                startNotificationScoresTickerIfNeeded()
             }
         }
         viewModelScope.launch {
@@ -602,14 +609,20 @@ class AppViewModel(
     fun setNotificationsEnabled(v: Boolean) {
         _state.update { it.copy(notificationsEnabled = v) }
         viewModelScope.launch { prefs.setNotificationsEnabled(v) }
+        if (!v) {
+            notifHelper.clearBaselines()
+        }
+        startNotificationScoresTickerIfNeeded()
     }
     fun setNotifyGameStarts(v: Boolean) {
         _state.update { it.copy(notifyGameStarts = v) }
         viewModelScope.launch { prefs.setNotifyGameStarts(v) }
+        startNotificationScoresTickerIfNeeded()
     }
     fun setNotifyGoals(v: Boolean) {
         _state.update { it.copy(notifyGoals = v) }
         viewModelScope.launch { prefs.setNotifyGoals(v) }
+        startNotificationScoresTickerIfNeeded()
     }
 
     fun setCleanUpNames(enabled: Boolean) {
@@ -1365,6 +1378,28 @@ class AppViewModel(
      */
     fun playFromTicker(game: Game) {
         openStreamPicker(game)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        scoresRefreshJob?.cancel()
+    }
+
+    private fun startNotificationScoresTickerIfNeeded() {
+        scoresRefreshJob?.cancel()
+        val s = _state.value
+        if (!s.notificationsEnabled || (!s.notifyGoals && !s.notifyGameStarts)) return
+        scoresRefreshJob = viewModelScope.launch {
+            while (isActive) {
+                delay(45_000L)
+                val cur = _state.value
+                if (cur.notificationsEnabled && (cur.notifyGoals || cur.notifyGameStarts)) {
+                    refreshScores()
+                } else {
+                    break
+                }
+            }
+        }
     }
 
     companion object {

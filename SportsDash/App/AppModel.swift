@@ -160,6 +160,12 @@ final class AppModel: ObservableObject {
 
         startScoresPolling()
         startPlaylistPolling()
+        #if os(iOS)
+        // Best-effort BGAppRefresh schedule for score catch-up when alerts on (soft; iOS may delay/throttle)
+        if playerPrefs.notificationsEnabled {
+            ScoresBackgroundRefresh.shared.scheduleIfNeeded(prefs: playerPrefs)
+        }
+        #endif
     }
 
     /// Rebuild category maps after channel list changes.
@@ -195,6 +201,10 @@ final class AppModel: ObservableObject {
             Task { @MainActor in
                 await self?.refreshScores(silent: true)
             }
+        }
+        // Ensure timer fires even during scrolling / tracking modes
+        if let t = scoresTimer {
+            RunLoop.main.add(t, forMode: .common)
         }
     }
 
@@ -306,6 +316,13 @@ final class AppModel: ObservableObject {
             notifyGoals: p.notifyGoals,
             masterEnabled: p.notificationsEnabled
         )
+    }
+
+    /// Central scheduler for iOS BG refresh (M1). Called on prefs changes for notifications.
+    func scheduleScoresBackgroundRefresh() {
+        #if os(iOS)
+        ScoresBackgroundRefresh.shared.scheduleIfNeeded(prefs: playerPrefs)
+        #endif
     }
 
     private static func upcomingCount(_ games: [Game]) -> Int {

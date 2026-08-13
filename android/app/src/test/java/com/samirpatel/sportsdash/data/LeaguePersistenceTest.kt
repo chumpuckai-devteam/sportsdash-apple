@@ -271,4 +271,15 @@ class LeaguePersistenceTest {
         assertTrue(afterClear)
     }
 
+
+
+    @Test
+    fun `score increase helper detects only increases, nil as zero`() {
+        assertTrue(GameNotificationHelper.didScoreIncrease(1, null, 0, 0))
+        assertTrue(GameNotificationHelper.didScoreIncrease(null, 1, 0, 0))
+        assertFalse(GameNotificationHelper.didScoreIncrease(1, 1, 1, 1))
+        assertFalse(GameNotificationHelper.didScoreIncrease(0, 0, 1, 0))
+        assertFalse(GameNotificationHelper.didScoreIncrease(null, null, null, null))
+    }
+
 }

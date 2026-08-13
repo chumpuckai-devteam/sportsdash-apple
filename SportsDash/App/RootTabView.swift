@@ -35,6 +35,9 @@ struct RootTabView: View {
     /// Full-screen splash until bootstrap finishes (min time avoids a flash).
     @State private var showSplash = true
     @State private var splashFinishing = false
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
 
     var body: some View {
         ZStack {
@@ -85,6 +88,17 @@ struct RootTabView: View {
                 showSplash = false
             }
         }
+        #if os(iOS)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await appModel.refreshScores(silent: true)
+                }
+                // Re-arm the 45s poll timer (common modes already configured)
+                appModel.startScoresPolling()
+            }
+        }
+        #endif
     }
 
     /// Three-tab shell: Scores · Guide · Settings.
