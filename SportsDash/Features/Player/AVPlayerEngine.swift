@@ -267,15 +267,21 @@ struct AVPlayerSurface: UIViewControllerRepresentable {
         // Primary delegate for system PiP state from AVPlayerViewController's built-in PiP.
         // Do NOT create a second PiP controller.
         func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
-            engine.setSystemPiPActive(true)
+            MainActor.assumeIsolated {
+                engine.setSystemPiPActive(true)
+            }
         }
 
         func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
-            engine.setSystemPiPActive(false)
+            MainActor.assumeIsolated {
+                engine.setSystemPiPActive(false)
+            }
         }
 
-        func playerViewController(_ playerViewController: AVPlayerViewController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
-            engine.setSystemPiPActive(false)
+        func playerViewController(_ playerViewController: AVPlayerViewController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping @Sendable (Bool) -> Void) {
+            MainActor.assumeIsolated {
+                engine.setSystemPiPActive(false)
+            }
             completionHandler(true)
         }
     }
