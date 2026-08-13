@@ -16,6 +16,8 @@ final class AVPlayerEngine: ObservableObject {
     @Published private(set) var isPlaying = false
     @Published var error: String?
 
+    @Published private(set) var isSystemPiPActive = false
+
     let player = AVPlayer()
     private var itemObservers: [NSKeyValueObservation] = []
     private var endObserver: NSObjectProtocol?
@@ -66,10 +68,16 @@ final class AVPlayerEngine: ObservableObject {
 
     func stop() {
         loadGeneration += 1
+        #if os(iOS)
+        stopSystemPiP()
+        #endif
         clearItem()
         isLoading = false
         isBuffering = false
         isPlaying = false
+        #if os(iOS)
+        isSystemPiPActive = false
+        #endif
     }
 
     func play() {
@@ -102,6 +110,36 @@ final class AVPlayerEngine: ObservableObject {
     func setMuted(_ muted: Bool) {
         player.isMuted = muted
     }
+
+    // MARK: - System Picture-in-Picture (iOS only)
+    // Simplified coherent path (ship-safe):
+    // - REMOVE separate AVPictureInPictureController with unattached AVPlayerLayer (competing owner for the player).
+    // - Primary activation is AUTOMATIC via AVPlayerViewController flags set in AVPlayerSurface.
+    // - startSystemPiPIfPossible(): no-op or best-effort only (if we later hold ref to AVPlayerViewController).
+    // - supportsSystemPiP = AVPictureInPictureController.isPictureInPictureSupported()
+    // - stopSystemPiP: safe no-op.
+    // - Removed unused: pipStateObserver / dead notif observers / setup func / AVPictureInPictureControllerDelegate.
+    // - State sync via AVPlayerViewControllerDelegate (Coordinator below).
+    #if os(iOS)
+    var supportsSystemPiP: Bool {
+        AVPictureInPictureController.isPictureInPictureSupported()
+    }
+
+    func startSystemPiPIfPossible() {
+        // No-op: rely on automatic PiP from AVPlayerViewController when allowsPictureInPicturePlayback
+        // and canStartPictureInPictureAutomaticallyFromInline are true (set on the surface).
+        // Programmatic trigger here is not needed for the background-to-PiP flow.
+        guard supportsSystemPiP else { return }
+    }
+
+    func stopSystemPiP() {
+        // Safe no-op. System / AVPlayerViewController manages the PiP window lifetime.
+    }
+
+    func setSystemPiPActive(_ value: Bool) {
+        isSystemPiPActive = value
+    }
+    #endif
 
     private func clearItem() {
         itemObservers.forEach { $0.invalidate() }
@@ -187,6 +225,8 @@ final class AVPlayerEngine: ObservableObject {
     }
 }
 
+// No more AVPictureInPictureControllerDelegate on engine (removed competing controller path).
+
 #if canImport(UIKit)
 struct AVPlayerSurface: UIViewControllerRepresentable {
     @ObservedObject var engine: AVPlayerEngine
@@ -198,6 +238,10 @@ struct AVPlayerSurface: UIViewControllerRepresentable {
         vc.videoGravity = .resizeAspect
         #if os(iOS)
         vc.allowsPictureInPicturePlayback = true
+        if #available(iOS 14.2, *) {
+            vc.canStartPictureInPictureAutomaticallyFromInline = true
+        }
+        vc.delegate = context.coordinator
         #endif
         return vc
     }
@@ -207,5 +251,34 @@ struct AVPlayerSurface: UIViewControllerRepresentable {
             vc.player = engine.player
         }
     }
+
+    #if os(iOS)
+    func makeCoordinator() -> Coordinator {
+        Coordinator(engine: engine)
+    }
+
+    class Coordinator: NSObject, AVPlayerViewControllerDelegate {
+        let engine: AVPlayerEngine
+
+        init(engine: AVPlayerEngine) {
+            self.engine = engine
+        }
+
+        // Primary delegate for system PiP state from AVPlayerViewController's built-in PiP.
+        // Do NOT create a second PiP controller.
+        func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+            engine.setSystemPiPActive(true)
+        }
+
+        func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+            engine.setSystemPiPActive(false)
+        }
+
+        func playerViewController(_ playerViewController: AVPlayerViewController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+            engine.setSystemPiPActive(false)
+            completionHandler(true)
+        }
+    }
+    #endif
 }
 #endif

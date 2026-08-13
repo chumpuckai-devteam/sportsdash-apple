@@ -28,7 +28,7 @@ Updated 2026-08-12. SportsDash ships from one monorepo. Parity means the same co
 | AirPlay | AV path/system route | Platform route where available | No Cast claim | No Cast claim |
 | Notification start-soon | One-shot local schedule | No-op | Not supported | Not supported |
 | Start/score observations | 45-second foreground in-process poll | None | Existing app-driven refreshes only | Existing app-driven refreshes only |
-| TV rails/focus | Phone list, touch targets | Implemented; device dogfood gate remains | Phone list | Implemented; AVD/hardware dogfood gate remains |
+| TV rails/focus | Phone list, touch targets | Implemented; device dogfood gate remains | Phone list | Implemented; device dogfood gate remains |
 
 Notification behavior is not parity: see `docs/game-notifications.md`. No push, WorkManager, alarm, Cast, or multiview is implied.
 
@@ -53,7 +53,6 @@ Notification behavior is not parity: see `docs/game-notifications.md`. No push, 
 ## Dogfood acceptance
 
 Phone:
-
 - Load Xtream; second launch paints cached channels quickly.
 - Install Android APK over the old build; saved configuration remains. Uninstall is destructive.
 - Add favorite teams through Sport → League → Team; favorite-team games pin first.
@@ -62,7 +61,23 @@ Phone:
 - Pop out and restore only on phone/tablet surfaces.
 
 TV:
-
 - Apple TV uses `SportsDashTV`; player always covers the screen and exposes no floating pop-out.
 - Android TV launches from the leanback row; D-pad reaches filters, rails, Guide, player controls, and shell navigation. TV pop-out removed.
 - Both TVs show horizontal My Games + per-league (not sport-flat) Scores rails rather than the dense phone list. Sport grouping headers may be present in sections but individual rails use league titles.
+
+## iOS System Picture-in-Picture (updated 2026-08-13)
+- System PiP = AV/HLS via AVPlayerViewController automatic (primary path).
+- AVPlayerSurface sets `allowsPictureInPicturePlayback = true` and `canStartPictureInPictureAutomaticallyFromInline = true` (iOS 14.2+).
+- AVPlayerEngine keeps `isSystemPiPActive` / `setSystemPiPActive` + supports check; startSystemPiPIfPossible is no-op (auto from surface).
+- Coordinator (AVPlayerViewControllerDelegate) updates engine state on PiP start/stop/restore.
+- NO separate unattached AVPictureInPictureController / playerLayer (removed competing owner).
+- VLC/TS: no system video PiP. Keeps audio in background (UIBackgroundModes); use in-app pop-out inside SportsDash.
+  Banner (once): "System video PiP works on AV/HLS streams. VLC/TS keeps audio in background; use in-app pop-out inside SportsDash."
+- NO destructive auto handoff (removed attemptAVHandoffForSystemPiP entirely; no stopping VLC on bg or auto-switch).
+- Post background signal only on .background (not inactive) to avoid double-fire.
+- In-app pop-out (FloatingPlayerView) for phone multitasking in foreground.
+- Phone pop-out stays; TV no float (per product law).
+- PlayerView onDisappear skips stop() when `isPiPActive`.
+- Full-screen + floating both use the shared surface/engine for their backend.
+- UIBackgroundModes audio already present — no change.
+- Android untouched.

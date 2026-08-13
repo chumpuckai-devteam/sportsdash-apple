@@ -98,7 +98,8 @@ struct PlayerView: View {
         .onDisappear {
             chromeTask?.cancel()
             // Keep decoding only if we handed off to the floating pop-out player.
-            if !isPoppingOut {
+            // Do NOT stop if system PiP is active (background float over other apps).
+            if !isPoppingOut && !playback.isPiPActive {
                 playback.stop()
             }
         }

@@ -2,6 +2,12 @@ import AVFoundation
 import Combine
 import Foundation
 
+#if os(iOS)
+extension Notification.Name {
+    static let sportsDashWillBackground = Notification.Name("SportsDashWillBackground")
+}
+#endif
+
 /// Multi-engine playback for SportsDash:
 /// - **Auto (default):** TS / unknown → **VLC** (libVLC); HLS → **AVPlayer**
 /// - Explicit VLC or AV overrides
@@ -34,8 +40,15 @@ final class PlaybackController: ObservableObject {
     private var muted = false
     private var didCrossEngineFallback = false
 
+    #if os(iOS)
+    private var lifecycleObserver: Any?
+    #endif
+
     init() {
         bindEngines()
+        #if os(iOS)
+        startObservingLifecycle()
+        #endif
     }
 
     func configure(prefs: PlayerPrefs) {
@@ -88,6 +101,7 @@ final class PlaybackController: ObservableObject {
         isLoading = false
         isBuffering = false
         isPlaying = false
+        isPiPActive = false
     }
 
     func jumpToLive() {
@@ -141,17 +155,90 @@ final class PlaybackController: ObservableObject {
 
     var isMuted: Bool { muted }
 
-    func togglePictureInPicture() {
-        // PiP: AV path supports via AVPlayerViewController; VLC uses floating mini player.
+    // MARK: - System Picture-in-Picture support (iOS AV path only for video PiP)
+    // Simplified: system PiP only via AV/HLS automatic path on AVPlayerViewController.
+    // VLC/TS: no system video PiP; audio bg + in-app float only. No auto handoff/destructive switch.
+    #if os(iOS)
+    var supportsSystemPictureInPicture: Bool {
         if activeBackend == .av {
-            banner = "Use the system PiP control or pop-out player"
-        } else {
-            banner = "PiP: use pop-out player on VLC"
+            return avEngine.supportsSystemPiP
         }
-        clearBannerSoon()
+        return false
     }
 
-    var isPiPActive: Bool { false }
+    var canUseSystemPiP: Bool {
+        supportsSystemPictureInPicture
+    }
+
+    @Published private(set) var isPiPActive: Bool = false
+    #else
+    var supportsSystemPictureInPicture: Bool { false }
+    var canUseSystemPiP: Bool { false }
+    @Published private(set) var isPiPActive: Bool = false
+    #endif
+
+    func togglePictureInPicture() {
+        #if os(iOS)
+        if activeBackend == .av {
+            if avEngine.supportsSystemPiP {
+                avEngine.startSystemPiPIfPossible()
+            } else {
+                banner = "System PiP not supported on this device"
+                clearBannerSoon()
+            }
+        } else {
+            // Honest for VLC: no destructive handoff
+            startSystemPiPIfPossible()
+        }
+        #else
+        banner = "System Picture-in-Picture is iOS-only"
+        clearBannerSoon()
+        #endif
+    }
+
+    func startSystemPiPIfPossible() {
+        #if os(iOS)
+        guard isPlaying else { return }
+        if activeBackend == .av {
+            // Rely on automatic PiP (flags already set on AVPlayerSurface).
+            // AVPlayerViewController will enter PiP on background when playing inline.
+            banner = nil
+            avEngine.startSystemPiPIfPossible()  // no-op but keeps API
+            return
+        }
+        // VLC path: DO NOT stop VLC, do not handoff. Show banner once.
+        banner = "System video PiP works on AV/HLS streams. VLC/TS keeps audio in background; use in-app pop-out inside SportsDash."
+        clearBannerSoon()
+        // Keep VLC running for audio bg.
+        #else
+        banner = "PiP is iOS-only"
+        clearBannerSoon()
+        #endif
+    }
+
+    #if os(iOS)
+    func startObservingLifecycle() {
+        // Clean previous
+        if let obs = lifecycleObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: .sportsDashWillBackground,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, self.isPlaying else { return }
+                // Only for .av let automatic PiP work (no spam on VLC).
+                // For VLC: silent (audio bg continues; no banner spam every background).
+                if self.activeBackend == .av {
+                    self.startSystemPiPIfPossible()
+                }
+                // else: silent for VLC/TS
+            }
+        }
+    }
+    #endif
 
     struct SubtitleOption: Identifiable, Hashable {
         var id: String
@@ -194,6 +281,12 @@ final class PlaybackController: ObservableObject {
                 self.isPlaying = false
             }
         }.store(in: &bags)
+        #if os(iOS)
+        avEngine.$isSystemPiPActive.receive(on: RunLoop.main).sink { [weak self] v in
+            guard let self, self.activeBackend == .av else { return }
+            self.isPiPActive = v
+        }.store(in: &bags)
+        #endif
         vlcEngine.$error.receive(on: RunLoop.main).sink { [weak self] err in
             guard let self, self.activeBackend == .vlc, let err, !err.isEmpty else { return }
             self.handleFail(err, generation: self.loadGeneration)
@@ -222,6 +315,7 @@ final class PlaybackController: ObservableObject {
             guard let self, self.activeBackend == .av, let err, !err.isEmpty else { return }
             self.handleFail(err, generation: self.loadGeneration)
         }.store(in: &bags)
+
     }
 
     private func stopEngines(clearError: Bool) {
