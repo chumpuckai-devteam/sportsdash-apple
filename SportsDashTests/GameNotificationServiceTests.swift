@@ -80,6 +80,7 @@ final class GameNotificationServiceTests: XCTestCase {
         XCTAssertNil(pruned["oldFinal"])
     }
 
+    @MainActor
     func testRealProductionDiskRoundTrip_usesLoadPersistMergeFromIOSImpl() {
         // Uses REAL production persist/load/merge (via injected suite defaults) — no copies.
         // This replaces previous weak sim tests.

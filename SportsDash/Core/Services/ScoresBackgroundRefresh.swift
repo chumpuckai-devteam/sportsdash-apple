@@ -37,18 +37,18 @@ final class ScoresBackgroundRefresh {
             task.setTaskCompleted(success: ok)
         }
 
-        let work = Task {
+        let work = Task { @MainActor in
             do {
                 let prefs = StorageService.shared.playerPrefs()
                 let favoriteTeamIds = StorageService.shared.favoriteTeamIds()
                 if !prefs.notificationsEnabled {
                     complete(true)
-                    scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                    self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
                     return
                 }
                 if favoriteTeamIds.isEmpty {
                     complete(true)
-                    scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                    self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
                     return
                 }
                 let api = SportsAPI()
@@ -57,21 +57,21 @@ final class ScoresBackgroundRefresh {
 
                 if Task.isCancelled {
                     complete(false)
-                    scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                    self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
                     return
                 }
 
                 if result.allBoardsFailed {
                     // Do not call process with empty games: that would pruneStaleStartRequests(keeping:[]) and delete scheduled start-soon notifications.
                     complete(false)
-                    scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                    self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
                     return
                 }
                 if result.games.isEmpty {
                     // Games empty for any reason (even with favorites) — skip process entirely to avoid empty payload clearing starts.
                     // (merge baseline keeps prior keys; on partial boards we only process present games when not empty)
                     complete(true)
-                    scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                    self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
                     return
                 }
 
@@ -86,26 +86,28 @@ final class ScoresBackgroundRefresh {
 
                 if Task.isCancelled {
                     complete(false)
-                    scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                    self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
                     return
                 }
 
                 complete(true)
                 // rearm next BG
-                scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
             } catch {
                 complete(false)
                 // rearm on failure too
                 let prefs = StorageService.shared.playerPrefs()
-                scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+                self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
             }
         }
 
         task.expirationHandler = {
             work.cancel()
-            let prefs = StorageService.shared.playerPrefs()
-            complete(false)
-            scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+            Task { @MainActor in
+                let prefs = StorageService.shared.playerPrefs()
+                complete(false)
+                self.scheduleIfNeeded(notificationsEnabled: prefs.notificationsEnabled, notifyGoals: prefs.notifyGoals, notifyStarts: prefs.notifyGameStarts)
+            }
         }
     }
 
