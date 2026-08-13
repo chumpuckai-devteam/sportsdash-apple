@@ -217,7 +217,7 @@ extension VLCPlayerController: VLCMediaPlayerDelegate {
     nonisolated func mediaPlayerTimeChanged(_ aNotification: Notification) {
         Task { @MainActor in
             guard let p = self.player else { return }
-            let currentTime = p.time?.intValue ?? 0
+            let currentTime = p.time.intValue
             let hasVideoOut = p.hasVideoOut
             if currentTime > 0 || hasVideoOut == true {
                 if !self.hasRenderedFrame {
