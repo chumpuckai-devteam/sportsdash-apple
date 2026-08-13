@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Fullscreen IPTV player with UHF-style chrome: channel/EPG info, pause, PiP, captions, scores.
+/// Fullscreen IPTV player with UHF-style chrome: channel/EPG info, pause, scores. (pop-out iOS-only; no captions/PiP/aspect stubs rendered)
 struct PlayerView: View {
     @EnvironmentObject private var appModel: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -88,7 +88,6 @@ struct PlayerView: View {
         #endif
         .onAppear {
             playback.configure(prefs: appModel.playerPrefs)
-            applyAspect()
             playback.start(url: channel.url)
             if let id = game?.id { appModel.recordLastPlayed(gameId: id) }
             if appModel.xtreamAccount == nil {
@@ -105,7 +104,6 @@ struct PlayerView: View {
         }
         .onChange(of: appModel.playerPrefs) { _, prefs in
             playback.configure(prefs: prefs)
-            applyAspect()
         }
         .sheet(isPresented: $showStreamSheet) {
             streamSheet(matches: streamOptions)
@@ -117,14 +115,11 @@ struct PlayerView: View {
             )
         }
         .confirmationDialog("Player options", isPresented: $showMoreMenu, titleVisibility: .visible) {
-            Button("Cycle aspect (\(appModel.playerPrefs.aspect.label))") { cycleAspect() }
             Button("Jump to LIVE") { playback.jumpToLive() }
             #if os(iOS)
-                Button("Pop out player") { popOutToFloatingPlayer() }
-                #endif
-            Button("System Picture in Picture") { playback.togglePictureInPicture() }
+            Button("Pop out player") { popOutToFloatingPlayer() }
+            #endif
             Button("Alternate streams") { showStreamSheet = true }
-            Button("Cycle subtitles") { playback.cycleSubtitleTrack() }
             Button("Cancel", role: .cancel) {}
         }
         .overlay(alignment: .top) {
@@ -282,15 +277,13 @@ struct PlayerView: View {
                 playback.jumpToLive()
                 scheduleChromeHide()
             }
+            #if os(iOS)
             chromeIconButton(systemName: "rectangle.inset.filled.and.person.filled") {
                 popOutToFloatingPlayer()
             }
+            #endif
             chromeIconButton(systemName: playback.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill") {
                 playback.toggleMute()
-                scheduleChromeHide()
-            }
-            chromeIconButton(systemName: "aspectratio") {
-                cycleAspect()
                 scheduleChromeHide()
             }
             Button {
@@ -325,10 +318,6 @@ struct PlayerView: View {
                 .sportsGlass(in: Circle())
                 .accessibilityLabel("AirPlay")
             #endif
-            chromeIconButton(systemName: "captions.bubble") {
-                playback.cycleSubtitleTrack()
-                scheduleChromeHide()
-            }
             chromeIconButton(systemName: "ellipsis") {
                 showMoreMenu = true
             }
@@ -431,9 +420,7 @@ struct PlayerView: View {
         case "rectangle.inset.filled.and.person.filled": return "Pop out player"
         case "speaker.slash.fill": return "Unmute"
         case "speaker.wave.2.fill": return "Mute"
-        case "aspectratio": return "Change aspect ratio"
         case "list.bullet": return "Stream options"
-        case "captions.bubble": return "Change subtitles"
         case "ellipsis": return "More player options"
         default: return "Player control"
         }
@@ -577,7 +564,6 @@ struct PlayerView: View {
         game = g
         alternates = matches.filter { $0.channel.id != ch.id }
         if let id = g?.id { appModel.recordLastPlayed(gameId: id) }
-        applyAspect()
         playback.start(url: ch.url)
         showChrome = true
         scheduleChromeHide()
@@ -595,29 +581,6 @@ struct PlayerView: View {
             if !Task.isCancelled {
                 await MainActor.run { showChrome = false }
             }
-        }
-    }
-
-    private func cycleAspect() {
-        let modes = PlayerAspectMode.allCases
-        let i = modes.firstIndex(of: appModel.playerPrefs.aspect) ?? 0
-        var prefs = appModel.playerPrefs
-        prefs.aspect = modes[(i + 1) % modes.count]
-        appModel.setPlayerPrefs(prefs)
-        applyAspect()
-        playback.banner = "Aspect: \(prefs.aspect.label)"
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            await MainActor.run { playback.banner = nil }
-        }
-    }
-
-    private func applyAspect() {
-        switch appModel.playerPrefs.aspect {
-        case .fill, .stretch:
-            playback.setAspectFill(true)
-        case .auto, .fit, .ratio16x9, .ratio4x3:
-            playback.setAspectFill(false)
         }
     }
 

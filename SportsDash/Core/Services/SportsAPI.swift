@@ -2,6 +2,34 @@ import Foundation
 
 /// ESPN public scoreboard client with bounded concurrency for snappy UI.
 actor SportsAPI {
+    struct ScoreboardFetchResult: Sendable {
+        let games: [Game]
+        let successfulBoards: Int
+        let failedBoards: Int
+        let failedLeagues: Set<SportLeague>
+
+        var allBoardsFailed: Bool {
+            successfulBoards == 0 && failedBoards > 0
+        }
+
+        var hasPartialFailures: Bool {
+            successfulBoards > 0 && failedBoards > 0
+        }
+    }
+
+    private struct LeagueFetchResult: Sendable {
+        let games: [Game]
+        let successfulBoards: Int
+        let failedBoards: Int
+        let failedLeague: SportLeague?
+    }
+
+    private enum ScoreboardRequestError: Error, Sendable {
+        case invalidResponse
+        case httpStatus(Int)
+        case invalidPayload
+    }
+
     private let session: URLSession
     private let base = "https://site.api.espn.com/apis/site/v2/sports"
     /// Cap parallel ESPN league requests so first paint isn't starved.
@@ -33,51 +61,80 @@ actor SportsAPI {
     /// 1. Default ESPN board per league (fast first paint — live + current slate).
     /// 2. One **date-range** board (today…+horizon, US/Eastern) merged in — fills Upcoming
     ///    when the default slate is already all finals (MLB evening / late night).
+    /// onPartial is now async @MainActor @Sendable so callers on MainActor can do
+    /// non-suspending work (guard, update, await notifications) before fetch continues.
+    /// Awaited end-to-end prevents partial-final race.
     func fetchScoreboards(
         leagues: [SportLeague],
-        onPartial: (@Sendable ([Game]) -> Void)? = nil
-    ) async -> [Game] {
+        onPartial: (@MainActor @Sendable ([Game]) async -> Void)? = nil
+    ) async -> ScoreboardFetchResult {
         var byId: [String: Game] = [:]
+        var successfulBoards = 0
+        var failedBoards = 0
+        var failedLeagues = Set<SportLeague>()
         let list = leagues
 
         // Pass 1 — default boards only (fast).
-        await fetchLeagues(list, urlsForLeague: { league in
+        let current = await fetchLeagues(list, urlsForLeague: { league in
             self.defaultScoreboardURL(for: league).map { [$0] } ?? []
         }, into: &byId, onPartial: onPartial)
+        successfulBoards += current.successfulBoards
+        failedBoards += current.failedBoards
+        failedLeagues.formUnion(current.failedLeagues)
 
         // Pass 2 — range supplement (scheduled days).
-        await fetchLeagues(list, urlsForLeague: { league in
+        let upcoming = await fetchLeagues(list, urlsForLeague: { league in
             self.upcomingRangeScoreboardURLs(for: league)
         }, into: &byId, onPartial: onPartial)
+        successfulBoards += upcoming.successfulBoards
+        failedBoards += upcoming.failedBoards
+        failedLeagues.formUnion(upcoming.failedLeagues)
 
-        return Array(byId.values).sorted(by: Self.sortGames)
+        return ScoreboardFetchResult(
+            games: Array(byId.values).sorted(by: Self.sortGames),
+            successfulBoards: successfulBoards,
+            failedBoards: failedBoards,
+            failedLeagues: failedLeagues
+        )
     }
 
     private func fetchLeagues(
         _ leagues: [SportLeague],
         urlsForLeague: (SportLeague) -> [URL],
         into byId: inout [String: Game],
-        onPartial: (@Sendable ([Game]) -> Void)?
-    ) async {
+        onPartial: (@MainActor @Sendable ([Game]) async -> Void)?
+    ) async -> (successfulBoards: Int, failedBoards: Int, failedLeagues: Set<SportLeague>) {
+        var successfulBoards = 0
+        var failedBoards = 0
+        var failedLeagues = Set<SportLeague>()
         var index = 0
         while index < leagues.count {
             let end = min(index + maxConcurrent, leagues.count)
             let slice = Array(leagues[index..<end])
-            let batches: [[Game]] = await withTaskGroup(of: [Game].self, returning: [[Game]].self) { group in
+            let batches: [LeagueFetchResult] = await withTaskGroup(
+                of: LeagueFetchResult.self,
+                returning: [LeagueFetchResult].self
+            ) { group in
                 for league in slice {
                     let urls = urlsForLeague(league)
                     group.addTask {
                         await self.fetchAndMerge(urls: urls, league: league)
                     }
                 }
-                var out: [[Game]] = []
+                var out: [LeagueFetchResult] = []
                 for await batch in group {
                     out.append(batch)
                 }
                 return out
             }
             for batch in batches {
-                for game in batch {
+                successfulBoards += batch.successfulBoards
+                failedBoards += batch.failedBoards
+                if let league = batch.failedLeague {
+                    failedLeagues.insert(league)
+                }
+
+                for game in batch.games {
                     if let existing = byId[game.id] {
                         byId[game.id] = Self.prefer(existing, game)
                     } else {
@@ -87,31 +144,58 @@ actor SportsAPI {
             }
             // Always publish merged snapshot so Upcoming can fill after pass-1 finals-only boards.
             let snapshot = Array(byId.values).sorted(by: Self.sortGames)
-            onPartial?(snapshot)
+            await onPartial?(snapshot)
             index = end
         }
+        return (successfulBoards, failedBoards, failedLeagues)
     }
 
-    private func fetchAndMerge(urls: [URL], league: SportLeague) async -> [Game] {
-        guard !urls.isEmpty else { return [] }
+    private func fetchAndMerge(urls: [URL], league: SportLeague) async -> LeagueFetchResult {
+        guard !urls.isEmpty else {
+            return LeagueFetchResult(
+                games: [],
+                successfulBoards: 0,
+                failedBoards: 0,
+                failedLeague: nil
+            )
+        }
         var local: [String: Game] = [:]
-        await withTaskGroup(of: [Game].self) { group in
+        var successfulBoards = 0
+        var failedBoards = 0
+        await withTaskGroup(of: Result<[Game], ScoreboardRequestError>.self) { group in
             for url in urls {
                 group.addTask {
-                    (try? await self.fetchScoreboardURL(url, league: league)) ?? []
-                }
-            }
-            for await batch in group {
-                for game in batch {
-                    if let existing = local[game.id] {
-                        local[game.id] = Self.prefer(existing, game)
-                    } else {
-                        local[game.id] = game
+                    do {
+                        return .success(try await self.fetchScoreboardURL(url, league: league))
+                    } catch let error as ScoreboardRequestError {
+                        return .failure(error)
+                    } catch {
+                        return .failure(.invalidResponse)
                     }
                 }
             }
+            for await result in group {
+                switch result {
+                case .success(let batch):
+                    successfulBoards += 1
+                    for game in batch {
+                        if let existing = local[game.id] {
+                            local[game.id] = Self.prefer(existing, game)
+                        } else {
+                            local[game.id] = game
+                        }
+                    }
+                case .failure:
+                    failedBoards += 1
+                }
+            }
         }
-        return Array(local.values)
+        return LeagueFetchResult(
+            games: Array(local.values),
+            successfulBoards: successfulBoards,
+            failedBoards: failedBoards,
+            failedLeague: failedBoards > 0 ? league : nil
+        )
     }
 
     nonisolated private static func sortGames(_ a: Game, _ b: Game) -> Bool {
@@ -124,7 +208,11 @@ actor SportsAPI {
         var urls: [URL] = []
         if let d = defaultScoreboardURL(for: league) { urls.append(d) }
         urls.append(contentsOf: upcomingRangeScoreboardURLs(for: league))
-        return await fetchAndMerge(urls: urls, league: league)
+        let result = await fetchAndMerge(urls: urls, league: league)
+        guard result.successfulBoards > 0 else {
+            throw ScoreboardRequestError.invalidResponse
+        }
+        return result.games
     }
 
     private func defaultScoreboardURL(for league: SportLeague) -> URL? {
@@ -166,9 +254,8 @@ actor SportsAPI {
 
     private func fetchScoreboardURL(_ url: URL, league: SportLeague) async throws -> [Game] {
         let (data, response) = try await session.data(from: url)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            return []
-        }
+        guard let http = response as? HTTPURLResponse else { throw ScoreboardRequestError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else { throw ScoreboardRequestError.httpStatus(http.statusCode) }
         return try parseScoreboard(data: data, league: league)
     }
 
@@ -190,7 +277,7 @@ actor SportsAPI {
     private func parseScoreboard(data: Data, league: SportLeague) throws -> [Game] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let events = json["events"] as? [[String: Any]] else {
-            return []
+            throw ScoreboardRequestError.invalidPayload
         }
 
         var games: [Game] = []

@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -74,6 +76,7 @@ import coil.compose.AsyncImage
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.player.ScoresTickerMode
 import com.samirpatel.sportsdash.core.player.VlcPlayerController
+import com.samirpatel.sportsdash.core.player.PlaybackState
 import com.samirpatel.sportsdash.core.player.createVlcVideoLayout
 import com.samirpatel.sportsdash.core.sports.Game
 import com.samirpatel.sportsdash.ui.theme.Gold
@@ -114,9 +117,13 @@ fun PlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val controller = remember { VlcPlayerController(context) }
+    val playbackState by controller.playbackState.collectAsState()
     var chromeVisible by remember { mutableStateOf(true) }
     var chromeIdleEpoch by remember { mutableIntStateOf(0) }
-    var isPlaying by remember { mutableStateOf(true) }
+    // retryEpoch forces LaunchedEffect to re-execute play(url) even when url string unchanged (D).
+    // LaunchedEffect is sole owner of initial+retry play; onReplay kept for vm state sync.
+    var retryEpoch by remember { mutableIntStateOf(0) }
+    val isPlaying = playbackState == PlaybackState.PLAYING
     var isMuted by remember { mutableStateOf(false) }
     val landscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -187,16 +194,15 @@ fun PlayerScreen(
                     android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                         if (repeat == 0) {
                             if (isPlaying) controller.pause() else controller.resume()
-                            isPlaying = controller.isPlaying
                             noteChromeInteraction()
                         }
                         true
                     }
                     android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                        controller.resume(); isPlaying = true; noteChromeInteraction(); true
+                        controller.resume(); noteChromeInteraction(); true
                     }
                     android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                        controller.pause(); isPlaying = false; noteChromeInteraction(); true
+                        controller.pause(); noteChromeInteraction(); true
                     }
                     android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                     android.view.KeyEvent.KEYCODE_ENTER,
@@ -227,11 +233,15 @@ fun PlayerScreen(
         Modifier
     }
 
-    DisposableEffect(url) {
+    // LaunchedEffect calls play (initial + retry via epoch bump). VlcPlayerController now owns
+    // exactly one media start: stores URL until attach, starts exactly once per ownership, resets on explicit retry same URL.
+    // Attach only attaches views + starts pending exactly once if needed. No dups.
+    LaunchedEffect(url, retryEpoch) {
         if (url.isNotBlank()) {
             controller.play(url)
-            isPlaying = true
         }
+    }
+    DisposableEffect(url) {
         onDispose { }
     }
     DisposableEffect(Unit) {
@@ -252,7 +262,6 @@ fun PlayerScreen(
                     layout.isFocusable = false
                     layout.isFocusableInTouchMode = false
                     controller.attach(layout)
-                    if (url.isNotBlank()) controller.play(url)
                 }
             },
             modifier = Modifier
@@ -264,6 +273,47 @@ fun PlayerScreen(
                 controller.attach(layout)
             },
         )
+
+        // Truthful playback state overlay (P1.1) - loading/error/retry
+        when (playbackState) {
+            PlaybackState.OPENING, PlaybackState.BUFFERING -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(15f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Gold)
+                }
+            }
+            PlaybackState.ERROR -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(15f)
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Playback error", color = Color.White)
+                        Spacer(Modifier.height(8.dp))
+                        CircleControl(
+                            tvFocus = isTelevision,
+                            onClick = {
+                                noteChromeInteraction()
+                                retryEpoch++
+                                onReplay()
+                            },
+                            contentDescription = "Retry playback",
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, tint = Gold)
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+
 
         // 2) Tap catcher under chrome
         Box(
@@ -377,21 +427,23 @@ fun PlayerScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        CircleControl(
-                            tvFocus = isTelevision,
-                            onClick = {
-                                noteChromeInteraction()
-                                onPopOut()
-                            },
-                            contentDescription = "Pop out mini player",
-                            background = Color.Transparent,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.OpenInFull,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp),
-                            )
+                        if (!isTelevision) {
+                            CircleControl(
+                                tvFocus = isTelevision,
+                                onClick = {
+                                    noteChromeInteraction()
+                                    onPopOut()
+                                },
+                                contentDescription = "Pop out mini player",
+                                background = Color.Transparent,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.OpenInFull,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                         // Same sports control — cycles Off → Fade → Pin; label shows mode
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -465,8 +517,7 @@ fun PlayerScreen(
                     onClick = {
                         noteChromeInteraction()
                         onReplay()
-                        controller.play(url)
-                        isPlaying = true
+                        retryEpoch++  // force effect to call play even if url unchanged
                     },
                     contentDescription = "Rejoin live",
                     size = if (landscape) 52.dp else 56.dp,
@@ -483,7 +534,6 @@ fun PlayerScreen(
                     onClick = {
                         noteChromeInteraction()
                         controller.togglePlayPause()
-                        isPlaying = controller.isPlaying
                     },
                     contentDescription = if (isPlaying) "Pause" else "Play",
                     size = if (landscape) 72.dp else 76.dp,

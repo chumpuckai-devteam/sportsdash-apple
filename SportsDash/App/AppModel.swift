@@ -3,6 +3,29 @@ import Foundation
 import SwiftUI
 
 /// Shared app state — Flutter providers parity.
+
+/// Pure testable helper: separate visible loading token ownership from result generation.
+/// Every visible request owns a token it can retire even if stale (superseded by silent or later visible).
+/// Silent requests never create or clear visible tokens.
+struct VisibleLoadingTracker {
+    private var activeTokens: Set<Int> = []
+    private var nextToken = 0
+
+    mutating func beginVisible() -> Int {
+        nextToken += 1
+        let t = nextToken
+        activeTokens.insert(t)
+        return t
+    }
+
+    mutating func retireVisible(token: Int) -> Bool {
+        activeTokens.remove(token)
+        return !activeTokens.isEmpty
+    }
+
+    var isVisibleLoading: Bool { !activeTokens.isEmpty }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var games: [Game] = []
@@ -10,6 +33,12 @@ final class AppModel: ObservableObject {
     @Published var isLoadingScores = false
     @Published var isLoadingChannels = false
     @Published var scoresError: String?
+    /// Non-blocking degraded-data notice when at least one ESPN board succeeds.
+    @Published var scoresWarning: String?
+    private var scoresResultGeneration = 0
+    /// Final applied token per gen: delayed partials after final must not overwrite or re-notify.
+    private var finalAppliedGeneration = 0
+    private var visibleLoading = VisibleLoadingTracker()
     @Published var channelsError: String?
     @Published var lastUpdated: Date?
     /// Saved IPTV sources (multi-playlist).
@@ -194,32 +223,79 @@ final class AppModel: ObservableObject {
     }
 
     func refreshScores(silent: Bool = false) async {
-        if !silent { isLoadingScores = true }
         scoresError = nil
-        defer { if !silent { isLoadingScores = false } }
+        scoresWarning = nil
+        let myResultGen = { scoresResultGeneration += 1; return scoresResultGeneration }()
+        var myVisibleToken: Int? = nil
+        if !silent {
+            myVisibleToken = visibleLoading.beginVisible()
+            isLoadingScores = visibleLoading.isVisibleLoading
+        }
         let leagues = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
-        // Progressive updates — always apply denser snapshots so dated Upcoming
-        // boards aren't dropped when pass-1 already filled finals/live.
-        let result = await sportsAPI.fetchScoreboards(leagues: leagues) { [weak self] partial in
-            Task { @MainActor in
-                guard let self else { return }
-                let richer =
-                    partial.count > self.games.count
-                    || Self.upcomingCount(partial) > Self.upcomingCount(self.games)
-                    || self.games.isEmpty
-                if richer {
-                    self.games = partial
-                    self.lastUpdated = Date()
-                    self.migrateLegacyFavoriteTeamIds(using: partial)
-                    await self.processGameNotifications(using: partial)
-                }
+        // Partial updates only apply if still latest result gen (visible or silent).
+        let previousGames = games
+        // onPartial is now @MainActor async @Sendable: remove nested Task, directly execute
+        // guard+updates+await notifications on MainActor (AppModel is @MainActor). The await
+        // in SportsAPI ensures partial work completes before fetch continues or final result.
+        // Keep gen guard + finalAppliedGeneration as defense-in-depth.
+        let result = await sportsAPI.fetchScoreboards(leagues: leagues) { @MainActor [weak self] partial async in
+            guard let self,
+                  self.scoresResultGeneration == myResultGen,
+                  myResultGen > self.finalAppliedGeneration else { return }
+            let richer =
+                partial.count > self.games.count
+                || Self.upcomingCount(partial) > Self.upcomingCount(self.games)
+            if richer {
+                self.games = partial
+                self.lastUpdated = Date()
+                self.migrateLegacyFavoriteTeamIds(using: partial)
+                await self.processGameNotifications(using: partial)
             }
         }
-        games = result
+
+        // ALWAYS retire this visible request's token (if any) even if superseded/stale.
+        // Silent never touches visible loading.
+        if let t = myVisibleToken {
+            let stillLoading = visibleLoading.retireVisible(token: t)
+            isLoadingScores = stillLoading
+        }
+
+        // Only latest result applies its final state.
+        guard self.scoresResultGeneration == myResultGen else {
+            return
+        }
+
+        if result.allBoardsFailed {
+            let message = games.isEmpty
+                ? "ESPN scoreboards are unavailable. Pull to try again."
+                : "ESPN scoreboards are unavailable. Showing the last successful update."
+            scoresError = message
+            scoresWarning = games.isEmpty ? nil : message
+            finalAppliedGeneration = myResultGen
+            return
+        }
+
+        var mergedGames = result.games
+        if result.hasPartialFailures {
+            let freshIds = Set(mergedGames.map(\.id))
+            mergedGames.append(contentsOf: previousGames.filter {
+                result.failedLeagues.contains($0.league) && !freshIds.contains($0.id)
+            })
+        }
+        games = mergedGames
         lastUpdated = Date()
-        migrateLegacyFavoriteTeamIds(using: result)
-        await processGameNotifications(using: result)
+        if result.hasPartialFailures {
+            let count = result.failedLeagues.count
+            scoresWarning = count == 1
+                ? "One league could not refresh. Other scores are current."
+                : "Some leagues could not refresh. Other scores are current."
+        }
+        migrateLegacyFavoriteTeamIds(using: mergedGames)
+        await processGameNotifications(using: mergedGames)
+        // Mark final applied token so any delayed partial Tasks for this gen cannot overwrite or re-notify
+        finalAppliedGeneration = myResultGen
     }
+
 
     private func processGameNotifications(using games: [Game]) async {
         let p = playerPrefs
@@ -806,7 +882,7 @@ final class AppModel: ObservableObject {
         return matching.matchGameToChannels(game, channels: chans)
     }
 
-    /// Live / Upcoming / All — favorite-team games pin first (S-PARITY.FAV.2 / FAV.3).
+    /// Live / Upcoming / Final — favorite-team games pin first (S-PARITY.FAV.2 / FAV.3).
     /// No separate "favorite games" filter or sticky list — teams only.
     var filteredGames: [Game] {
         let base: [Game]
@@ -815,8 +891,7 @@ final class AppModel: ObservableObject {
             base = games.filter(\.isLive)
         case .upcoming:
             base = games.filter(\.isUpcoming)
-        case .all:
-            // Product label "Final" — completed slate (Android parity).
+        case .final:
             base = games.filter(\.isFinal)
         }
         return Self.pinFavoriteGames(base, favoriteTeamIds: favoriteTeamIds)

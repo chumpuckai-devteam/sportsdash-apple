@@ -55,7 +55,14 @@ import com.samirpatel.sportsdash.ui.theme.VoidBlack
 fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
     val notifPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { /* state flows from system */ }
+    ) { granted ->
+        // Handle callback explicitly (no noop). Use pure helper.
+        // For 13+ this is the only path that can enable after request.
+        val resolved = com.samirpatel.sportsdash.core.notifications.GameNotificationHelper.resolveNotificationEnabledFromPermissionResult(
+            Build.VERSION.SDK_INT, granted
+        )
+        vm.setNotificationsEnabled(resolved)
+    }
     var mode by remember { mutableIntStateOf(0) }
     var name by remember { mutableStateOf("My IPTV") }
     var serverUrl by remember { mutableStateOf("") }
@@ -332,10 +339,19 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
                     .background(Panel)
                     .clickable {
                         val turningOn = !state.notificationsEnabled
-                        if (turningOn && Build.VERSION.SDK_INT >= 33) {
-                            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        if (turningOn) {
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                // Launch; enable ONLY after granted result (denial keeps false)
+                                notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                // do NOT set here for 13+
+                            } else {
+                                // Pre-13: enable immediately
+                                vm.setNotificationsEnabled(true)
+                            }
+                        } else {
+                            // turning off: immediate, no perm involved
+                            vm.setNotificationsEnabled(false)
                         }
-                        vm.setNotificationsEnabled(turningOn)
                     }
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,

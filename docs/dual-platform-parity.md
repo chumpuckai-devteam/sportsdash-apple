@@ -1,84 +1,68 @@
-# Dual-platform parity matrix (baseline freeze)
+# Dual-platform parity matrix
 
-**Repo:** `sportsdash-apple` · **Board:** `sportsdash` · **Updated:** 2026-08 goal run (league-scoped fav ids + row parity + a11y)  
-**Law:** Ship Android + iOS to the **same product story** before net-new features.
+Updated 2026-08-12. SportsDash ships from one monorepo. Parity means the same core product journey; intentional platform capabilities are stated rather than hidden.
 
-## Shared baseline (both platforms)
+## Shared baseline
 
-| Area | Behavior |
-|------|----------|
-| Nav | Scores · Guide · Settings |
-| Hard player | VLC / libVLC, TS-first |
-| Scores | ESPN Live / Upcoming / Final (both); favorite **teams** pin first via **league-scoped ESPN ids** (`nfl:27`) |
-| Watch from Scores | Tap game → match channels → play |
-| Guide | Hour timeline + Grid; provider category order; EPG download-once |
-| Guide favorites | Star **channels** (Android long-press; iOS optional follow-up) |
-| Movies Now | Filter movie-like now-playing (both when enabled) |
-| Player | Back, mute, pause, rejoin, ticker toggle, **pop-out mini player** |
-| Settings | Playlist Xtream/M3U, leagues, reload EPG, clean names, About LGPL |
-| Brand | Void + gold / live mint |
+| Area | Shared behavior |
+|---|---|
+| Navigation | Scores · Guide · Settings |
+| Hard engine | VLC/libVLC, TS-first |
+| Scores | ESPN Live / Upcoming / Final; favorite teams pin first using league-scoped IDs |
+| Watch from Scores | Select game → match IPTV channels → choose stream → play |
+| Guide | Current-hour timeline + Grid, provider category order, automatic full EPG |
+| Guide favorites | Star channels; distinct from Scores team favorites |
+| Movies Now | Movie-like now-playing filter and ratings where configured |
+| Player | Full-bleed video, Back, play/pause, rejoin, mute, three-mode ticker |
+| Settings | Xtream/M3U, leagues, EPG status/reload, name cleanup, LGPL attribution |
+| TV Scores | Horizontal My Games/sport rails on Apple TV and Android TV |
+| Brand | Void, gold WATCH, live mint |
 
-## Wave status
+## Capability matrix
 
-### Wave A — must (shipped this sprint)
-| ID | Item | Status |
-|----|------|--------|
-| S-PARITY.A1 | Android favorite teams + pin-first | **shipped** (★ Faves filter removed — FAV.3 teams-only) |
-| S-PARITY.A2 | Scores filter Live/Upcoming/Final | **shipped** (no separate Faves chip) |
-| S-PARITY.A3 | Guide timeline checklist | **shipped** (doc + dogfood AC) |
-| S-PARITY.A4 | This matrix doc | **shipped** |
+| Capability | iOS/iPadOS | tvOS | Android phone | Android TV |
+|---|---|---|---|---|
+| Player presentation | Full-screen cover | Full-screen cover | Full-screen player | Full-screen player |
+| Floating pop-out | Supported | Not supported; control omitted | Supported | Pop-out removed on TV (Kotlin updated) |
+| Engine routing | Auto TS→VLC, HLS→AV; override/fallback | Same Apple routing | VLC-only | VLC-only |
+| AirPlay | AV path/system route | Platform route where available | No Cast claim | No Cast claim |
+| Notification start-soon | One-shot local schedule | No-op | Not supported | Not supported |
+| Start/score observations | 45-second foreground in-process poll | None | Existing app-driven refreshes only | Existing app-driven refreshes only |
+| TV rails/focus | Phone list, touch targets | Implemented; device dogfood gate remains | Phone list | Implemented; AVD/hardware dogfood gate remains |
 
-### Wave B — should (shipped this sprint)
-| ID | Item | Status |
-|----|------|--------|
-| S-PARITY.B1 | Android floating mini-player | **shipped** (pop-out bar) |
-| S-PARITY.B2 | Channel name cleanup | **shipped** (toggle + display) |
-| S-PARITY.B3 | Channel list disk cache | **shipped** |
-| S-PARITY.B4 | Settings core prefs | **shipped** (clean names) |
+Notification behavior is not parity: see `docs/game-notifications.md`. No push, WorkManager, alarm, Cast, or multiview is implied.
 
-### Wave C — later / partial
-| ID | Item | Status |
-|----|------|--------|
-| S-PARITY.C1 | Movies Now + rating chips | **Movies Now + OMDb/TMDB chips shipped** (keys in Settings) |
-| S-PARITY.C2 | iOS channel favorites | **shipped** (context menu / long-press + ★ Favorites group) |
-| S-PARITY.C3 | AirPlay / Cast | **blocked** Apple AV / Android Cast later |
-| S-PARITY.C4 | TV (tvOS / Android TV) | **in progress** — Apple TV residual compile/focus (My Games + player chrome + CI) after 1.2.0; Android TV leanback started; device dogfood still Samir |
+## Shipped product slices
 
-## Intentional remaining deltas
+- Team picker and metadata persistence; no favorite-game concept.
+- Live/Upcoming/Final filters and favorite-first grouping.
+- Channel favorites in Guide on both stacks.
+- Automatic bulk XMLTV plus progressive gap fill.
+- Android phone floating player and Apple phone floating player.
+- Apple TV and Android TV horizontal Scores rails, focus helpers, leanback target/entry, and TV player controls.
+- VLC family on all platforms; Apple retains AVPlayer as its HLS/system path.
 
-1. **Dual engine Auto (HLS→AV)** — Android VLC-only; fine for IPTV dogfood.  
-2. **Liquid Glass / splash polish** — Apple chrome only.  
-3. **tvOS focus vs Android TV** — not phone baseline.
+## Remaining intentional deltas and gates
 
-## Dogfood AC (baseline green)
+1. Android stays VLC-only; Apple dual-engine Auto is not an Android backlog promise.
+2. Liquid Glass and some system route surfaces are Apple-specific chrome.
+3. TV implementations ship, while simulator/device interaction sign-off remains a release gate.
+4. iOS has scheduled start-soon and recurring foreground score polling; Android alerts only observe refreshes the app already performs.
+5. Cast, multiview, and remote push remain blocked unless explicitly reopened.
 
-- [ ] Load Xtream; 2nd launch paints cached channels quickly  
-- [ ] **Android update:** install new APK **over** existing app (no uninstall) → Xtream host/user still in Settings; blank password = kept (see `docs/android-login-persist.md`)  
-- [ ] Long-press Scores game → star home/away team → those games pin first under Live/Upcoming  
-- [ ] Favorite-team games sort first under Live (no separate ★ Faves filter)  
-- [ ] Guide: Hour/Grid, Movies filter, category ☰, channel ★ favorites  
-- [ ] Play → pop-out mini bar over tabs → expand → close  
-- [ ] Clean names ON strips HD/4K noise  
-- [ ] EPG full download once; titles on timeline  
+## Dogfood acceptance
 
+Phone:
 
+- Load Xtream; second launch paints cached channels quickly.
+- Install Android APK over the old build; saved configuration remains. Uninstall is destructive.
+- Add favorite teams through Sport → League → Team; favorite-team games pin first.
+- Star Guide channels independently from Scores teams.
+- Play from Scores and Guide, change ticker stream through the picker, and exit with always-on Back.
+- Pop out and restore only on phone/tablet surfaces.
 
-## Player Engine Strategy (Intentional Delta)
+TV:
 
-**Apple (iOS + tvOS)**
-- `PlaybackController` with auto selection:
-  - TS / unknown container → VLCKit (MobileVLCKit / TVVLCKit)
-  - Clean HLS → AVPlayer
-- User can override in Settings (primary + fallback toggle).
-- Floating mini-player supported on phone.
-
-**Android**
-- `VlcPlayerController` (libVLC-all 3.6.0)
-- Single engine for now (matches the "hard engine" family used on Apple).
-- TextureView + proper rebind on stream switch.
-
-This delta is accepted. Full dual-engine parity on Android is not currently planned.
-
-## New features rule
-
-TV work is active (unblocked). Cast / multiview remain blocked unless explicitly requested.
+- Apple TV uses `SportsDashTV`; player always covers the screen and exposes no floating pop-out.
+- Android TV launches from the leanback row; D-pad reaches filters, rails, Guide, player controls, and shell navigation. TV pop-out removed.
+- Both TVs show horizontal My Games + per-league (not sport-flat) Scores rails rather than the dense phone list. Sport grouping headers may be present in sections but individual rails use league titles.

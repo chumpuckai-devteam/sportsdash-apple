@@ -40,6 +40,39 @@ jobs:
           brew install xcodegen cocoapods
           xcodegen generate
           pod install --repo-update
+      - name: Select available iPhone simulator UDID (robust dynamic)
+        id: select_iphone
+        run: |
+          set -e
+          IPHONE_UDID=$(python3 scripts/select_simulator.py --platform iphone)
+          if [ -z "$IPHONE_UDID" ]; then
+            echo "ERROR: No iPhone simulator found"
+            exit 1
+          fi
+          echo "IPHONE_UDID=$IPHONE_UDID" >> $GITHUB_OUTPUT
+          echo "iOS selected: $IPHONE_UDID"
+      - name: Select available tvOS simulator UDID (robust dynamic)
+        id: select_tvos
+        run: |
+          set -e
+          TV_UDID=$(python3 scripts/select_simulator.py --platform tvos)
+          if [ -z "$TV_UDID" ]; then
+            echo "ERROR: No tvOS simulator found"
+            exit 1
+          fi
+          echo "TVOS_UDID=$TV_UDID" >> $GITHUB_OUTPUT
+          echo "tvOS selected: $TV_UDID"
+      - name: Test pure logic iOS (SportsDash scheme)
+        run: |
+          IPHONE_UDID="${{ steps.select_iphone.outputs.IPHONE_UDID }}"
+          xcodebuild \
+            -workspace SportsDash.xcworkspace \
+            -scheme SportsDash \
+            -destination "platform=iOS Simulator,id=$IPHONE_UDID" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            test
       - name: Build iOS (workspace)
         run: |
           xcodebuild \
@@ -50,6 +83,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
             build
+      - name: Test pure logic tvOS (SportsDashTV scheme)
+        run: |
+          TVOS_UDID="${{ steps.select_tvos.outputs.TVOS_UDID }}"
+          xcodebuild \
+            -workspace SportsDash.xcworkspace \
+            -scheme SportsDashTV \
+            -destination "platform=tvOS Simulator,id=$TVOS_UDID" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            test
       - name: Build tvOS SportsDashTV (workspace)
         run: |
           xcodebuild \

@@ -74,6 +74,7 @@ import com.samirpatel.sportsdash.ScoresFilter
 import com.samirpatel.sportsdash.core.matching.ChannelMatch
 import com.samirpatel.sportsdash.core.sports.Game
 import com.samirpatel.sportsdash.core.sports.LeagueShelf
+import com.samirpatel.sportsdash.core.sports.ScoreboardGrouping
 import com.samirpatel.sportsdash.core.sports.SportScoreSection
 import com.samirpatel.sportsdash.core.sports.TeamInfo
 import com.samirpatel.sportsdash.ui.theme.Gold
@@ -150,6 +151,15 @@ fun ScoresScreen(
                     text = scoresErr,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                )
+            }
+            val scoresWarn = state.scoresWarning
+            if (scoresWarn != null && scoresErr == null) {
+                Text(
+                    text = scoresWarn,
+                    color = Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 1.dp),
                 )
             }
 
@@ -359,8 +369,8 @@ private fun flattenScoreRows(
         if (collapsed) continue
         for (shelf in section.leagues) {
             val rest = shelf.games.filter { it.id !in pinIds }
-            if (rest.isEmpty()) continue
             out.add(ScoreRow.LeagueHeader(shelf, section.sportKey))
+            if (rest.isEmpty()) continue
             for (g in rest) {
                 out.add(ScoreRow.GameItem(g, rowKey = "g-${section.sportKey}-${shelf.key}-${g.id}"))
             }
@@ -809,20 +819,31 @@ private fun LeagueSectionHeader(shelf: LeagueShelf) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (live > 0) {
-            Text(
-                text = "$live Live",
-                color = LiveMint,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-            )
-        } else {
-            Text(
-                text = "${shelf.games.size}",
-                color = Muted,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-            )
+        when {
+            shelf.games.isEmpty() -> {
+                Text(
+                    text = "None scheduled",
+                    color = Muted,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                )
+            }
+            live > 0 -> {
+                Text(
+                    text = "$live Live",
+                    color = LiveMint,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                )
+            }
+            else -> {
+                Text(
+                    text = "${shelf.games.size}",
+                    color = Muted,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                )
+            }
         }
     }
 }
@@ -1193,19 +1214,20 @@ private fun ScoresTVBrowse(
                 )
             }
         }
-        sections.forEach { section ->
-            val games = section.leagues.flatMap { it.games }
-            if (games.isNotEmpty()) {
-                item(key = "rail-${section.sportKey}") {
-                    ScoresTVRail(
-                        title = section.sportTitle,
-                        emoji = section.emoji,
-                        games = games,
-                        isFavorite = isFavorite,
-                        onGameClick = onGameClick,
-                        onGameLongClick = onGameLongClick,
-                    )
-                }
+        // Use pure extracted transform: per-league rails (not flat per sport).
+        // This ensures every section.leagues shelf gets its own titled rail
+        // with league label + cards or "None scheduled".
+        val tvRails = ScoreboardGrouping.tvScoreRails(sections)
+        tvRails.forEach { rail ->
+            item(key = rail.key) {
+                ScoresTVRail(
+                    title = rail.title,
+                    emoji = rail.emoji,
+                    games = rail.games,
+                    isFavorite = isFavorite,
+                    onGameClick = onGameClick,
+                    onGameLongClick = onGameLongClick,
+                )
             }
         }
     }
@@ -1250,20 +1272,29 @@ private fun ScoresTVRail(
                 fontWeight = FontWeight.SemiBold,
             )
         }
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .tvFocusGroup(),
-        ) {
-            items(items = games, key = { it.id }) { game ->
-                ScoresTVGameCard(
-                    game = game,
-                    isFavoriteMatch = isFavorite(game),
-                    onClick = { onGameClick(game) },
-                    onLongClick = { onGameLongClick(game) },
-                )
+        if (games.isEmpty()) {
+            Text(
+                text = "None scheduled",
+                color = Muted,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 8.dp),
+            )
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 40.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tvFocusGroup(),
+            ) {
+                items(items = games, key = { it.id }) { game ->
+                    ScoresTVGameCard(
+                        game = game,
+                        isFavoriteMatch = isFavorite(game),
+                        onClick = { onGameClick(game) },
+                        onLongClick = { onGameLongClick(game) },
+                    )
+                }
             }
         }
     }

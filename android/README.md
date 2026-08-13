@@ -1,183 +1,114 @@
 # SportsDash Android
 
-Compose + **libVLC** (`org.videolan.android:libvlc-all`) dogfood app.  
-Same repo as iOS/tvOS (`sportsdash-apple`). Shared product law: **TS → VLC**, Xtream/M3U, LGPL.
+Compose + libVLC application for Android phone and Android TV. Production Android code lives in this monorepo under `android/`; do not create a separate repository.
 
-## JDK / Gradle note
+## Toolchain
 
-1. **Gradle JDK = 21** (JetBrains Runtime) in Studio:  
-   **Settings → Build Tools → Gradle → Gradle JDK → 21**
-2. We do **not** pin `jvmToolchain(17)` (that requires a separate JDK 17 install and breaks with only JBR 21).
-3. App still compiles to **Java 17 bytecode** via `compileOptions` / `jvmTarget = "17"`.
+- Android Studio Gradle JDK: 21 (JetBrains Runtime).
+- Do not pin `jvmToolchain(17)` when only JBR 21 is installed.
+- Source/target bytecode remains Java 17 through `compileOptions` and Kotlin `jvmTarget`.
+- Ignore optional “new minor Gradle version” prompts during dogfood.
 
-Ignore “New Minor Gradle Version” for now.
-
-## Open & run (emulator / your phone via USB)
+## Open and run
 
 ```bash
 cd ~/agency/sportsdash-apple
 git pull origin main
 # Android Studio → Open → select android/
+# Sync, then Run ▶ on phone, emulator, or TV AVD.
 ```
 
-Sync → Run.
-
-## Build a friend APK (sideload)
-
-### In Android Studio
-
-1. `git pull origin main`
-2. Open **`android/`**
-3. **Build → Clean Project**
-4. **Build → Rebuild Project**
-5. **Build → Build Bundle(s) / APK(s) → Build APK(s)**
-6. Click **locate** when finished, or open:
-
-```text
-android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-### CLI
+CLI debug build:
 
 ```bash
 cd ~/agency/sportsdash-apple/android
 ./gradlew :app:clean :app:assembleDebug
-open app/build/outputs/apk/debug/   # Finder
+# android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Package id: **`com.samirpatel.sportsdash`**  
-File: **`app-debug.apk`** (debug-signed — fine for dogfood, not Play Store)
+Package ID: `com.samirpatel.sportsdash`. The debug APK is dogfood-only, not a Play Store artifact.
 
-### Share
+## Updating without losing IPTV configuration
 
-- AirDrop / Drive / Dropbox — send the **`.apk` file only** (not a zip of the whole project).
-- Prefer **Google Drive “anyone with link”** over SMS (SMS can corrupt large APKs).
+Install the new APK over the existing application. Do not uninstall first.
 
-## Updating (keep Xtream login) — read this first
+| Operation | App-private data |
+|---|---|
+| Open newer APK over installed app or `adb install -r` | Preserved when application ID and signing key match |
+| Uninstall, then install | Deleted by Android; credentials must be entered again |
 
-**Do not uninstall SportsDash to install a newer dogfood APK.**
+The application writes playlist configuration to DataStore and app-private compatibility backups. Those locations improve update resilience but are not described as encrypted credential storage. See `../docs/android-login-persist.md` for the current storage contract.
 
-| Path | Xtream / M3U login |
-|------|--------------------|
-| **Install over** (open new APK while old app is still installed, or `adb install -r`) | **Kept** — same `applicationId` `com.samirpatel.sportsdash` |
-| **Uninstall → install** | **Wiped** — Android deletes app private storage (DataStore + backups) |
+## Friend APK and Samsung sideloading
 
-Friends who uninstall and reinstall will always need to re-enter credentials. That is normal Android behavior, not a regression.
+Share `app-debug.apk` directly through Drive/AirDrop rather than messaging compression. A full libVLC APK is normally tens of megabytes; a tiny file indicates the wrong artifact.
 
-Details: [`../docs/android-login-persist.md`](../docs/android-login-persist.md)
+On current Samsung devices:
 
-## Install on Samsung — “App not installed”
+1. Settings → Security and privacy → Auto Blocker → Off.
+2. Allow “Install unknown apps” for the app opening the APK.
+3. Approve Play Protect's “Install anyway” flow if shown.
+4. Install over the old build.
 
-Do these **in order**. Step 1 fixes most modern Galaxy phones.
-
-### 1. Turn OFF Auto Blocker (One UI 6 / 7)
-
-**Settings → Security and privacy → Auto Blocker → Off**
-
-Samsung blocks many sideloaded APKs with a generic **App not installed** when this is on.
-
-### 2. Allow installs from My Files
-
-**Settings → Apps → ⋮ → Special access → Install unknown apps → My Files → Allow**
-
-### 3. Play Protect
-
-If a shield notification appears: **More details → Install anyway**  
-(or Play Store → profile → Play Protect → settings → briefly disable scanning)
-
-### 4. Prefer install-over (keep login)
-
-Leave the existing SportsDash app installed. Open the new `app-debug.apk` and choose **Update** / install.
-
-**Only uninstall** if install fails with signature mismatch (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) or a truly broken install — then you **will** need to re-enter Xtream.
-
-### 5. Use a full APK (not a tiny file)
-
-After rebuild, `app-debug.apk` should be **roughly 50–120 MB** (libVLC).  
-If it’s under ~10 MB, the build/copy is wrong.
-
-Share via **Google Drive / AirDrop**, not SMS/iMessage (can corrupt).
-
-### 6. Install via USB (shows the real error)
-
-On Mac, with USB debugging enabled on the phone:
+USB installation gives the actionable error code:
 
 ```bash
-cd ~/agency/sportsdash-apple
-git pull origin main
-cd android
-./gradlew :app:clean :app:assembleDebug
-# Install OVER the existing app (keeps login). Do NOT adb uninstall first.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-If it fails, `adb` prints a code like:
-
-| Code | Meaning |
-|------|---------|
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Different signing key — uninstall old app, then install (login lost) |
-| `INSTALL_FAILED_INVALID_APK` | Bad/corrupt file — rebuild + re-copy |
-| `INSTALL_FAILED_NO_MATCHING_ABIS` | Wrong CPU APK (rebuild after latest pull) |
-| `INSTALL_FAILED_USER_RESTRICTED` | Auto Blocker / unknown apps still on |
-| `INSTALL_FAILED_VERSION_DOWNGRADE` | Newer version already installed — ship a higher `versionCode` |
-
-Copy/paste that `INSTALL_FAILED_…` line back to me.
-
-### Rebuild dogfood APK
-
-```bash
-cd ~/agency/sportsdash-apple
-git pull origin main
-cd android
-./gradlew :app:clean :app:assembleDebug
-open app/build/outputs/apk/debug/
-# → app-debug.apk
-```
+| Error | Meaning/action |
+|---|---|
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | Signing mismatch; uninstall is the last resort and deletes app data |
+| `INSTALL_FAILED_INVALID_APK` | Rebuild and recopy the artifact |
+| `INSTALL_FAILED_NO_MATCHING_ABIS` | Wrong/stale APK; rebuild current source |
+| `INSTALL_FAILED_USER_RESTRICTED` | Auto Blocker or unknown-app restriction remains enabled |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | Installed versionCode is newer |
 
 ## Android TV
 
-**Not ready.** Phone UI only (no leanback launcher / D-pad). Sideload may open on some sticks but UX is poor. TV shell is later.
+Android TV support is implemented in the same APK:
 
-## Layout
+- `LEANBACK_LAUNCHER` and TV banner provide a home-row entry.
+- Touchscreen and leanback hardware features are optional, preserving phone installability.
+- `DeviceProfile.isTelevision` selects TV behavior.
+- Scores renders horizontal TV rails.
+- `tvFocusRing`, `tvFocusCircle`, and `tvFocusGroup` cover core Scores, Guide, and player surfaces.
+- Shell navigation remains reachable on TV.
+- Media keys and D-pad reveal/Back behavior are implemented in the player.
+- TV playback full-screen only (pop-out removed and gated by isTelevision; Kotlin changed).
 
-```
-android/
-  app/src/main/java/com/samirpatel/sportsdash/
-    core/iptv/     Xtream + M3U
-    core/epg/      xmltv bulk + short EPG
-    core/player/   VlcPlayerController
-    core/sports/   ESPN scores
-    ui/            Compose screens
-```
+AVD/hardware dogfood for full-screen TV (pop-out removed); that does not make Android TV absent or phone-only. See `../docs/tv-surfaces.md`.
 
-## Playlist login persistence
-
-Full write-up: [`../docs/android-login-persist.md`](../docs/android-login-persist.md)
-
-- Xtream host/user/password and M3U URL live in **DataStore** (`sportsdash_prefs`) and are multi-written to:
-  - **SharedPreferences** `sportsdash_secure_backup` (sync `commit`)
-  - **`filesDir/playlist_config_backup.json`** (atomic rewrite)
-- **APK update-install** (same `applicationId` `com.samirpatel.sportsdash`, rising `versionCode`) keeps private storage — login loads without re-entry.
-- Settings shows saved host/user; **password field stays blank** meaning “keep existing” on Save.
-- **Uninstall** clears app private storage (DataStore + backups). Expected Android behavior — not fixed by dual-write.
-
-## License
-
-libVLC Android — LGPL. See `../docs/LGPL-NOTICE.md`.
-
-## Android TV (1.2.0-tv+ / D-pad 1.2.1-tv-focus)
-
-Same debug APK appears on the **TV home row** (`LEANBACK_LAUNCHER`).
-Touchscreen/leanback features are **not required**, so phone installs still work.
-
-**D-pad (1.2.1-tv-focus):** gold `tvFocusRing` / `tvFocusCircle` on Scores rows+filters,
-Guide grid+timeline, Player transport/ticker. Shell chrome stays on TV.
-Media play/pause keys; DPAD reveals player chrome when hidden.
+TV AVD build/install:
 
 ```bash
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-# AVD: TV 1080p · open from leanback row
+# Use a 1080p TV AVD and launch from the leanback row.
 ```
 
-See `docs/tv-surfaces.md`.
+## Product implementation map
+
+```text
+android/app/src/main/java/com/samirpatel/sportsdash/
+  core/iptv/           Xtream + M3U
+  core/epg/            bulk XMLTV + automatic short-EPG gap fill
+  core/player/         VlcPlayerController
+  core/sports/         ESPN Scores
+  core/notifications/  refresh-observed local alert helper
+  ui/                  phone/TV Compose surfaces
+```
+
+- Engine: libVLC is shipping now, not future work.
+- Scores: ESPN Live/Upcoming/Final with team favorites.
+- Guide favorites: channels, separate from Scores team favorites.
+- Notifications: alerts occur when existing app-driven score refreshes observe transitions; no WorkManager, alarm, scheduled start-soon, push, or parity with iOS is claimed. See `../docs/game-notifications.md`.
+
+## License
+
+libVLC Android is LGPL. See `../docs/LGPL-NOTICE.md`.
+
+## CI (added for P0.5)
+
+- `.github/workflows/android.yml` runs on push/PR: JDK21, `./gradlew :app:test` (JVM unit tests for pure logic) + `assembleDebug`.
+- Tests cover league persistence migration, upcoming grouping, etc.

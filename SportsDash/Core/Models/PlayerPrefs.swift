@@ -1,23 +1,5 @@
 import Foundation
 
-// MARK: - Aspect
-
-enum PlayerAspectMode: String, CaseIterable, Identifiable, Codable, Sendable {
-    case auto, fit, fill, ratio16x9, ratio4x3, stretch
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .auto: return "Auto"
-        case .fit: return "Fit"
-        case .fill: return "Fill / crop"
-        case .ratio16x9: return "16:9"
-        case .ratio4x3: return "4:3"
-        case .stretch: return "Stretch"
-        }
-    }
-}
 
 // MARK: - Primary video player (UHF-style)
 
@@ -53,7 +35,7 @@ enum PrimaryVideoPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
         case .auto:
             return "Detects stream type from the URL. MPEG-TS → VLC; HLS .m3u8 → AVPlayer. Best default for IPTV."
         case .vlc:
-            return "libVLC via MobileVLCKit/TVVLCKit (LGPL). Strong TS/IPTV. Same engine family for Android later."
+            return "libVLC via MobileVLCKit/TVVLCKit (LGPL). Strong TS/IPTV. Android ships the same libVLC family."
         case .avKit:
             return "Apple’s player. Best clean HLS + system AirPlay/PiP; weaker on raw TS."
         case .ksPlayer, .mpvKit:
@@ -210,7 +192,6 @@ enum ScoresTickerMode: String, CaseIterable, Identifiable, Codable, Sendable {
 /// Player + general + UI preferences (UHF-inspired).
 struct PlayerPrefs: Codable, Sendable, Equatable {
     // Player
-    var aspect: PlayerAspectMode = .auto
     var primaryPlayer: PrimaryVideoPlayer = .auto
     var fallbackPlayers: Bool = true
     /// Preferred forward buffer (seconds), 1…15.
@@ -237,7 +218,7 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
     var notifyGoals: Bool = true
 
     enum CodingKeys: String, CodingKey {
-        case aspect, primaryPlayer, fallbackPlayers, bufferSeconds
+        case primaryPlayer, fallbackPlayers, bufferSeconds
         case adaptiveFrameRate, hardwareDecode, asynchronousDecompression
         case userAgent, preferredLiveFormat, playlistRefresh
         case theme, guideLayout, cleanUpNames, launchTab, scoresTickerMode
@@ -249,7 +230,6 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        aspect = try c.decodeIfPresent(PlayerAspectMode.self, forKey: .aspect) ?? .auto
         bufferSeconds = try c.decodeIfPresent(Double.self, forKey: .bufferSeconds) ?? 3
         adaptiveFrameRate = try c.decodeIfPresent(Bool.self, forKey: .adaptiveFrameRate) ?? true
         hardwareDecode = try c.decodeIfPresent(Bool.self, forKey: .hardwareDecode) ?? true
@@ -302,7 +282,6 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(aspect, forKey: .aspect)
         try c.encode(primaryPlayer, forKey: .primaryPlayer)
         try c.encode(fallbackPlayers, forKey: .fallbackPlayers)
         try c.encode(bufferSeconds, forKey: .bufferSeconds)
@@ -325,6 +304,14 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
     /// Clamped buffer seconds for hard engine caching.
     var clampedBufferSeconds: Double {
         min(15, max(1, bufferSeconds))
+    }
+
+    /// Pure, side-effect-free helper (P0.2).
+    /// Clamps 1–15s and converts to milliseconds for VLC network/live/sout caching options.
+    /// Practical for unit testing (no side effects, deterministic).
+    static func vlcCachingMs(_ seconds: Double) -> Int {
+        let s = min(15.0, max(1.0, seconds))
+        return Int(s * 1000.0 + 0.5)
     }
 }
 
@@ -356,11 +343,11 @@ enum ChannelNameCleanup {
 enum DashboardFilter: String, CaseIterable, Identifiable, Sendable {
     /// Live / Upcoming / Final — no separate favorite-games filter (S-PARITY.FAV.3).
     /// Favorite **teams** pin first inside each filter (S-PARITY.FAV.2).
-    /// `.all` rawValue kept for prefs decode; product label is "Final".
-    ///
     /// Android side uses `ScoresFilter { LIVE, UPCOMING, FINAL }`.
     /// Keep the mapping in sync in AppModel / AppViewModel filtering logic.
-    case live, upcoming, all
+    /// This UI-only selection is not persisted; repository search confirmed there is
+    /// no legacy `all` value to decode, so the runtime name can safely match the product.
+    case live, upcoming, final
 
     var id: String { rawValue }
 
@@ -368,7 +355,7 @@ enum DashboardFilter: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .live: return "Live"
         case .upcoming: return "Upcoming"
-        case .all: return "Final"
+        case .final: return "Final"
         }
     }
 }

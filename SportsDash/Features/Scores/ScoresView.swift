@@ -58,7 +58,7 @@ struct ScoresView: View {
                         .environmentObject(appModel)
                         .sportsSheetChrome()
                 }
-                .sheet(isPresented: $showFavoritePicker) {
+                .sportsLargeCover(isPresented: $showFavoritePicker) {
                     FavoriteTeamPickerView()
                         .environmentObject(appModel)
                         .sportsSheetChrome()
@@ -166,6 +166,14 @@ struct ScoresView: View {
         #else
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                if let warning = appModel.scoresWarning {
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(SportsColors.muted)
+                        .padding(.horizontal, 10)
+                        .accessibilityLabel("Scores warning: \(warning)")
+                }
+
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
                         .padding(.horizontal, 10)
@@ -204,6 +212,14 @@ struct ScoresView: View {
     private func tvNetflixBrowse(pin: [Game], sections: [SportScoreSection]) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 36) {
+                if let warning = appModel.scoresWarning {
+                    Label(warning, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(SportsColors.muted)
+                        .padding(.horizontal, 48)
+                        .accessibilityLabel("Scores warning: \(warning)")
+                }
+
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
                         .padding(.horizontal, 48)
@@ -229,18 +245,16 @@ struct ScoresView: View {
                         )
                         .focusSection()
                     }
-                    ForEach(sections) { section in
-                        let games = section.leagues.flatMap(\.games)
-                        if !games.isEmpty {
-                            ScoresTVRail(
-                                title: section.sportTitle,
-                                emoji: section.emoji,
-                                games: games,
-                                favoriteTeamIds: appModel.favoriteTeamIds,
-                                onSelect: { selectedGame = $0 }
-                            )
-                            .focusSection()
-                        }
+                    let rails = ScoreboardGrouping.tvScoreRails(sections: sections)
+                    ForEach(rails, id: \.key) { rail in
+                        ScoresTVRail(
+                            title: rail.title,  // per-league (not sportTitle) for Upcoming empty rails
+                            emoji: rail.emoji,
+                            games: rail.games,
+                            favoriteTeamIds: appModel.favoriteTeamIds,
+                            onSelect: { selectedGame = $0 }
+                        )
+                        .focusSection()
                     }
                 }
             }
@@ -809,7 +823,7 @@ struct ScoresView: View {
         switch appModel.dashboardFilter {
         case .live: return "No live games"
         case .upcoming: return "No upcoming games"
-        case .all: return "No final games"
+        case .final: return "No final games"
         }
     }
 
@@ -824,7 +838,7 @@ struct ScoresView: View {
             return "No scheduled games in the next few days for \(labels)\(more). Pull to refresh or adjust leagues in Settings."
         case .live:
             return "Nothing in progress right now. Check Upcoming or pull to refresh. Star a team on a matchup to pin their games first."
-        case .all:
+        case .final:
             return "No completed games in the current slate. Check Live or Upcoming, or pull to refresh."
         }
     }
@@ -921,5 +935,23 @@ enum ScoreboardGrouping {
         }
         if let current { sections.append(current) }
         return sections
+    }
+
+    /// Pure transformation extracted for TV Netflix browse (parity with Android tvScoreRails).
+    /// Returns league-level rails (title=league.label) so Upcoming renders per-league
+    /// including empty selected leagues (which will render "None scheduled" inside rail).
+    /// Live/Final avoid empty because buildSections omits empty shelves for those filters.
+    /// My Games is handled separately and remains first.
+    static func tvScoreRails(sections: [SportScoreSection]) -> [(key: String, title: String, emoji: String, games: [Game])] {
+        return sections.flatMap { section in
+            section.leagues.map { shelf in
+                (
+                    key: "rail-\(section.sportKey)-\(shelf.key)",
+                    title: shelf.title,
+                    emoji: section.emoji,
+                    games: shelf.games
+                )
+            }
+        }
     }
 }

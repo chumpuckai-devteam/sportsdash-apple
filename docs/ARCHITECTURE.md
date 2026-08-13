@@ -1,84 +1,87 @@
 # SportsDash Architecture (2026-08)
 
 ## Goals
-- Native multi-platform: **iOS + tvOS** (SwiftUI) + **Android** (Jetpack Compose) in a **single monorepo**.
-- Hard IPTV engine using **VLC family** (LGPL) to avoid GPL App Store risk.
-- Strong phone baseline first, then 10-foot TV surfaces.
-- Parity between platforms before major net-new features.
 
-## Current Repository Structure
-- `SportsDash/` — SwiftUI app (iOS + tvOS)
-- `android/` — Kotlin + Compose app (same `applicationId`)
-- `docs/` — product decisions, parity matrix, TV surfaces
-- `Project.yml` + `Podfile` — xcodegen + CocoaPods (VLCKit / TVVLCKit)
-- `android/build.gradle.kts` — libVLC (`org.videolan.android:libvlc-all`)
+- Native multi-platform product: iOS + tvOS in SwiftUI and Android phone + Android TV in Jetpack Compose, in one monorepo.
+- VLC-family hard IPTV playback under LGPL; Apple also uses AVPlayer for clean HLS.
+- Phone baseline and explicit 10-foot TV surfaces, with parity claims limited to behavior that actually ships.
+- No secrets in source or documentation.
 
-Both platforms live in `sportsdash-apple` (rename to `sportsdash` planned later).
+## Repository structure
 
-## Modules (Swift side)
-| Area                  | Responsibility |
-|-----------------------|----------------|
-| App                   | Lifecycle, `AppModel`, tabs (Scores · Guide · Settings) |
-| Core/Models           | `Game`, `SportLeague`, IPTV types, `PlayerPrefs` |
-| Core/Services         | `SportsAPI`, `IptvService`, `EpgService`, `MatchingService`, `GameNotificationService` (iOS only) |
-| Features/Player       | `PlaybackController` (multi-engine), `PlayerView`, chrome |
-| Features/Scores       | Phone list + TV Netflix-style rails |
-| Features/Guide        | Timeline + Grid, category picker |
-| Theme                 | Colors, `PlatformChrome`, TV focus helpers (`SportsTVFocused`) |
+- `SportsDash/` — shared SwiftUI sources for iOS and tvOS.
+- `android/` — Kotlin/Compose application for Android phone and Android TV.
+- `docs/` — product contracts, parity, TV, notification, engine, EPG, and dogfood guidance.
+- `Project.yml` + `Podfile` — XcodeGen and CocoaPods for MobileVLCKit/TVVLCKit.
+- `android/app/build.gradle.kts` — Android app dependencies, including `org.videolan.android:libvlc-all`.
 
-## Player Strategy
-**Apple (iOS + tvOS)**: `PlaybackController`
-- Auto routing: TS / unknown → **VLCKit** (MobileVLCKit / TVVLCKit); clean HLS → **AVPlayer**
-- Explicit override in Settings
-- Floating mini-player (phone only) + full-screen
+The repository remains named `sportsdash-apple` for now; that name does not imply a separate Android repository.
 
-**Android**: `VlcPlayerController`
-- libVLC only (same family as Apple)
-- TextureView for Compose overlays
-- Audio focus + volume boost (0–200)
+## Apple modules
 
-Intentional delta: Android is currently VLC-only. Dual-engine + fallback is Apple-only for now.
+| Area | Responsibility |
+|---|---|
+| App | Lifecycle, `AppModel`, Scores · Guide · Settings navigation, refresh orchestration |
+| Core/Models | Games, leagues, IPTV types, player preferences |
+| Core/Services | ESPN, IPTV, EPG, matching, storage, ratings, and iOS notification service with tvOS no-op surface |
+| Features/Player | `PlaybackController`, AVPlayer/VLCKit surfaces, full-screen player chrome, iPhone/iPad floating player |
+| Features/Scores | Phone list and tvOS horizontal rails |
+| Features/Guide | Timeline, grid, category presentation, channel favorites |
+| Theme | Tokens, `PlatformChrome`, and TV focus helpers |
 
-## Scores & Favorites
-- ESPN-powered scores.
-- **Favorite teams only** (no bare channels in Scores).
-- **League-scoped IDs** (e.g. `nfl:27` vs `mlb:27`) to prevent cross-sport collisions.
-- On TV: Netflix-style horizontal rails ("My Games" first, then per-sport).
-- On phone: Dense one-row chrome + vertical list.
+## Player strategy
 
-## TV Surfaces (10-foot)
-- **Apple TV** (`SportsDashTV` scheme): fullScreenCover player, focus rings, horizontal rails.
-- **Android TV**: `LEANBACK_LAUNCHER`, `DeviceProfile.isTelevision`, `TvFocus` helpers.
-- PlatformChrome gates iOS-only APIs.
-- Shell (tabs) stays visible on TV (unlike phone landscape).
+Apple:
 
-See `docs/tv-surfaces.md` for current status and dogfood steps.
+- Auto routes MPEG-TS/unknown/Xtream live streams to MobileVLCKit or TVVLCKit.
+- Clean HLS routes to AVPlayer.
+- User override and one cross-engine fallback are Apple-only capabilities.
+- Player presentation is a `fullScreenCover` on iOS and tvOS.
+- Floating mini-player/pop-out is iOS/iPadOS only and never appears on tvOS or Android TV (removed/gated).
 
-## Platform Differences (Intentional)
-- Presentation: fullScreenCover on TV vs sheet on phone for some flows.
-- Floating player: iOS only.
-- Notifications: local favorite-team alerts (iOS only).
-- Engine: Apple dual + fallback; Android VLC-only.
+Android:
 
-## Build & Workflow
-- iOS/tvOS: `xcodegen generate && pod install && open SportsDash.xcworkspace`
-- Android: Open `android/` folder in Android Studio or `./gradlew :app:assembleDebug`
-- Always prefer **install-over** on Android to preserve login (see `docs/android-login-persist.md`).
-- TV dogfood: Apple TV simulator (SportsDashTV scheme) + Android TV AVD.
+- `VlcPlayerController` uses libVLC 3.6.x for all supported streams.
+- TextureView supports Compose overlays and video rebind on stream switch.
+- Floating mini-player / pop-out exists on phone only. TV (both platforms) full-screen only; pop-out removed.
 
-## Documentation
-- `docs/dual-platform-parity.md` — baseline matrix
-- `docs/tv-surfaces.md` — TV specific
-- `docs/game-notifications.md`
-- `android/README.md`
+Android's single-engine implementation is an intentional delta, not unfinished VLC work.
 
-## Historical Notes (kept for context)
-- Early Flutter prototype existed (different repo).
-- Early plan was separate `sportsdash-android` repo. That plan was abandoned in favor of the current monorepo.
-- KSPlayer and other GPL engines were evaluated and removed.
+## Scores and favorites
 
-## Current Focus Areas (as of 2026-08)
-- TV polish (Netflix cards, focus, player sizing)
-- Continued parity enforcement
-- Local notifications (shipped)
-- EPG experience
+- ESPN supplies Live, Upcoming, and Final boards.
+- Apple distinguishes a legitimate successful empty slate from aggregate board failure. A total failure preserves the last successful games and exposes `scoresError`; partial failures retain successful games and expose a warning.
+- Scores favorites = teams only, stored with league-scoped IDs such as `nfl:27` and `mlb:27`.
+- Guide favorites = IPTV channels. They are a separate domain and do not create score alerts.
+- Phone uses dense one-row filters and a vertical list; TV uses horizontal “My Games” first + per-league rails (Upcoming incl. empty selected leagues w/ None scheduled on both; Live/Final avoid empty). Sport headers ok in grouping but rails league-level (see tv-surfaces.md).
+
+## TV surfaces
+
+- Apple TV: `SportsDashTV`, TVVLCKit, focus helpers, horizontal Scores rails, and full-screen player cover. No TV pop-out.
+- Android TV: leanback launcher/banner, `DeviceProfile.isTelevision`, D-pad focus helpers, TV Scores rails, and TV player key handling. Pop-out removed (Kotlin updated).
+- Shell navigation remains available on TV. Phone landscape may use the compact replacement strip.
+
+See `docs/tv-surfaces.md` for the exact implementation and dogfood matrix.
+
+## Notification contract
+
+Game alerts are local and opt-in; no remote push exists.
+
+- iOS: one-shot start-soon scheduling plus transitions/score increases observed by the in-process 45-second foreground score poll.
+- Android: transitions/score increases observed when existing app-driven score refreshes run. No recurring poll, WorkManager, alarm, or scheduled start-soon reminder is claimed.
+- tvOS: no-op notification service; notification UI is iOS-only.
+
+This is an intentional documented capability delta, not notification parity. See `docs/game-notifications.md`.
+
+## Build and workflow
+
+- Apple: `xcodegen generate && pod install`, then open `SportsDash.xcworkspace`.
+- Android: open `android/` in Android Studio or run `./gradlew :app:assembleDebug` with JDK 21.
+- Install Android APKs over the existing app to preserve private app data; uninstall removes it.
+- Apple CI builds iOS and tvOS. Device/simulator dogfood remains required for interaction and focus sign-off.
+
+## Historical decisions
+
+- The early separate Android repository plan was abandoned; Android production code lives in `android/` here.
+- KSPlayer and other GPL engine paths were removed. VLC/libVLC is the chosen hard engine family.
+- Cast, multiview, remote push, and another player-engine migration are not part of the current parity slice.

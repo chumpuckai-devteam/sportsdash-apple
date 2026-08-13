@@ -14,6 +14,13 @@ import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+enum class PlaybackState { IDLE, OPENING, BUFFERING, PLAYING, PAUSED, ERROR, STOPPED }
+
+
 /**
  * Hard IPTV engine — libVLC (same family as iOS MobileVLCKit).
  *
@@ -43,12 +50,40 @@ class VlcPlayerController(context: Context) {
     )
     private val mediaPlayer: MediaPlayer = MediaPlayer(libVlc)
     private var attachedLayout: VLCVideoLayout? = null
+
+    private val _playbackState = MutableStateFlow(PlaybackState.IDLE)
+    val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
+
+    private val eventListener = object : MediaPlayer.EventListener {
+        override fun onEvent(event: MediaPlayer.Event) {
+            val newState = when (event.type) {
+                MediaPlayer.Event.Opening -> PlaybackState.OPENING
+                MediaPlayer.Event.Buffering -> PlaybackState.BUFFERING
+                MediaPlayer.Event.Playing -> PlaybackState.PLAYING
+                MediaPlayer.Event.Paused -> PlaybackState.PAUSED
+                MediaPlayer.Event.Stopped, MediaPlayer.Event.EndReached -> PlaybackState.STOPPED
+                MediaPlayer.Event.EncounteredError -> PlaybackState.ERROR
+                else -> _playbackState.value
+            }
+            _playbackState.value = newState
+        }
+    }
+
+    init {
+        mediaPlayer.setEventListener(eventListener)
+    }
+
     private var muted: Boolean = false
     /** 0–200; 100 = normal. Default boost for quiet IPTV encodes. */
     private var volumePercent: Int = DEFAULT_VOLUME_PERCENT
     private var currentUrl: String? = null
+    /** Pending URL to start once attached (ensures single start owner). */
+    private var pendingUrl: String? = null
+    /** The URL for which start has been issued (prevents dup starts on attach/play). */
+    private var startedUrl: String? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var hasAudioFocus: Boolean = false
+
 
     private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
@@ -65,7 +100,7 @@ class VlcPlayerController(context: Context) {
         }
     }
 
-    val isPlaying: Boolean get() = mediaPlayer.isPlaying
+    val isPlaying: Boolean get() = _playbackState.value == PlaybackState.PLAYING
     val isMuted: Boolean get() = muted
 
     fun attach(layout: VLCVideoLayout) {
@@ -77,7 +112,14 @@ class VlcPlayerController(context: Context) {
         rebindViews(layout)
         attachedLayout = layout
         applyVolume()
-        currentUrl?.let { playInternal(it, force = false) }
+        // Attach ONLY attaches views and starts pending URL exactly once if not already started.
+        // No call to playInternal here; no duplicate starts.
+        val p = pendingUrl
+        if (p != null && startedUrl != p) {
+            startedUrl = p
+            pendingUrl = null
+            startMedia(p)
+        }
     }
 
     fun detach() {
@@ -88,13 +130,27 @@ class VlcPlayerController(context: Context) {
         attachedLayout = null
     }
 
-    /** Play or switch stream. Always rebinds TextureView after media change. */
+    /** Play or switch stream. Sets current/pending URL.
+     *  If attached, starts once (if not already owner for this URL).
+     *  For retry of *same* URL: explicitly resets ownership then starts once.
+     *  Stores URL safely until attach without premature start.
+     */
     fun play(url: String) {
-        playInternal(url, force = true)
+        if (currentUrl == url) {
+            // explicit retry of same URL: reset ownership to allow restart
+            startedUrl = null
+        }
+        currentUrl = url
+        pendingUrl = url
+        if (attachedLayout != null && startedUrl != url) {
+            startedUrl = url
+            pendingUrl = null
+            startMedia(url)
+        }
     }
 
-    private fun playInternal(url: String, force: Boolean) {
-        if (!force && currentUrl == url && mediaPlayer.isPlaying) return
+    /** Core media start (no attach logic, no delayed duplicate play). Called exactly once per owner. */
+    private fun startMedia(url: String) {
         currentUrl = url
         val layout = attachedLayout
         requestPlaybackAudioFocus()
@@ -122,27 +178,13 @@ class VlcPlayerController(context: Context) {
         }
         mediaPlayer.play()
         applyVolume()
-        // Re-assert volume after decoder starts (some builds reset to 100)
+        // Re-assert volume after decoder starts (some builds reset to 100). NO play() restart.
         mainHandler.postDelayed({
             if (currentUrl == url) applyVolume()
         }, 120)
         mainHandler.postDelayed({
             if (currentUrl == url) applyVolume()
         }, 500)
-        if (layout != null) {
-            mainHandler.postDelayed({
-                if (attachedLayout === layout && currentUrl == url) {
-                    rebindViews(layout)
-                    applyVolume()
-                    if (!mediaPlayer.isPlaying) {
-                        try {
-                            mediaPlayer.play()
-                        } catch (_: Exception) {
-                        }
-                    }
-                }
-            }, 250)
-        }
     }
 
     private fun rebindViews(layout: VLCVideoLayout) {
@@ -159,6 +201,8 @@ class VlcPlayerController(context: Context) {
 
     fun stop() {
         currentUrl = null
+        pendingUrl = null
+        startedUrl = null
         try {
             mediaPlayer.stop()
         } catch (_: Exception) {
@@ -256,13 +300,16 @@ class VlcPlayerController(context: Context) {
         }
     }
 
-    fun setEventListener(listener: MediaPlayer.EventListener?) {
-        mediaPlayer.setEventListener(listener)
-    }
-
     companion object {
         /** Unity is 100; 140 is a moderate boost for quiet IPTV without harsh clipping. */
         const val DEFAULT_VOLUME_PERCENT = 140
+
+        /** Pure (no side effects) ownership decision helper for testability. */
+        fun shouldStartMedia(pending: String?, started: String?, targetUrl: String, attached: Boolean): Boolean {
+            if (targetUrl.isBlank()) return false
+            if (started == targetUrl) return false
+            return attached || pending == targetUrl
+        }
     }
 }
 

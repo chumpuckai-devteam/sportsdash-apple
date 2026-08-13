@@ -5,7 +5,7 @@ import Foundation
 /// Multi-engine playback for SportsDash:
 /// - **Auto (default):** TS / unknown → **VLC** (libVLC); HLS → **AVPlayer**
 /// - Explicit VLC or AV overrides
-/// Cross-platform story: same libVLC family on Android later.
+/// Cross-platform story: Android ships the same libVLC family.
 @MainActor
 final class PlaybackController: ObservableObject {
     @Published private(set) var isLoading = false
@@ -125,11 +125,6 @@ final class PlaybackController: ObservableObject {
         isPlaying = true
         isLoading = false
         isBuffering = false
-    }
-
-    func setAspectFill(_ fill: Bool) {
-        // VLC drawable scales with view; AV surface uses resizeAspect by default.
-        _ = fill
     }
 
     func toggleMute() {

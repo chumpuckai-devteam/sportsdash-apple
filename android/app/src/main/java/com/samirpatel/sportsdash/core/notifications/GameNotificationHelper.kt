@@ -124,4 +124,17 @@ class GameNotificationHelper(private val context: Context) {
             // missing POST_NOTIFICATIONS
         }
     }
+
+    companion object {
+        /**
+         * Pure testable helper (no side effects, JVM only) for the Settings permission callback result.
+         * Called with the result of RequestPermission.
+         * - Pre-13 (sdkInt < 33): always enable (request not required).
+         * - 13+: return granted (denial -> false, keep master off; grant -> enable).
+         */
+        fun resolveNotificationEnabledFromPermissionResult(sdkInt: Int, permissionGranted: Boolean): Boolean {
+            if (sdkInt < 33) return true
+            return permissionGranted
+        }
+    }
 }

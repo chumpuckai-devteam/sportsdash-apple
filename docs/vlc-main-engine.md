@@ -1,54 +1,58 @@
-# VLC main engine cutover (iOS / tvOS)
+# VLC main engine
 
-**Date:** 2026-08  
-**Decision:** libVLC is the **main hard engine** (MobileVLCKit + TVVLCKit). Same family later on Android.  
-**Soft path:** native AVPlayer for clean HLS.
+Decision: VLC/libVLC is the shipping hard IPTV engine family on every platform. Apple uses MobileVLCKit/TVVLCKit; Android ships `libvlc-all` 3.6.x. KSPlayer/GPL dependencies are removed.
 
-## Architecture
+## Runtime architecture
 
-| Stream | Engine |
-|--------|--------|
-| MPEG-TS / unknown / Xtream `/live/` | **VLC** |
-| HLS `.m3u8` | **AVPlayer** |
-| Fallback (once) | Other engine |
+| Stream/capability | Apple | Android |
+|---|---|---|
+| MPEG-TS, unknown, Xtream `/live/` | VLC | VLC |
+| Clean HLS `.m3u8` | AVPlayer in Auto | VLC |
+| Manual engine choice | VLC or AVPlayer | VLC only |
+| One cross-engine fallback | Supported | Not supported/claimed |
+| TV hard engine | TVVLCKit | libVLC |
 
-KSPlayer (GPL) **removed** from the package graph.
+Android's VLC-only route is intentional. “Same family later,” ExoPlayer, mpv, and another hard-engine migration are not current implementation claims.
 
-## Packaging (CocoaPods — official)
+## Apple packaging
 
 ```bash
-# Quit Xcode
 cd ~/agency/sportsdash-apple
-git checkout -- SportsDash.xcodeproj/project.pbxproj   # if dirty
+git checkout -- SportsDash.xcodeproj/project.pbxproj   # only if generated file is dirty
 git pull origin main
 rm -rf Pods ~/Library/Developer/Xcode/DerivedData/SportsDash-*
 xcodegen generate
 pod install
-open SportsDash.xcworkspace   # NOT the .xcodeproj
+open SportsDash.xcworkspace
 ```
 
-**Critical:** open **`SportsDash.xcworkspace`**.
+Open the workspace, not the bare project. `ENABLE_USER_SCRIPT_SANDBOXING=NO` is required for CocoaPods to embed the large VLC frameworks.
 
-Project sets `ENABLE_USER_SCRIPT_SANDBOXING = NO` so CocoaPods can embed the large VLC frameworks (previous Path A failure mode).
+Apple settings:
 
-First `pod install` downloads large binaries — be patient.
+- Auto: TS/unknown → VLC; clean HLS → AVPlayer.
+- VLC: force MobileVLCKit/TVVLCKit.
+- AVKit: force native Apple playback.
+- Optional Apple fallback tries the other engine once.
 
-## Settings
+## Android packaging
 
-- **Auto · TS→VLC · HLS→AV · Default**
-- **VLC (libVLC) · Main**
-- **AVKit (Native)**
+`android/app/build.gradle.kts` owns `org.videolan.android:libvlc-all`. Build with JDK 21:
+
+```bash
+cd ~/agency/sportsdash-apple/android
+./gradlew :app:assembleDebug
+```
+
+Android does not expose a dual-engine preference. Do not describe VLC as future work there.
 
 ## License
 
-LGPL — see `docs/LGPL-NOTICE.md`. Dynamic frameworks via CocoaPods. Attribution in Settings → About.
+VLCKit/libVLC are LGPL. See `docs/LGPL-NOTICE.md` and Settings → About. Keep upstream framework replacement/notice obligations intact and do not re-add GPL player code.
 
-## Android later
+## Troubleshooting Apple embed
 
-Use libVLC / VLC Android as the hard engine so product behavior matches iOS/tvOS.
-
-## If pod install / embed fails again
-
-1. Confirm Build Setting **User Script Sandboxing = No** on SportsDash + Pods targets  
-2. Wipe DerivedData + `pod deintegrate && pod install`  
-3. Do **not** re-add KSPlayer without Samir asking  
+1. Confirm User Script Sandboxing is No for app and Pods targets.
+2. Wipe DerivedData and run `pod deintegrate && pod install` if embed state is stale.
+3. Regenerate with XcodeGen, then reopen `SportsDash.xcworkspace`.
+4. Do not switch player engines as a packaging workaround.

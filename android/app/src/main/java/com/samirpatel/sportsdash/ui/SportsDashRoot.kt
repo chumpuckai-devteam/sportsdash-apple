@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -75,7 +76,7 @@ fun SportsDashRoot(
                 nowTitle = vm.nowTitle(playing.id),
                 nextTitle = vm.nextTitle(playing.id),
                 onClose = { vm.stopPlayback() },
-                onPopOut = { vm.popOutPlayer() },
+                onPopOut = if (isTelevision) { {} } else { { vm.popOutPlayer() } },
                 onTickerGame = { game -> vm.playFromTicker(game) },
                 onReplay = {
                     vm.play(playing, gameId = state.playingGameId)
@@ -215,7 +216,7 @@ fun SportsDashRoot(
                 }
 
                 // Floating mini-player over tabs (iOS pop-out parity)
-                if (state.floating && playing != null && playUrl != null) {
+                if (state.floating && playing != null && playUrl != null && !isTelevision) {
                     FloatingPlayerBar(
                         channel = playing,
                         url = playUrl,

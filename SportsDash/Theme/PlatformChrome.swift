@@ -86,6 +86,35 @@ extension View {
         #endif
     }
 
+
+    /// Large presentation helper for category/favorite flows (P0).
+    /// tvOS: fullScreenCover (opaque, focus-friendly, preserves TV picker law).
+    /// iOS: sheet.
+    @ViewBuilder
+    func sportsLargeCover<Content: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        #if os(tvOS)
+        self.fullScreenCover(isPresented: isPresented, content: content)
+        #else
+        self.sheet(isPresented: isPresented, content: content)
+        #endif
+    }
+
+    /// Item-based variant for large covers.
+    @ViewBuilder
+    func sportsLargeCover<Item: Identifiable, Content: View>(
+        item: Binding<Item?>,
+        @ViewBuilder content: @escaping (Item) -> Content
+    ) -> some View {
+        #if os(tvOS)
+        self.fullScreenCover(item: item, content: content)
+        #else
+        self.sheet(item: item, content: content)
+        #endif
+    }
+
     /// Returns true when running on tvOS (10-foot UI).
     var isTelevision: Bool {
         #if os(tvOS)

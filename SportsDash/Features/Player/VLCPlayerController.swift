@@ -38,12 +38,13 @@ final class VLCPlayerController: NSObject, ObservableObject {
     private var loadGeneration = 0
     private var userAgent = "VLC/3.0.21 LibVLC/3.0.21"
     private var hardwareDecode = true
+    private var bufferMs: Int = 3000
 
     func configure(userAgent: String, bufferSeconds: Double, hardwareDecode: Bool) {
         let ua = userAgent.trimmingCharacters(in: .whitespacesAndNewlines)
         self.userAgent = ua.isEmpty ? "VLC/3.0.21 LibVLC/3.0.21" : ua
         self.hardwareDecode = hardwareDecode
-        _ = bufferSeconds
+        self.bufferMs = PlayerPrefs.vlcCachingMs(bufferSeconds)
     }
 
     func start(url: String) {
@@ -71,10 +72,11 @@ final class VLCPlayerController: NSObject, ObservableObject {
         #endif
 
         let m = VLCMedia(url: mediaURL)
-        // Network / IPTV-friendly options
-        m.addOption(":network-caching=\(Int(max(300, 1500)))")
-        m.addOption(":live-caching=1500")
-        m.addOption(":sout-mux-caching=1500")
+        // Network / IPTV-friendly options -- functional via pure PlayerPrefs.vlcCachingMs (P0)
+        let cache = bufferMs
+        m.addOption(":network-caching=\(cache)")
+        m.addOption(":live-caching=\(cache)")
+        m.addOption(":sout-mux-caching=\(cache)")
         m.addOption(":http-user-agent=\(userAgent)")
         m.addOption(":http-reconnect=true")
         if hardwareDecode {

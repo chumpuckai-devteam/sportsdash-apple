@@ -245,7 +245,7 @@ struct GuideView: View {
             .sheet(isPresented: $showGuideSettings) {
                 guideSettingsSheet
             }
-            .sheet(isPresented: $showCategoryPicker) {
+            .sportsLargeCover(isPresented: $showCategoryPicker) {
                 SportsCategoryPickerScreen(
                     selection: $selectedGroup,
                     options: groupNames,

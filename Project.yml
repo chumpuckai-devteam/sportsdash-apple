@@ -58,7 +58,8 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
-      testTargets: []
+      testTargets:
+        - SportsDashTests
 
   SportsDashTV:
     type: application
@@ -79,4 +80,35 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: "$(inherited) -ObjC"
     scheme:
-      testTargets: []
+      testTargets:
+        - SportsDashTVTests
+
+  SportsDashTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SportsDashTests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: SportsDash
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.ios.tests
+        DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+  SportsDashTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - path: SportsDashTests
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - target: SportsDashTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.samirpatel.sportsdash.tvos.tests
+        DEVELOPMENT_TEAM: "2H57Y8GR9D"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO

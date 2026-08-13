@@ -25,4 +25,12 @@ object ChannelNameCleanup {
         s = multiSpace.replace(s, " ")
         return s.trim()
     }
+
+    /** Pure canonical key for dedupe / internal use. ALWAYS cleans (ignores display pref).
+     * Mirrors Apple dedupe key construction independent of cleanUpNames.
+     */
+    fun canonicalKey(raw: String): String {
+        val cleaned = displayName(raw, enabled = true)
+        return cleaned.lowercase().trim().ifBlank { raw.lowercase().trim() }
+    }
 }

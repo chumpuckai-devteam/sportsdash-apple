@@ -45,6 +45,7 @@ class PrefsStore(private val context: Context) {
     private val keyCategoryOrder = stringPreferencesKey("category_order_json")
     private val keyOmdb = stringPreferencesKey("omdb_api_key")
     private val keyTmdb = stringPreferencesKey("tmdb_api_key")
+    private val keySelectedLeagues = stringPreferencesKey("selected_league_ids_json")
 
     private val backupPrefs by lazy {
         context.getSharedPreferences(BACKUP_PREFS, Context.MODE_PRIVATE)
@@ -113,6 +114,10 @@ class PrefsStore(private val context: Context) {
 
     val tmdbKeyFlow: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[keyTmdb]?.takeIf { it.isNotBlank() }
+    }
+
+    val selectedLeagueIdsFlow: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        decodeIdSet(prefs[keySelectedLeagues])
     }
 
     suspend fun savePlaylist(config: PlaylistConfig) {
@@ -224,6 +229,20 @@ class PrefsStore(private val context: Context) {
         context.dataStore.edit {
             if (key.isBlank()) it.remove(keyTmdb) else it[keyTmdb] = key.trim()
         }
+    }
+
+    suspend fun setSelectedLeagueIds(ids: Set<String>) {
+        context.dataStore.edit {
+            it[keySelectedLeagues] = encodeIdSet(ids)
+        }
+    }
+
+    /** One-shot read for cold start. Returns null if key absent (missing pref -> caller applies defaults);
+     * returns the set (possibly empty) if key present so intentional empty survives restart. */
+    suspend fun peekSelectedLeagueIds(): Set<String>? {
+        val prefs = runCatching { context.dataStore.data.first() }.getOrNull()
+        val raw = prefs?.get(keySelectedLeagues)
+        return if (raw == null) null else decodeIdSet(raw)
     }
 
     suspend fun saveChannelCache(channels: List<IptvChannel>, categoryOrder: List<String>) {
@@ -348,20 +367,9 @@ class PrefsStore(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    private fun encodeIdSet(ids: Set<String>): String = JSONArray(ids.toList()).toString()
+    private fun encodeIdSet(ids: Set<String>): String = Companion.encodeIdSet(ids)
 
-    private fun decodeIdSet(raw: String?): Set<String> {
-        if (raw.isNullOrBlank()) return emptySet()
-        return runCatching {
-            val arr = JSONArray(raw)
-            buildSet {
-                for (i in 0 until arr.length()) {
-                    val id = arr.optString(i)
-                    if (id.isNotBlank()) add(id)
-                }
-            }
-        }.getOrDefault(emptySet())
-    }
+    private fun decodeIdSet(raw: String?): Set<String> = Companion.decodeIdSet(raw)
 
     private fun encodePlaylist(c: PlaylistConfig): String = JSONObject().apply {
         put("id", c.id)
@@ -432,5 +440,23 @@ class PrefsStore(private val context: Context) {
         private const val BACKUP_TICKER_KEY = "player_show_scores_ticker"
         private const val BACKUP_TICKER_MODE_KEY = "player_scores_ticker_mode"
         private const val PLAYLIST_BACKUP_NAME = "playlist_config_backup.json"
+
+        internal fun encodeIdSet(ids: Set<String>): String = JSONArray(ids.toList()).toString()
+
+        internal fun decodeIdSet(raw: String?): Set<String> {
+            if (raw.isNullOrBlank()) return emptySet()
+            return runCatching {
+                val arr = JSONArray(raw)
+                buildSet {
+                    for (i in 0 until arr.length()) {
+                        val id = arr.optString(i)
+                        if (id.isNotBlank()) add(id)
+                    }
+                }
+            }.getOrDefault(emptySet())
+        }
+
+        internal fun effectiveSelectedLeagueIds(stored: Set<String>?): Set<String> =
+            if (stored == null) com.samirpatel.sportsdash.core.sports.SportLeague.DEFAULTS.map { it.id }.toSet() else stored
     }
 }

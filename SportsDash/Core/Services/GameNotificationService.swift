@@ -7,7 +7,9 @@ import UserNotifications
 /// Local notifications for favorite-team game starts and score increases (“goals”).
 ///
 /// - **iOS only** — `UNMutableNotificationContent` title/body/sound are unavailable on tvOS.
-/// - No remote push server — compares scoreboard polls and schedules calendar start alerts.
+/// - No remote push server — compares iOS foreground score polls and schedules calendar start alerts.
+/// - Android's separate helper only observes existing app-driven refreshes; it does not share
+///   this service's start-soon scheduler or iOS 45-second polling owner.
 /// - Master off by default (`PlayerPrefs.notificationsEnabled`).
 ///
 /// See `docs/game-notifications.md`.

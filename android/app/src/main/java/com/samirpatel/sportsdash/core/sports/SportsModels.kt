@@ -138,6 +138,40 @@ data class SportScoreSection(
     val liveCount: Int get() = leagues.sumOf { shelf -> shelf.games.count { it.isLive } }
 }
 
+/** Pure row data for TV Netflix browse rails (one per league shelf). */
+data class TvScoreRail(
+    val key: String,
+    val title: String,
+    val emoji: String,
+    val games: List<Game>,
+)
+
+/** Typed per-league result from fetch (analogous to Apple LeagueFetchResult).
+ * Distinguishes legitimate successful-empty (0 games from 2xx) vs network/HTTP/parse failures.
+ */
+data class LeagueFetchResult(
+    val league: SportLeague,
+    val games: List<Game>,
+    val successfulBoards: Int,
+    val failedBoards: Int,
+) {
+    val allBoardsFailedForLeague: Boolean get() = successfulBoards == 0 && failedBoards > 0
+}
+
+/** Aggregate fetch result (analogous to Apple ScoreboardFetchResult).
+ * allBoardsFailed: total outage (preserve prior + set error)
+ * hasPartialFailures: some leagues failed (merge retain prior for those leagues + warning/status)
+ */
+data class ScoreboardFetchResult(
+    val games: List<Game>,
+    val successfulBoards: Int,
+    val failedBoards: Int,
+    val failedLeagues: Set<SportLeague> = emptySet(),
+) {
+    val allBoardsFailed: Boolean get() = successfulBoards == 0 && failedBoards > 0
+    val hasPartialFailures: Boolean get() = successfulBoards > 0 && failedBoards > 0
+}
+
 /** Group games sport → league in stable [SportLeague.ALL] order (iOS ScoreboardGrouping). */
 object ScoreboardGrouping {
     fun sportEmoji(sportPath: String): String = when (sportPath) {
@@ -234,5 +268,191 @@ object ScoreboardGrouping {
         }
         flush()
         return sections
+    }
+
+    /**
+     * Pure grouping for UPCOMING filter (TDD).
+     * Every selected league must be represented (with empty games list for "None scheduled").
+     * Regular sportSections() intentionally skips empty (for Live/Final).
+     * Matches Apple behavior for Upcoming empty shelves.
+     */
+    fun upcomingSportSections(
+        games: List<Game>,
+        selectedLeagueIds: Set<String>,
+        favoriteTeamIds: Set<String> = emptySet(),
+    ): List<SportScoreSection> {
+        val buckets = games.groupBy { it.league }
+        val shelves = ArrayList<LeagueShelf>()
+
+        // First: all selected leagues in ALL order, include even if no games
+        for (league in SportLeague.ALL) {
+            if (league.id !in selectedLeagueIds) continue
+            val list = buckets[league] ?: emptyList()
+            val sorted = if (list.isNotEmpty()) {
+                list.sortedWith(
+                    compareBy<Game> { g ->
+                        if (favoriteTeamIds.isNotEmpty() &&
+                            (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds)
+                        ) 0 else 1
+                    }
+                        .thenByDescending { it.isLive }
+                        .thenBy { it.startTimeMs },
+                )
+            } else emptyList()
+            shelves.add(
+                LeagueShelf(
+                    key = league.id,
+                    title = league.label,
+                    sportKey = league.sportPath,
+                    sportTitle = league.section,
+                    games = sorted,
+                ),
+            )
+        }
+
+        // Any extra selected not in ALL? (should not but for completeness)
+        for ((league, list) in buckets) {
+            if (league.id !in selectedLeagueIds) continue
+            if (shelves.any { it.key == league.id } || list.isEmpty()) continue
+            val sorted = list.sortedWith(
+                compareBy<Game> { g ->
+                    if (favoriteTeamIds.isNotEmpty() &&
+                        (g.home.id in favoriteTeamIds || g.away.id in favoriteTeamIds)
+                    ) 0 else 1
+                }
+                    .thenByDescending { it.isLive }
+                    .thenBy { it.startTimeMs },
+            )
+            shelves.add(
+                LeagueShelf(
+                    key = league.id,
+                    title = league.label,
+                    sportKey = league.sportPath,
+                    sportTitle = league.section,
+                    games = sorted,
+                ),
+            )
+        }
+
+        // Build sections same as sportSections (sport buckets)
+        val sections = ArrayList<SportScoreSection>()
+        var currentKey: String? = null
+        var currentTitle = ""
+        var currentEmoji = "🏟️"
+        var currentLeagues = ArrayList<LeagueShelf>()
+        fun flush() {
+            val key = currentKey
+            if (key != null && currentLeagues.isNotEmpty()) {
+                sections.add(
+                    SportScoreSection(
+                        sportKey = key,
+                        sportTitle = currentTitle,
+                        emoji = currentEmoji,
+                        leagues = currentLeagues.toList(),
+                    ),
+                )
+            }
+        }
+        for (shelf in shelves) {
+            if (currentKey != shelf.sportKey) {
+                flush()
+                currentKey = shelf.sportKey
+                currentTitle = shelf.sportTitle
+                currentEmoji = sportEmoji(shelf.sportKey)
+                currentLeagues = ArrayList()
+            }
+            currentLeagues.add(shelf)
+        }
+        flush()
+        return sections
+    }
+
+
+    /**
+     * Pure aggregate merge/result helper (TDD: RED then GREEN).
+     * For partial failure: retain prior games for *failed* leagues only (do not destructive [] replace).
+     * Legit successful empty (from API) for a league does not retain its prior.
+     * all failure handled upstream in VM with gen guard + error + prior preserve.
+     */
+    fun mergeWithRetainedPrevious(
+        fresh: List<Game>,
+        previous: List<Game>,
+        failedLeagues: Set<SportLeague>
+    ): List<Game> {
+        if (failedLeagues.isEmpty()) return fresh
+        val freshIds = fresh.mapTo(mutableSetOf()) { it.id }
+        val retained = previous.filter { g ->
+            g.league in failedLeagues && g.id !in freshIds
+        }
+        return fresh + retained
+    }
+
+    /**
+     * Pure TV browse row transformation: one rail per `section.leagues` shelf.
+     * Uses league title (e.g. "Premier League", "MLS") so empty upcoming leagues
+     * produce explicit titled rail + "None scheduled".
+     * Preserves sport grouping order (leagues under same sport are consecutive).
+     * For Live/Final, upstream sportSections() omits empty leagues so no unnecessary rails.
+     * My Games rail is constructed separately in ScoresTVBrowse (always first).
+     */
+    fun tvScoreRails(sections: List<SportScoreSection>): List<TvScoreRail> =
+        sections.flatMap { section ->
+            section.leagues.map { shelf ->
+                TvScoreRail(
+                    key = "rail-${section.sportKey}-${shelf.key}",
+                    title = shelf.title,
+                    emoji = section.emoji,
+                    games = shelf.games,
+                )
+            }
+        }
+
+    /**
+     * Pure helpers for ordering/dedup (extracted for testability and reuse).
+     */
+    internal fun statusRank(s: GameStatus): Int = when (s) {
+        GameStatus.LIVE -> 0
+        GameStatus.UPCOMING -> 1
+        GameStatus.POSTPONED -> 2
+        GameStatus.FINAL -> 3
+        GameStatus.UNKNOWN -> 4
+    }
+
+    internal fun prefer(a: Game, b: Game): Game =
+        if (statusRank(a.status) <= statusRank(b.status)) a else b
+
+    /**
+     * Pure aggregation semantics for combining per-league fetch results.
+     * Testable independently of HTTP.
+     * Only increments successful for completed HTTP + successful parse (blank/missing events = fail; explicit events=[] ok empty).
+     * This centralizes the counting + game merge logic.
+     */
+    fun aggregateResults(results: List<LeagueFetchResult>): ScoreboardFetchResult {
+        val byId = linkedMapOf<String, Game>()
+        var successfulBoards = 0
+        var failedBoards = 0
+        val failedLeagues = mutableSetOf<SportLeague>()
+
+        for (r in results) {
+            successfulBoards += r.successfulBoards
+            failedBoards += r.failedBoards
+            if (r.failedBoards > 0) {
+                failedLeagues.add(r.league)
+            }
+            for (g in r.games) {
+                val prev = byId[g.id]
+                byId[g.id] = if (prev == null) g else prefer(prev, g)
+            }
+        }
+        val sorted = byId.values.toList().sortedWith(
+            compareBy<Game> { statusRank(it.status) }
+                .thenBy { it.startTimeMs },
+        )
+        return ScoreboardFetchResult(
+            games = sorted,
+            successfulBoards = successfulBoards,
+            failedBoards = failedBoards,
+            failedLeagues = failedLeagues
+        )
     }
 }

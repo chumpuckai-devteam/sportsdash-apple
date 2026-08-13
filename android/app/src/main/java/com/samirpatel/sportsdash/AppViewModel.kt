@@ -36,6 +36,7 @@ import com.samirpatel.sportsdash.core.sports.SportsRepository
 import com.samirpatel.sportsdash.data.PrefsStore
 import java.io.File
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +63,44 @@ fun snappedCurrentHourMs(): Long {
     cal.set(Calendar.SECOND, 0)
     cal.set(Calendar.MILLISECOND, 0)
     return cal.timeInMillis
+}
+
+/** Coordinator request item with revision for race/failure detection (collector and writer compare). */
+data class LeagueWriteRequest(val value: Set<String>, val revision: Long)
+
+/** Minimal pure coordinator state helper (exercised by tests + production). */
+object LeagueSelectionCoordinator {
+    fun shouldAck(desired: Set<String>?, emitted: Set<String>): Boolean =
+        desired != null && emitted == desired
+
+    fun shouldApplyExternal(desired: Set<String>?, emitted: Set<String>, current: Set<String>): Boolean =
+        desired == null && emitted != current
+
+    fun shouldClearOnWriteFailure(failedValue: Set<String>, currentDesired: Set<String>?): Boolean =
+        currentDesired == failedValue
+
+    fun computeNextRevision(current: Long): Long = current + 1
+
+    // Revision-based (new for final release blocker): governs completion, not value match.
+    // Actor only clears on exact rev match for current.
+    // Stale older rev never clears later pending.
+    fun shouldClearPendingOnSuccess(requestRevision: Long, currentPendingRevision: Long?): Boolean =
+        currentPendingRevision != null && requestRevision == currentPendingRevision
+
+    fun shouldClearAndReconcileOnFailure(
+        requestRevision: Long,
+        currentPendingRevision: Long?,
+        failedValue: Set<String>,
+        pendingDesired: Set<String>?
+    ): Boolean =
+        currentPendingRevision != null && requestRevision == currentPendingRevision &&
+            pendingDesired == failedValue
+
+    // Collector (if kept for external) must ignore while any pending rev active.
+    fun shouldIgnoreWhilePending(pendingRev: Long?): Boolean = pendingRev != null
+
+    fun shouldApplyExternalNoPending(pendingRev: Long?, emitted: Set<String>, current: Set<String>): Boolean =
+        pendingRev == null && emitted != current
 }
 
 data class AppUiState(
@@ -93,6 +132,7 @@ data class AppUiState(
     val isLoadingScores: Boolean = false,
     val scoresStatus: String? = null,
     val scoresError: String? = null,
+    val scoresWarning: String? = null,
     val scoresUpdatedAtMs: Long? = null,
 
     val streamPickerGame: Game? = null,
@@ -153,7 +193,28 @@ class AppViewModel(
     private var epgJob: Job? = null
     private var categoryEpgJob: Job? = null
 
+    private var pendingDesiredLeagueSelection: Set<String>? = null
+    private var pendingLeagueWriteRevision: Long? = null
+    private var leagueWriteRevision = 0L
+    private val leagueWriteChannel = Channel<LeagueWriteRequest>(Channel.CONFLATED)
+
+    private var scoresGeneration = 0L
+
     init {
+        // League selection: sequential init (peek + one refresh) BEFORE starting collector/writer to avoid
+        // replayed initial emission and ensure exactly one initial refresh. Then start coordinator.
+        viewModelScope.launch {
+            val peeked = try { prefs.peekSelectedLeagueIds() } catch (_: Throwable) { null }
+            val initial = PrefsStore.effectiveSelectedLeagueIds(peeked)
+            _state.update { it.copy(selectedLeagueIds = initial) }
+            if (peeked == null) {
+                // missing -> persist defaults
+                runCatching { prefs.setSelectedLeagueIds(initial) }
+            }
+            refreshScores()  // exactly one initial
+            startLeagueSelectionCoordinator()
+        }
+
         // Cold-start: restore playlist ASAP so Settings/Guide don't look "logged out"
         // after an APK update while DataStore is still warming up.
         viewModelScope.launch {
@@ -244,7 +305,7 @@ class AppViewModel(
                 _state.update { it.copy(tmdbKeyPresent = !key.isNullOrBlank()) }
             }
         }
-        refreshScores()
+        // legacy unconditional refreshScores() removed; sequential block in init does exactly one
     }
 
     fun saveXtream(name: String, serverUrl: String, user: String, pass: String) {
@@ -943,52 +1004,132 @@ class AppViewModel(
 
     fun refreshScores() {
         viewModelScope.launch {
-            val leagues = SportLeague.ALL.filter { it.id in _state.value.selectedLeagueIds }
+            // snapshot selected at request for generation guard
+            val selectedSnapshot = _state.value.selectedLeagueIds
+            val myGen = ++scoresGeneration
+
+            val leagues = SportLeague.ALL.filter { it.id in selectedSnapshot }
             if (leagues.isEmpty()) {
+                // empty selection explicit
                 _state.update {
                     it.copy(
                         games = emptyList(),
                         scoresStatus = "Select leagues in Settings",
+                        scoresWarning = null,
+                        scoresError = null,
                         isLoadingScores = false,
                     )
                 }
                 return@launch
             }
+
             _state.update {
-                it.copy(isLoadingScores = true, scoresError = null, scoresStatus = "Updating scores…")
+                it.copy(isLoadingScores = true, scoresError = null, scoresStatus = "Updating scores…", scoresWarning = null)
             }
-            runCatching { sports.fetchGames(leagues) }
-                .onSuccess { games ->
-                    val live = games.count { it.isLive }
-                    val up = games.count { it.isUpcoming }
-                    _state.update {
-                        it.copy(
-                            games = games,
-                            isLoadingScores = false,
-                            scoresUpdatedAtMs = System.currentTimeMillis(),
-                            scoresStatus = "$live live · $up upcoming · ${games.size} total",
-                            scoresError = null,
-                        )
-                    }
-                    migrateLegacyFavoriteTeamIds(games)
-                    val s = _state.value
-                    notifHelper.process(
-                        games = games,
-                        favoriteTeamIds = s.favoriteTeamIds,
-                        masterEnabled = s.notificationsEnabled,
-                        notifyStarts = s.notifyGameStarts,
-                        notifyGoals = s.notifyGoals,
-                    )
-                }
-                .onFailure { e ->
+
+            val previousGames = _state.value.games
+            val fetchRes = runCatching { sports.fetchGames(leagues) }.getOrNull()
+
+            // generation guard EVERY state/notification write
+            if (scoresGeneration != myGen) return@launch
+
+            if (fetchRes == null) {
+                if (scoresGeneration == myGen) {
                     _state.update {
                         it.copy(
                             isLoadingScores = false,
-                            scoresError = e.message ?: "Scores failed",
+                            scoresError = "Scores failed",
+                            scoresWarning = null,
                             scoresStatus = null,
                         )
                     }
                 }
+                return@launch
+            }
+
+            val result = fetchRes
+            if (result.allBoardsFailed) {
+                // allBoardsFailed preserves prior games + scoresError
+                if (scoresGeneration != myGen) return@launch
+                val message = if (previousGames.isEmpty()) {
+                    "ESPN scoreboards are unavailable. Pull to try again."
+                } else {
+                    "ESPN scoreboards are unavailable. Showing the last successful update."
+                }
+                _state.update {
+                    it.copy(
+                        games = it.games,  // preserve prior, do not take empty
+                        isLoadingScores = false,
+                        scoresError = message,
+                        scoresWarning = if (previousGames.isEmpty()) null else message,
+                        scoresStatus = null,
+                    )
+                }
+                return@launch
+            }
+
+            if (result.hasPartialFailures) {
+                if (scoresGeneration != myGen) return@launch
+                val merged = ScoreboardGrouping.mergeWithRetainedPrevious(
+                    fresh = result.games,
+                    previous = previousGames,
+                    failedLeagues = result.failedLeagues
+                )
+                val live = merged.count { it.isLive }
+                val up = merged.count { it.isUpcoming }
+                _state.update {
+                    it.copy(
+                        games = merged,
+                        isLoadingScores = false,
+                        scoresUpdatedAtMs = System.currentTimeMillis(),
+                        scoresStatus = "$live live · $up upcoming · ${merged.size} total",
+                        scoresError = null,
+                        scoresWarning = if (result.failedLeagues.size == 1)
+                            "One league could not refresh. Other scores are current."
+                        else
+                            "Some leagues could not refresh. Other scores are current.",
+                    )
+                }
+                if (scoresGeneration != myGen) return@launch
+                migrateLegacyFavoriteTeamIds(merged)
+                val s = _state.value
+                if (scoresGeneration != myGen) return@launch
+                notifHelper.process(
+                    games = merged,
+                    favoriteTeamIds = s.favoriteTeamIds,
+                    masterEnabled = s.notificationsEnabled,
+                    notifyStarts = s.notifyGameStarts,
+                    notifyGoals = s.notifyGoals,
+                )
+                return@launch
+            }
+
+            // success (legitimate empty ok)
+            if (scoresGeneration != myGen) return@launch
+            val games = result.games
+            val live = games.count { it.isLive }
+            val up = games.count { it.isUpcoming }
+            _state.update {
+                it.copy(
+                    games = games,
+                    isLoadingScores = false,
+                    scoresUpdatedAtMs = System.currentTimeMillis(),
+                    scoresStatus = "$live live · $up upcoming · ${games.size} total",
+                    scoresError = null,
+                    scoresWarning = null,
+                )
+            }
+            if (scoresGeneration != myGen) return@launch
+            migrateLegacyFavoriteTeamIds(games)
+            val s = _state.value
+            if (scoresGeneration != myGen) return@launch
+            notifHelper.process(
+                games = games,
+                favoriteTeamIds = s.favoriteTeamIds,
+                masterEnabled = s.notificationsEnabled,
+                notifyStarts = s.notifyGameStarts,
+                notifyGoals = s.notifyGoals,
+            )
         }
     }
 
@@ -1002,10 +1143,85 @@ class AppViewModel(
             if (!next.add(id)) next.remove(id)
             s.copy(selectedLeagueIds = next)
         }
+        val latest = _state.value.selectedLeagueIds
+        val rev = LeagueSelectionCoordinator.computeNextRevision(leagueWriteRevision)
+        leagueWriteRevision = rev
+        pendingDesiredLeagueSelection = latest
+        pendingLeagueWriteRevision = rev
+        leagueWriteChannel.trySend(LeagueWriteRequest(latest, rev))
         refreshScores()
     }
 
-    fun filteredGames(): List<Game> {
+
+    private fun startLeagueSelectionCoordinator() {
+        // Revision must govern completion, not ambiguous DataStore values.
+        // Actor serially processes requests.
+        // Only when req.revision equals current revision may success clear pending desired.
+        // A->B->A: first stale A must not ack latest.
+        // Collector while pending ignores emissions.
+        // On current write success: clear, state already current.
+        // On current write failure: clear then re-read persisted + apply/refresh if differs.
+        // Older request completion/failure cannot clear/reconcile current.
+        // Avoid collector-based ack entirely.
+        viewModelScope.launch {
+            for (req in leagueWriteChannel) {
+                val success = runCatching {
+                    prefs.setSelectedLeagueIds(req.value)
+                    true
+                }.getOrDefault(false)
+                val currRev = pendingLeagueWriteRevision
+                if (success) {
+                    if (LeagueSelectionCoordinator.shouldClearPendingOnSuccess(req.revision, currRev)) {
+                        pendingDesiredLeagueSelection = null
+                        pendingLeagueWriteRevision = null
+                        // state already current from UI toggle
+                    }
+                    // older rev success ignored
+                } else {
+                    if (LeagueSelectionCoordinator.shouldClearAndReconcileOnFailure(
+                            req.revision, currRev, req.value, pendingDesiredLeagueSelection
+                        )) {
+                        pendingDesiredLeagueSelection = null
+                        pendingLeagueWriteRevision = null
+                        // re-read + reconcile if persisted differs
+                        val persisted = runCatching { prefs.peekSelectedLeagueIds() }.getOrNull()
+                        val effective = PrefsStore.effectiveSelectedLeagueIds(persisted)
+                        if (effective != _state.value.selectedLeagueIds) {
+                            _state.update { it.copy(selectedLeagueIds = effective) }
+                            refreshScores()
+                        }
+                    }
+                    // older failure ignored
+                }
+            }
+        }
+        // Collector ignores while pending; no ack; only external when no pending.
+        viewModelScope.launch {
+            var isFirst = true
+            val initializedCurrent = _state.value.selectedLeagueIds
+            prefs.selectedLeagueIdsFlow
+                .collect { emitted ->
+                    if (isFirst) {
+                        isFirst = false
+                        if (emitted == initializedCurrent) {
+                            return@collect
+                        }
+                    }
+                    if (LeagueSelectionCoordinator.shouldIgnoreWhilePending(pendingLeagueWriteRevision)) {
+                        return@collect
+                    }
+                    if (LeagueSelectionCoordinator.shouldApplyExternalNoPending(
+                            pendingLeagueWriteRevision, emitted, _state.value.selectedLeagueIds
+                        )) {
+                        _state.update { it.copy(selectedLeagueIds = emitted) }
+                        refreshScores()
+                    }
+                }
+        }
+    }
+
+
+        fun filteredGames(): List<Game> {
         val s = _state.value
         val base = when (s.scoresFilter) {
             ScoresFilter.LIVE -> s.games.filter { it.isLive }

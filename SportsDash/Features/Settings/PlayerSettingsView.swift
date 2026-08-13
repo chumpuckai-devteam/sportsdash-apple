@@ -20,10 +20,6 @@ struct PlayerSettingsView: View {
         PrefsBinding.field(appModel, get: \.asynchronousDecompression) { $0.asynchronousDecompression = $1 }
     }
 
-    private var aspectBinding: Binding<PlayerAspectMode> {
-        PrefsBinding.field(appModel, get: \.aspect) { $0.aspect = $1 }
-    }
-
     var body: some View {
         Form {
             Section {
@@ -69,7 +65,7 @@ struct PlayerSettingsView: View {
             } header: {
                 Text("Primary video player")
             } footer: {
-                Text("Auto detects MPEG-TS vs HLS: TS → VLC (libVLC, LGPL); HLS → AVPlayer. VLC is the main hard engine (iOS/tvOS; Android later). Enable fallback to try the other engine once if the first fails. Video AirPlay works best on AV.")
+                Text("Auto detects MPEG-TS vs HLS on Apple: TS → VLC (libVLC, LGPL); HLS → AVPlayer. Android ships libVLC as its single engine. Enable Apple fallback to try the other engine once if the first fails. Video AirPlay works best on AV.")
                     .font(.caption2)
             }
 
@@ -128,18 +124,6 @@ struct PlayerSettingsView: View {
                 Text("Decode")
             }
 
-            Section {
-                Picker("Aspect ratio", selection: aspectBinding) {
-                    ForEach(PlayerAspectMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                Text("You can also cycle aspect from the player toolbar.")
-                    .font(.caption)
-                    .foregroundStyle(SportsColors.muted)
-            } header: {
-                Text("Display")
-            }
         }
         .sportsHideScrollBackground()
         .background(SportsColors.voidBlack)

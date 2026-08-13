@@ -1,99 +1,92 @@
 # SportsDash TV surfaces
 
-**Updated:** 2026-08-12 — residual Apple TV dogfood after main **1.2.0** (`S-TV.APPLE.2`).
+Updated 2026-08-12. TV implementations are present on both stacks; simulator/hardware dogfood remains a separate release gate.
 
-## Apple TV (SportsDashTV)
+## TV product law
 
-| Item | Detail |
-|------|--------|
-| Scheme | **SportsDashTV** in `SportsDash.xcworkspace` |
+- Player playback is full-screen-only TV product law on both platforms. Pop-out removed (gated for TV).
+- Apple uses `fullScreenCover` through `sportsPlayerCover`; never use `.sheet` for the TV player.
+- No floating mini-player or pop-out control may be rendered on TV.
+- TV Scores uses horizontal My Games first + per-league rails (not sport-flat), not the phone dense list.
+- Use remote-safe, focusable, in-content controls. Category lists that need 10-foot traversal use an opaque full-screen presentation on tvOS.
+- No `.buttonStyle(.card)` white focus plume over SportsDash gold focus styling.
+- Shell navigation remains reachable on TV.
+
+## Apple TV
+
+| Item | Current implementation |
+|---|---|
+| Scheme | `SportsDashTV` in `SportsDash.xcworkspace` |
 | Bundle | `com.samirpatel.sportsdash.tvos` |
-| Engine | **TVVLCKit** (CocoaPods) |
-| Focus | S-TV.1 — `SportsTVFocused` + `sportsTVFocusClean()` |
-| Tabs | Scores · Guide · Settings |
-| Icons | `AppIcon` tv idiom PNGs in Assets |
-| CI | `.github/workflows/ios.yml` also builds **SportsDashTV** (generic tvOS Simulator) |
+| Engine | TVVLCKit hard path; AVPlayer clean-HLS path |
+| Focus | `SportsTVFocused`, `sportsTVFocusClean()`, focus sections |
+| Scores | Horizontal TV rails (per-league for Upcoming incl empty) with My Games first |
+| Guide category | In-content trigger and opaque full-screen picker |
+| Player | `fullScreenCover`, full-bleed surface, no pop-out |
+| Notifications | tvOS-safe no-op service; Settings alert controls omitted |
+| CI | Apple workflow builds the generic tvOS Simulator scheme |
 
-### Mac dogfood
+### Apple TV dogfood
+
 ```bash
-cd ~/agency/sportsdash-apple   # or this repo path
+cd ~/agency/sportsdash-apple
 git pull origin main
 xcodegen generate && pod install
 open SportsDash.xcworkspace
-# Scheme: SportsDashTV → Apple TV simulator or device
+# Select SportsDashTV and an Apple TV simulator/device.
 ```
 
-### Product law on TV
-- No `Menu`-only pickers — in-content + fullScreenCover/sheet
-- No `.buttonStyle(.card)` under brand gold
-- Gate iOS-only APIs via `PlatformChrome` / `#if os(iOS)`
-- Player presents as **sheet** (`sportsPlayerCover`), not phone immersive status-bar hide
-- Prefer plain `HStack` + `.focusSection()` over horizontal `ScrollView` for focusable chips (filters + player chrome)
+Checklist:
 
-### Residual fixes (this card)
-| Area | Issue | Fix |
-|------|--------|-----|
-| Scores | `myGamesSection` lived under `#if os(iOS)` but called from shared `scoresContent` → **SportsDashTV compile break** when My Games pin path is compiled | Shared `myGamesSection` + TV focus inset / `.focusSection()` |
-| Scores | Favorite picker sheet iOS-only; row star actions disabled on TV | Toolbar ★ + My Games “Edit favorites” → `FavoriteTeamPickerView` sheet |
-| Favorites sheet | League/team rows missing TV focus clean | `.sportsTVFocusClean()` on all picker steps |
-| Player | Horizontal `ScrollView` chrome + plain buttons → weak/no D-pad focus | Fixed: `fullScreenCover` + `sportsPlayerCover`. Plain `HStack` + focus helpers. |
-| CI | Only iOS scheme built | Add SportsDashTV simulator build |
+1. Launch to Scores; no white system focus plume obscures the first control.
+2. Live/Upcoming/Final and TV rails receive deterministic focus.
+3. My Games and favorite-team editing are remote reachable.
+4. Guide category opens an opaque full-screen list; selection returns to Guide.
+5. WATCH and Guide playback open a screen-filling player, never a small sheet/card.
+6. Player Back, play/pause, mute, ticker, stream selection, and supported engine controls receive focus.
+7. No pop-out/floating control is focusable; Menu/Back dismisses full-screen playback.
+8. Settings and playlist setup remain remote reachable.
 
-### Device / sim dogfood checklist (Samir)
-Run scheme **SportsDashTV** on Apple TV **sim or hardware** after pull. Mark PASS/FAIL:
+## Android TV
 
-1. **Launch** — splash → Scores tab; gold tint; no white system focus plume on first control
-2. **Categories (Guide)** — Category control opens **fullScreen** picker; search + list focus; select group returns to grid
-3. **Scores focus** — Live / Upcoming / Final chips focusable; sport headers expand/collapse; game rows gold focus (no `.card` white lift)
-4. **My Games** — With starred teams, pin section appears; rows focusable; **Edit favorites** / toolbar ★ opens picker; star/unstar teams
-5. **Game detail** — Select row → sheet; streams / WATCH path works
-6. **Player sheet** — Open from Guide or Scores stream; **VLC** chip when hard path; play/pause, mute, aspect, streams list, ticker cycle all take focus without ScrollView trap
-7. **Back / Menu** — Dismiss player sheet; floating pop-out parks safely if used
-8. **Settings** — Xtream login + engine preference reachable with remote
-
-**Linux CI host cannot sign off device ACs** — static + workflow gate only. Attach screenshots / short notes on the kanban card when done.
-
-## Android TV (started 1.2.0-tv)
-
-| Item | Detail |
-|------|--------|
-| Same APK | `com.samirpatel.sportsdash` with `LEANBACK_LAUNCHER` |
-| Leanback feature | `required=false` (phone install still OK) |
-| Touchscreen | `required=false` |
+| Item | Current implementation |
+|---|---|
+| APK | Same `com.samirpatel.sportsdash` APK as phone |
+| Launcher | `LEANBACK_LAUNCHER`; touchscreen and leanback features are optional |
 | Banner | `@drawable/tv_banner` |
 | Detection | `DeviceProfile.isTelevision` |
-| Shell | TopAppBar + bottom nav **always** on TV (D-pad); phone landscape still hides shell |
+| Focus | `tvFocusRing`, `tvFocusCircle`, `tvFocusGroup` on core surfaces |
+| Scores | Horizontal `ScoresTVBrowse` rails |
+| Guide | Timeline/grid/category surfaces with D-pad treatment |
+| Player | Media keys and D-pad chrome behavior; full-screen only (pop-out removed and gated) |
+| Shell | Top app bar and bottom navigation remain visible/reachable on TV |
 
-### D-pad focus (**1.2.1-tv-focus** · S-TV.AND.2)
-| Surface | Focus law |
-|---------|-----------|
-| Helpers | `ui/tv/TvFocus.kt` — `tvFocusRing` / `tvFocusCircle` / `tvFocusGroup` (gold + scale; no double-`focusable` with clickable) |
-| Shell | TopAppBar + bottom nav **always** on TV |
-| Scores | Live/Upcoming/Final chips, favorite rail, sport headers, game rows, stream picker rows |
-| Guide | Action bar focus group; Hour timeline channel col + row; Grid cards; category sheet rows |
-| Player | Media play/pause keys; DPAD reveals chrome when hidden; CENTER only intercepts when chrome down; Back hides chrome first; circle controls + ticker pills |
-| Phone | All rings gated by `DeviceProfile.isTelevision` — phone UX unchanged |
+Android TV is implemented, not “phone UI only.” TV pop-out removed and Kotlin changed in this revision; device/AVD dogfood verifies full-screen only on TV. A dedicated BrowseFragment or separate TV application ID is not part of the shipped contract.
 
-### Emulator dogfood checklist
-1. Install debug APK on **TV AVD 1080p** · open from leanback row (banner)
-2. Scores — D-pad chips → game row gold ring → select opens stream picker → play
-3. Guide Hour — earlier/now/later; channel column focus → play; Grid cards focus → play
-4. Player — transport + mute/ticker focus; media key play/pause; Back hides chrome then exits
-5. Bottom nav — Scores/Guide/Settings always reachable (shell not landscape-hidden)
+### Android TV dogfood
 
-### Not yet (follow-on)
-- Dedicated Leanback BrowseFragment / sidemenu redesign
-- Separate `applicationId` TV flavor
-- Device stick dogfood sign-off (needs hardware / AVD session from Samir)
+```bash
+cd ~/agency/sportsdash-apple/android
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+# TV AVD 1080p: open SportsDash from the leanback row.
+```
 
-## Scores dashboard — Netflix-style rails (TV)
+Checklist:
 
-On **Apple TV** and **Android TV**, Scores uses horizontal card rails (not phone dense lists):
+1. Scores: D-pad through filters and rails; WATCH opens stream picker then full-screen playback.
+2. Guide: timeline/grid/category controls focus and select without touch.
+3. Player: media keys work; D-pad reveals chrome; Back hides chrome then exits.
+4. TV pop-out removed on both platforms; full-screen only. Pop-out gated off for television devices.
+5. Bottom navigation reaches Scores, Guide, and Settings without phone-landscape hiding.
 
-- **My Games** rail first (favorites)
-- One rail per sport section (emoji + title + LIVE badge)
-- Large focusable cards: logos, status, gold **WATCH**, scores when live/final
-- Recent polish: wider cards + fixed center band for status/WATCH to prevent truncation
-- D-pad: left/right within rail, up/down between rails
+## TV Scores rails
 
-Phone layout unchanged (dense one-row chrome + vertical list).
+Both TVs render:
+
+- My Games first when favorite-team games exist.
+- Per-league rails on both (Apple now aligned); Upcoming renders empty selected leagues with "None scheduled". Sport headers may group but rails are league-level.
+- Large focusable cards with logos, status, scores when applicable, and gold WATCH.
+- Left/right navigation within a rail and up/down traversal between rails.
+
+Scores favorites = teams. Guide favorites = channels. There is no favorite-game model.

@@ -43,16 +43,13 @@ class SportsRepository(
             }
         }
     }
-    suspend fun fetchGames(leagues: List<SportLeague>): List<Game> = withContext(Dispatchers.IO) {
+    suspend fun fetchGames(leagues: List<SportLeague>): ScoreboardFetchResult = withContext(Dispatchers.IO) {
         coroutineScope {
-            leagues.map { league ->
-                async { fetchLeague(league) }
-            }.awaitAll().flatten()
-                .distinctBy { it.id }
-                .sortedWith(
-                    compareBy<Game> { statusRank(it.status) }
-                        .thenBy { it.startTimeMs },
-                )
+            val results: List<LeagueFetchResult> = leagues.map { league ->
+                async { fetchLeagueResult(league) }
+            }.awaitAll()
+
+            ScoreboardGrouping.aggregateResults(results)
         }
     }
 
@@ -115,18 +112,37 @@ class SportsRepository(
         return out.sortedBy { it.name.lowercase() }
     }
 
-    private fun fetchLeague(league: SportLeague): List<Game> {
+    private fun fetchLeagueResult(league: SportLeague): LeagueFetchResult {
         val urls = scoreboardUrls(league)
         val byId = linkedMapOf<String, Game>()
+        var successfulBoards = 0
+        var failedBoards = 0
         for (url in urls) {
-            runCatching {
-                parseScoreboard(httpGet(url), league).forEach { g ->
-                    val prev = byId[g.id]
-                    byId[g.id] = if (prev == null) g else prefer(prev, g)
+            val body = runCatching { httpGet(url) }.getOrNull()
+            if (body != null) {
+                // HTTP success only counts if parse also succeeds.
+                // Legitimate empty list from parse is success (no events).
+                // Parse failure (bad JSON etc) counts as failed board, does not increment success.
+                val parsed = runCatching { parseScoreboard(body, league) }.getOrNull()
+                if (parsed != null) {
+                    successfulBoards += 1
+                    parsed.forEach { g ->
+                        val prev = byId[g.id]
+                        byId[g.id] = if (prev == null) g else ScoreboardGrouping.prefer(prev, g)
+                    }
+                } else {
+                    failedBoards += 1
                 }
+            } else {
+                failedBoards += 1
             }
         }
-        return byId.values.toList()
+        return LeagueFetchResult(
+            league = league,
+            games = byId.values.toList(),
+            successfulBoards = successfulBoards,
+            failedBoards = failedBoards
+        )
     }
 
     private fun scoreboardUrls(league: SportLeague): List<String> {
@@ -156,15 +172,23 @@ class SportsRepository(
             .get()
             .build()
         client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return ""
+            if (!resp.isSuccessful) {
+                // Do not log URL, status, body, or any credential. Caller sees failure via exception.
+                throw RuntimeException("http error")
+            }
             return resp.body?.string().orEmpty()
         }
     }
 
-    private fun parseScoreboard(body: String, league: SportLeague): List<Game> {
-        if (body.isBlank()) return emptyList()
-        val json = JSONObject(body)
-        val events = json.optJSONArray("events") ?: return emptyList()
+    internal fun parseScoreboard(body: String, league: SportLeague): List<Game> {
+        if (body.isBlank()) {
+            throw IllegalStateException("blank body")
+        }
+        val json = runCatching { JSONObject(body) }.getOrElse { throw IllegalStateException("malformed json") }
+        val events = if (json.has("events")) json.optJSONArray("events") else null
+        if (events == null) {
+            throw IllegalStateException("missing or invalid events")
+        }
         val out = ArrayList<Game>(events.length())
         for (i in 0 until events.length()) {
             val event = events.optJSONObject(i) ?: continue
@@ -284,14 +308,4 @@ class SportsRepository(
         return null
     }
 
-    private fun statusRank(s: GameStatus): Int = when (s) {
-        GameStatus.LIVE -> 0
-        GameStatus.UPCOMING -> 1
-        GameStatus.POSTPONED -> 2
-        GameStatus.FINAL -> 3
-        GameStatus.UNKNOWN -> 4
-    }
-
-    private fun prefer(a: Game, b: Game): Game =
-        if (statusRank(a.status) <= statusRank(b.status)) a else b
 }
