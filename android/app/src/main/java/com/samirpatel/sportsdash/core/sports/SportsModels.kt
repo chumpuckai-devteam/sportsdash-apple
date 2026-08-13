@@ -42,6 +42,8 @@ data class SportLeague(
             SportLeague("nba", "NBA", "basketball", "nba", "Basketball"),
             SportLeague("mlb", "MLB", "baseball", "mlb", "Baseball"),
             SportLeague("nhl", "NHL", "hockey", "nhl", "Hockey"),
+            SportLeague("pga", "PGA Tour", "golf", "pga", "Golf"),
+            SportLeague("lpga", "LPGA", "golf", "lpga", "Golf"),
             SportLeague("ufc", "UFC", "mma", "ufc", "Combat"),
         )
 

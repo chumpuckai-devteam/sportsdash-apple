@@ -1,6 +1,7 @@
 import Foundation
 
 /// Port of Flutter `MatchingService` (v1 subset): event groups, teams, broadcasts.
+/// Updated for smarter geo/broadcast/golf US-centric matching (Aug 2026). Apple+Android parity.
 struct MatchingService: Sendable {
     var minScore: Double = 48
     var eventGroupFloor: Double = 70
@@ -24,6 +25,13 @@ struct MatchingService: Sendable {
                 let g = (ch.group ?? "").lowercased().trimmingCharacters(in: .whitespaces)
                 guard eventGroups.contains(g) else { continue }
                 if isExcluded(ch.searchBlob) { continue }
+                // Same geo/golf gates as score() — do not reinsert foreign ESPN via event-group floor.
+                if isGeoForeign(ch.name) && isUSCentricLeague(game.league) && !skipGeoPenaltyForLeague(game.league) {
+                    continue
+                }
+                if !passesNonH2HGate(game: game, channel: ch, awardedCleanBroadcast: false) {
+                    continue
+                }
                 scored.append(
                     ChannelMatch(
                         channel: ch,
@@ -97,6 +105,10 @@ struct MatchingService: Sendable {
             return ["nfl"]
         case .nhl:
             return ["nhl"]
+        case .pga:
+            return ["pga", "pga tour", "golf", "golf channel", "pgatour", "fedex cup", "fedex"]
+        case .lpga:
+            return ["lpga", "golf", "golf channel"]
         default:
             return [league.label.lowercased(), league.sportPath]
         }
@@ -114,10 +126,19 @@ struct MatchingService: Sendable {
     }
 
     private func groupHasSportsContext(_ group: String, _ game: Game) -> Bool {
-        if group.contains("sport") { return true }
-        if group.contains(game.league.sportPath) { return true }
-        if group.contains(game.league.label.lowercased()) { return true }
-        for a in leagueAliases(game.league) where a.count >= 3 && tokenOrPhrase(group, a) {
+        let g = group.lowercased()
+        let sp = game.league.sportPath.lowercased()
+        let isGolfLike = sp == "golf" || sp == "racing"
+        if (isGolfLike) {
+            let hasGolf = hasGolfRelatedToken(g, "")
+            if (g.contains("sport") && !hasGolf) {
+                return false
+            }
+        }
+        if g.contains("sport") { return true }
+        if g.contains(sp) { return true }
+        if g.contains(game.league.label.lowercased()) { return true }
+        for a in leagueAliases(game.league) where a.count >= 3 && tokenOrPhrase(g, a) {
             return true
         }
         return false
@@ -141,13 +162,30 @@ struct MatchingService: Sendable {
             reasons.append("Event group: \(channel.group ?? "")")
         }
 
-        for b in game.broadcasts {
-            let key = b.lowercased()
-            if key.count >= 2, blob.contains(key) {
-                score += 40
-                reasons.append("Broadcast: \(b)")
-                break
+        // Smarter broadcast matching: prefer longer names (Golf Channel over ESPN), word-boundary, geo filter for generics
+        let sortedBroadcasts = game.broadcasts.sorted { $0.count > $1.count }
+        var awardedBroadcast = false
+        for b in sortedBroadcasts {
+            let key = b.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            if key.count < 2 { continue }
+            let matches = tokenOrPhrase(blob, key) || blob.contains(key)
+            if !matches { continue }
+            let generics: Set<String> = ["espn", "fox", "nbc", "abc", "cbs", "tnt", "tbs", "usa", "fs1", "fs2", "golf", "nbcsn", "peacock"]
+            if generics.contains(key) && isGeoForeign(channel.name) {
+                continue  // do not award +40 for geo-foreign generic e.g. "ARG | ESPN 2"
             }
+            score += 40
+            reasons.append("Broadcast: \(b)")
+            awardedBroadcast = true
+            break
+        }
+
+        // Geo-foreign penalty for US-centric (pga etc + golf/racing)
+        if isGeoForeign(channel.name) &&
+            isUSCentricLeague(game.league) &&
+            !skipGeoPenaltyForLeague(game.league) {
+            score -= 35
+            reasons.append("Geo-foreign penalty")
         }
 
         if game.usesMatchupLayout {
@@ -172,13 +210,38 @@ struct MatchingService: Sendable {
             }
         }
 
-        if !inEvent, groupHasSportsContext(group, game) {
-            score += 12
-            reasons.append("Sports group")
+        // Sports group +12 with golf special: suppress "sport" alone for golf unless group has golf token or clean US broadcast
+        if !inEvent {
+            let isGolfLike = game.league.sportPath == "golf" || game.league.sportPath == "racing"
+            let baseContext = groupHasSportsContext(group, game)
+            let groupGolfSignal = hasGolfRelatedToken(group, "")
+            let cleanBroadcastGolf = isGolfLike && awardedBroadcast && !isGeoForeign(channel.name)
+            if (baseContext) {
+                let allow = !isGolfLike || groupGolfSignal || cleanBroadcastGolf
+                if (allow) {
+                    score += 12
+                    reasons.append("Sports group")
+                }
+            } else if (cleanBroadcastGolf) {
+                // give context bonus for clean US broadcast (e.g. bare ESPN) even if group context suppressed for golf
+                score += 12
+                reasons.append("Sports group")
+            }
         }
 
         if name.contains("4k") || name.contains("uhd") { score += 8 }
         else if name.contains("hd") || name.contains("fhd") { score += 5 }
+
+        // Golf / non-H2H specific: require golf token OR clean US broadcast OR event token; else zero for golf
+        if game.league.sportPath == "golf" || game.league.sportPath == "racing" {
+            let hasGolfToken = hasGolfRelatedToken(name, group)
+            let hasCleanUS = awardedBroadcast && !isGeoForeign(channel.name)
+            let hasEvent = hasEventNameToken(game.eventName, name)
+            if !hasGolfToken && !hasCleanUS && !hasEvent {
+                score = 0
+                reasons = ["No golf signal (generic/foreign only)"]
+            }
+        }
 
         return ChannelMatch(
             channel: channel,
@@ -201,6 +264,22 @@ struct MatchingService: Sendable {
         return h.range(of: "\\b\(NSRegularExpression.escapedPattern(for: n))\\b", options: .regularExpression) != nil
     }
 
+    
+    private func passesNonH2HGate(game: Game, channel: IptvChannel, awardedCleanBroadcast: Bool) -> Bool {
+        let sp = game.league.sportPath.lowercased()
+        guard sp == "golf" || sp == "racing" else { return true }
+        let blob = "\(channel.name.lowercased()) \((channel.group ?? "").lowercased())"
+        if hasGolfRelatedToken(blob, channel.name) { return true }
+        if awardedCleanBroadcast && !isGeoForeign(channel.name) { return true }
+        if let event = game.eventName?.lowercased(), !event.isEmpty {
+            let tokens = event.split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count >= 4 }
+            for t in tokens where tokenOrPhrase(blob, t) || blob.contains(t) {
+                return true
+            }
+        }
+        return false
+    }
+
     private func isExcluded(_ blob: String) -> Bool {
         let s = blob.lowercased()
         if s.range(of: #"\b(radio|sirius|podcast)\b"#, options: .regularExpression) != nil {
@@ -213,6 +292,48 @@ struct MatchingService: Sendable {
             return true
         }
         return false
+    }
+
+    // --- new helpers for parity with Android ---
+
+    private func isGeoForeign(_ name: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let idx = n.firstIndex(of: "|") {
+            let before = String(n[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let cc = before.replacingOccurrences(of: " ", with: "")
+            if cc.count >= 2 && cc.count <= 3 {
+                let friendly: Set<String> = ["us", "usa", "uk", "gb", "ca", "au", "ie", "nz", "en"]
+                return !friendly.contains(cc)
+            }
+        }
+        return false
+    }
+
+    private func isUSCentricLeague(_ league: SportLeague) -> Bool {
+        let id = league.rawValue.lowercased()
+        let usIds: Set<String> = ["mlb", "nba", "nfl", "nhl", "pga", "lpga", "mls", "ncaaf", "ncaab"]
+        if usIds.contains(id) { return true }
+        let sp = league.sportPath.lowercased()
+        return sp == "golf" || sp == "racing"
+    }
+
+    private func skipGeoPenaltyForLeague(_ league: SportLeague) -> Bool {
+        let id = league.rawValue.lowercased()
+        let skip: Set<String> = ["epl", "ucl", "uel", "worldcup", "laliga", "bundesliga", "seriea", "ligue1"]
+        return league.sportPath.lowercased() == "soccer" && skip.contains(id)
+    }
+
+    private func hasGolfRelatedToken(_ name: String, _ group: String) -> Bool {
+        let blob = "\(name) \(group)".lowercased()
+        let tokens = ["golf", "pga", "lpga", "masters", "ryder", "fedex", "pgatour", "st. jude", "st jude"]
+        return tokens.contains { t in tokenOrPhrase(blob, t) || blob.contains(t) }
+    }
+
+    private func hasEventNameToken(_ eventName: String?, _ channelName: String) -> Bool {
+        guard let ev = eventName?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines), !ev.isEmpty else { return false }
+        let tokens = ev.split(whereSeparator: { " ,.:-".contains($0) }).filter { $0.count >= 4 }.map(String.init)
+        let ch = channelName.lowercased()
+        return tokens.contains { ch.contains($0) }
     }
 }
 
