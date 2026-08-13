@@ -68,13 +68,13 @@ TV:
 ## iOS System Picture-in-Picture (updated 2026-08-13)
 - System PiP = AV/HLS via AVPlayerViewController automatic (primary path).
 - AVPlayerSurface sets `allowsPictureInPicturePlayback = true` and `canStartPictureInPictureAutomaticallyFromInline = true` (iOS 14.2+).
-- AVPlayerEngine keeps `isSystemPiPActive` / `setSystemPiPActive` + supports check; startSystemPiPIfPossible is no-op (auto from surface).
+- AVPlayerEngine keeps `isSystemPiPActive` / `setSystemPiPActive` + supports check; startSystemPiPIfPossible is no-op for AV (auto from surface).
 - Coordinator (AVPlayerViewControllerDelegate) updates engine state on PiP start/stop/restore.
 - NO separate unattached AVPictureInPictureController / playerLayer (removed competing owner).
-- VLC/TS: no system video PiP. Keeps audio in background (UIBackgroundModes); use in-app pop-out inside SportsDash.
-  Banner (once): "System video PiP works on AV/HLS streams. VLC/TS keeps audio in background; use in-app pop-out inside SportsDash."
-- NO destructive auto handoff (removed attemptAVHandoffForSystemPiP entirely; no stopping VLC on bg or auto-switch).
-- Post background signal only on .background (not inactive) to avoid double-fire.
+- VLC/TS → safe handoff to HLS candidate when available (via playbackURLCandidates .m3u8 or alternateXtreamContainer). Starts AV briefly in parallel without stopping VLC first. On AV playing success within ~5s: stop VLC, switch activeBackend=.av, surface swaps to AVPlayerSurface (auto-PiP). On fail/timeout: stop AV attempt, restore VLC active + state, no black screen.
+- If no HLS alternate: one-shot banner "System video PiP needs HLS/AV. Audio may continue; in-app pop-out stays in SportsDash." (no spam).
+- Do NOT claim PiP success banner unless isPiPActive becomes true.
+- Post background signal on .inactive and .background to avoid double-fire.
 - In-app pop-out (FloatingPlayerView) for phone multitasking in foreground.
 - Phone pop-out stays; TV no float (per product law).
 - PlayerView onDisappear skips stop() when `isPiPActive`.

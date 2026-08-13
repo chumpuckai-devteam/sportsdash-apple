@@ -365,6 +365,7 @@ actor SportsAPI {
             let clock = statusObj["displayClock"] as? String
             let isH2H = league.sportPath != "golf" && league.sportPath != "racing"
 
+            if home.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || away.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || home.isPlaceholder || away.isPlaceholder { continue }
             games.append(
                 Game(
                     id: "\(league.rawValue)-\(id)",

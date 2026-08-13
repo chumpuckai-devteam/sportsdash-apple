@@ -63,7 +63,7 @@ struct PlayerView: View {
                 .ignoresSafeArea()
                 .onTapGesture { toggleChrome() }
 
-            if (playback.isLoading || playback.isBuffering) && !playback.isPlaying {
+            if (playback.isLoading && !playback.isPlaying) || (playback.isBuffering && !playback.isPlaying && !playback.hasRenderedFrame) {
                 loadingOverlay
                     .allowsHitTesting(false)
             }
@@ -141,7 +141,7 @@ struct PlayerView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .tint(SportsColors.gold)
-            Text(playback.isLoading ? "Starting stream…" : "Buffering…")
+            Text( (playback.isLoading && !playback.hasRenderedFrame) ? "Starting stream…" : "Buffering…" )
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.9))
             if !playback.engineLabel.isEmpty {
@@ -164,7 +164,7 @@ struct PlayerView: View {
             // Off | Fade-with-chrome | Persistent
             if shouldShowTicker, playback.error == nil {
                 LiveScoresStrip(
-                    games: appModel.games.filter(\.isLive),
+                    games: appModel.games.filter { $0.isLive && $0.isTickerEligible },
                     currentGameId: game?.id,
                     favoriteTeamIds: appModel.favoriteTeamIds,
                     lastPlayedGameIds: appModel.lastPlayedGameIds,

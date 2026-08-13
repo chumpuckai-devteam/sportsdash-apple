@@ -31,6 +31,16 @@ struct TeamInfo: Identifiable, Hashable, Codable, Sendable {
         }
         return abbreviation
     }
+
+    /// True for junk/placeholder rows that should be filtered from ticker / live lists.
+    var isPlaceholder: Bool {
+        let ab = abbreviation.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if ab.isEmpty || ab == "TBD" || ab == "HOME" || ab == "AWAY" { return true }
+        let nm = name.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if nm.isEmpty || nm == "HOME" || nm == "AWAY" || nm == "TEAM" { return true }
+        if id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        return false
+    }
 }
 
 struct Game: Identifiable, Hashable, Codable, Sendable {
@@ -57,6 +67,22 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         if status == .live || status == .final_ || status == .postponed { return false }
         // unknown + future start → show under Upcoming rather than disappearing
         return startTime > Date().addingTimeInterval(-15 * 60)
+    }
+
+    /// Ticker / live list eligibility. Rejects placeholder/junk teams and requires
+    /// some in-progress signal (score, clock/period, or status detail) for live rows.
+    var isTickerEligible: Bool {
+        guard isLive else { return false }
+        if home.isPlaceholder || away.isPlaceholder { return false }
+        let hasScore = home.score != nil || away.score != nil
+        let hasTime = !(clock?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ||
+                      !(period?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let detail = statusDetail?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let detailSuggests = !detail.isEmpty &&
+            (detail.contains("progress") || detail.contains("live") || detail.contains("qtr") ||
+             detail.contains("quarter") || detail.contains("half") || detail.contains("inning") ||
+             detail.contains("period") || detail.contains("ot") || detail.contains("end"))
+        return hasScore || hasTime || detailSuggests
     }
 
     var usesMatchupLayout: Bool {

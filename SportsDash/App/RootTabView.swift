@@ -97,9 +97,9 @@ struct RootTabView: View {
                 // Re-arm the 45s poll timer (common modes already configured)
                 appModel.startScoresPolling()
             }
-            if newPhase == .background {
-                // Signal active player controllers (fullscreen PlayerView + floatingPlayback) to attempt system PiP.
-                // Only .background (not .inactive) to avoid double fire.
+            if newPhase == .inactive || newPhase == .background {
+                // Signal for PiP handoff prep: post on .inactive (to begin parallel AV early for surface attach before suspend) as well as .background.
+                // Idempotent handling + handoffInFlight prevents double-start / spam.
                 // Each PlaybackController listens via startObservingLifecycle.
                 NotificationCenter.default.post(name: .sportsDashWillBackground, object: nil)
             }

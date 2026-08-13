@@ -17,6 +17,7 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isBuffering = false
     @Published private(set) var isPlaying = false
+    @Published private(set) var hasRenderedFrame = false
     @Published var error: String?
     @Published var banner: String?
     @Published private(set) var engineLabel: String = ""
@@ -42,6 +43,7 @@ final class PlaybackController: ObservableObject {
 
     #if os(iOS)
     private var lifecycleObserver: Any?
+    private var handoffInFlight = false
     #endif
 
     init() {
@@ -78,10 +80,14 @@ final class PlaybackController: ObservableObject {
         candidateIndex = 0
         loadGeneration += 1
         didCrossEngineFallback = false
+        #if os(iOS)
+        handoffInFlight = false
+        #endif
         let gen = loadGeneration
         isLoading = true
         isBuffering = true
         isPlaying = false
+        hasRenderedFrame = false
         error = nil
 
         Task { @MainActor in
@@ -101,7 +107,11 @@ final class PlaybackController: ObservableObject {
         isLoading = false
         isBuffering = false
         isPlaying = false
+        hasRenderedFrame = false
         isPiPActive = false
+        #if os(iOS)
+        handoffInFlight = false
+        #endif
     }
 
     func jumpToLive() {
@@ -156,8 +166,7 @@ final class PlaybackController: ObservableObject {
     var isMuted: Bool { muted }
 
     // MARK: - System Picture-in-Picture support (iOS AV path only for video PiP)
-    // Simplified: system PiP only via AV/HLS automatic path on AVPlayerViewController.
-    // VLC/TS: no system video PiP; audio bg + in-app float only. No auto handoff/destructive switch.
+    // System PiP: AV auto. VLC uses safe HLS handoff when alternate m3u8 exists (brief parallel start, success switches engine). Honest banner residual otherwise.
     #if os(iOS)
     var supportsSystemPictureInPicture: Bool {
         if activeBackend == .av {
@@ -199,17 +208,79 @@ final class PlaybackController: ObservableObject {
     func startSystemPiPIfPossible() {
         #if os(iOS)
         guard isPlaying else { return }
-        if activeBackend == .av {
-            // Rely on automatic PiP (flags already set on AVPlayerSurface).
-            // AVPlayerViewController will enter PiP on background when playing inline.
-            banner = nil
-            avEngine.startSystemPiPIfPossible()  // no-op but keeps API
+        if activeBackend == .av || handoffInFlight {
+            if activeBackend == .av {
+                // Rely on automatic PiP (flags already set on AVPlayerSurface).
+                // AVPlayerViewController will enter PiP on background when playing inline.
+                banner = nil
+                avEngine.startSystemPiPIfPossible()  // no-op but keeps API
+            }
             return
         }
-        // VLC path: DO NOT stop VLC, do not handoff. Show banner once.
-        banner = "System video PiP works on AV/HLS streams. VLC/TS keeps audio in background; use in-app pop-out inside SportsDash."
-        clearBannerSoon()
-        // Keep VLC running for audio bg.
+        // VLC path: safe handoff to HLS/AV if alternate candidate exists (for system video PiP).
+        // Both engines may run briefly during handoff. On success switch active + stop VLC.
+        // On fail/timeout: stop AV attempt, restore VLC, no black screen.
+        guard let url = currentURL, !url.isEmpty else {
+            banner = "No stream for PiP"
+            clearBannerSoon()
+            return
+        }
+        let m3u8Cands = IptvService.playbackURLCandidates(from: url, preferredFormat: .m3u8)
+        var hlsURL: String? = m3u8Cands.first { $0.lowercased().contains(".m3u8") }
+        if hlsURL == nil {
+            if let alt = IptvService.alternateXtreamContainer(url), alt.lowercased().contains(".m3u8") {
+                hlsURL = alt
+            }
+        }
+        if hlsURL == nil || hlsURL == url {
+            // honest residual, one-shot banner not spam
+            if banner == nil {
+                banner = "System video PiP needs HLS/AV. Audio may continue; in-app pop-out stays in SportsDash."
+                clearBannerSoon()
+            }
+            return
+        }
+        // safe handoff
+        let target = hlsURL!
+        let gen = loadGeneration
+        handoffInFlight = true
+        // start AV without stopping VLC (parallel for prep on inactive)
+        avEngine.start(url: target)
+        Task { @MainActor in
+            defer { handoffInFlight = false }
+            var success = false
+            for _ in 0..<20 { // ~5s @ 0.25s  (B1 poll, use time-based not mere isPlaying)
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if loadGeneration != gen { return }
+                let hasRealProgress = avEngine.hasAdvancedPlayback || avEngine.hasRenderedFrame
+                if hasRealProgress {
+                    success = true
+                    break
+                }
+            }
+            guard loadGeneration == gen else { return }
+            if success {
+                vlcEngine.stop()
+                activeBackend = .av
+                engineLabel = label(for: .av)
+                isPlaying = true
+                hasRenderedFrame = true
+                isLoading = false
+                isBuffering = false
+                error = nil
+                avEngine.startSystemPiPIfPossible()
+                // Do NOT claim PiP success in banner unless isPiPActive becomes true.
+            } else {
+                avEngine.stop()
+                activeBackend = .vlc
+                isPlaying = vlcEngine.isPlaying
+                hasRenderedFrame = vlcEngine.hasRenderedFrame
+                isLoading = vlcEngine.isLoading
+                isBuffering = vlcEngine.isBuffering
+                banner = "PiP handoff to HLS timed out/failed; VLC audio continues."
+                clearBannerSoon()
+            }
+        }
         #else
         banner = "PiP is iOS-only"
         clearBannerSoon()
@@ -229,12 +300,7 @@ final class PlaybackController: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self, self.isPlaying else { return }
-                // Only for .av let automatic PiP work (no spam on VLC).
-                // For VLC: silent (audio bg continues; no banner spam every background).
-                if self.activeBackend == .av {
-                    self.startSystemPiPIfPossible()
-                }
-                // else: silent for VLC/TS
+                self.startSystemPiPIfPossible()
             }
         }
     }
@@ -276,10 +342,15 @@ final class PlaybackController: ObservableObject {
                 self.isLoading = false
                 self.isBuffering = false
                 self.isPlaying = true
+                // B3: do not force hasRenderedFrame here on mere isPlaying (VLC side owns time-based now)
                 self.error = nil
             } else if !self.isLoading {
                 self.isPlaying = false
             }
+        }.store(in: &bags)
+        vlcEngine.$hasRenderedFrame.receive(on: RunLoop.main).sink { [weak self] v in
+            guard let self, self.activeBackend == .vlc else { return }
+            self.hasRenderedFrame = v
         }.store(in: &bags)
         #if os(iOS)
         avEngine.$isSystemPiPActive.receive(on: RunLoop.main).sink { [weak self] v in
@@ -306,10 +377,16 @@ final class PlaybackController: ObservableObject {
                 self.isLoading = false
                 self.isBuffering = false
                 self.isPlaying = true
+                // B1: do not force hasRenderedFrame on isPlaying alone (time-based in AV now)
                 self.error = nil
             } else if !self.isLoading {
                 self.isPlaying = false
             }
+        }.store(in: &bags)
+        // AV may not publish hasRendered yet; mirror when added or default true on play
+        avEngine.$hasRenderedFrame.receive(on: RunLoop.main).sink { [weak self] v in
+            guard let self, self.activeBackend == .av else { return }
+            if v { self.hasRenderedFrame = true }
         }.store(in: &bags)
         avEngine.$error.receive(on: RunLoop.main).sink { [weak self] err in
             guard let self, self.activeBackend == .av, let err, !err.isEmpty else { return }
@@ -338,6 +415,7 @@ final class PlaybackController: ObservableObject {
         isLoading = true
         isBuffering = true
         isPlaying = false
+        hasRenderedFrame = false
         error = nil
 
         let preferAV: Bool = {

@@ -16,7 +16,7 @@ struct LiveScoresStrip: View {
     @State private var collapsedLeagues: Set<String> = []
 
     private var liveOrdered: [Game] {
-        var live = games.filter(\.isLive)
+        var live = games.filter { $0.isLive && $0.isTickerEligible }
         // Favorites lead (cycle faves). Current-among-favs first; non-fav current after fav block.
         live.sort { a, b in
             func rank(_ g: Game) -> Int {

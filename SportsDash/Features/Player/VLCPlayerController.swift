@@ -19,6 +19,7 @@ final class VLCPlayerController: NSObject, ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isBuffering = false
     @Published private(set) var isPlaying = false
+    @Published private(set) var hasRenderedFrame = false
     @Published var error: String?
 
     #if canImport(UIKit)
@@ -53,6 +54,7 @@ final class VLCPlayerController: NSObject, ObservableObject {
         isLoading = true
         isBuffering = true
         isPlaying = false
+        hasRenderedFrame = false
         loadGeneration += 1
         let gen = loadGeneration
 
@@ -114,6 +116,7 @@ final class VLCPlayerController: NSObject, ObservableObject {
         isLoading = false
         isBuffering = false
         isPlaying = false
+        hasRenderedFrame = false
     }
 
     private func stopPlayerOnly() {
@@ -130,6 +133,7 @@ final class VLCPlayerController: NSObject, ObservableObject {
         #if os(iOS) || os(tvOS)
         player?.play()
         isPlaying = true
+        // hasRenderedFrame set ONLY in mediaPlayerTimeChanged on time progress (B3)
         #endif
     }
 
@@ -181,11 +185,14 @@ extension VLCPlayerController: VLCMediaPlayerDelegate {
             switch p.state {
             case .buffering:
                 self.isBuffering = true
-                if !self.isPlaying { self.isLoading = true }
+                if !self.isPlaying && !self.hasRenderedFrame {
+                    self.isLoading = true
+                }
             case .playing:
                 self.isLoading = false
                 self.isBuffering = false
                 self.isPlaying = true
+                // DO NOT set hasRenderedFrame here (B3) — only on time advance in mediaPlayerTimeChanged
                 self.error = nil
                 self.applyPreferredVolume()
             case .paused:
@@ -203,6 +210,25 @@ extension VLCPlayerController: VLCMediaPlayerDelegate {
                 self.isLoading = true
             default:
                 break
+            }
+        }
+    }
+
+    nonisolated func mediaPlayerTimeChanged(_ aNotification: Notification) {
+        Task { @MainActor in
+            guard let p = self.player else { return }
+            let currentTime = p.time?.intValue ?? 0
+            let hasVideoOut = p.hasVideoOut
+            if currentTime > 0 || hasVideoOut == true {
+                if !self.hasRenderedFrame {
+                    self.hasRenderedFrame = true
+                }
+                if !self.isPlaying {
+                    self.isLoading = false
+                    self.isBuffering = false
+                    self.isPlaying = true
+                    self.error = nil
+                }
             }
         }
     }

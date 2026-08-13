@@ -14,6 +14,9 @@ final class AVPlayerEngine: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isBuffering = false
     @Published private(set) var isPlaying = false
+    @Published private(set) var hasRenderedFrame = false
+    @Published private(set) var hasAdvancedPlayback = false
+    @Published private(set) var hasOutputProgress = false
     @Published var error: String?
 
     @Published private(set) var isSystemPiPActive = false
@@ -24,6 +27,7 @@ final class AVPlayerEngine: ObservableObject {
     private var timeObserver: Any?
     private var loadGeneration = 0
     private var userAgent = "VLC/3.0.21 LibVLC/3.0.21"
+    private var lastObservedSeconds: Double?
 
     func configure(userAgent: String) {
         let ua = userAgent.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -35,6 +39,10 @@ final class AVPlayerEngine: ObservableObject {
         isLoading = true
         isBuffering = true
         isPlaying = false
+        hasRenderedFrame = false
+        hasAdvancedPlayback = false
+        hasOutputProgress = false
+        lastObservedSeconds = nil
         loadGeneration += 1
         let gen = loadGeneration
 
@@ -75,6 +83,10 @@ final class AVPlayerEngine: ObservableObject {
         isLoading = false
         isBuffering = false
         isPlaying = false
+        hasRenderedFrame = false
+        hasAdvancedPlayback = false
+        hasOutputProgress = false
+        lastObservedSeconds = nil
         #if os(iOS)
         isSystemPiPActive = false
         #endif
@@ -154,6 +166,10 @@ final class AVPlayerEngine: ObservableObject {
         }
         player.pause()
         player.replaceCurrentItem(with: nil)
+        hasRenderedFrame = false
+        hasAdvancedPlayback = false
+        hasOutputProgress = false
+        lastObservedSeconds = nil
     }
 
     private func observe(item: AVPlayerItem, generation: Int) {
@@ -205,12 +221,28 @@ final class AVPlayerEngine: ObservableObject {
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] time in
             Task { @MainActor in
                 guard let self, generation == self.loadGeneration else { return }
-                if self.player.timeControlStatus == .playing {
-                    self.markReady()
-                } else if self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+                let secs = time.seconds
+                let tc = self.player.timeControlStatus
+                let rate = self.player.rate
+                if tc == .playing {
+                    if let last = self.lastObservedSeconds {
+                        if (secs - last) > 0.2 || (rate > 0 && secs != last) {
+                            self.hasRenderedFrame = true
+                            self.hasAdvancedPlayback = true
+                            self.hasOutputProgress = true
+                        }
+                    } else {
+                        // First sample only stores baseline, does not approve.
+                    }
+                    self.lastObservedSeconds = secs
+                    self.isPlaying = true
+                    self.isLoading = false
+                    self.isBuffering = false
+                    self.error = nil
+                } else if tc == .waitingToPlayAtSpecifiedRate {
                     self.isBuffering = true
                 }
             }
@@ -222,6 +254,8 @@ final class AVPlayerEngine: ObservableObject {
         isBuffering = false
         isPlaying = true
         error = nil
+        // NOTE: hasRenderedFrame / hasAdvancedPlayback set ONLY from time progress in periodic observer
+        // (readyToPlay / likelyToKeepUp can report true before actual frames advance)
     }
 }
 
