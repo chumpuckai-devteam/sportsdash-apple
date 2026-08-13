@@ -10,6 +10,10 @@ workspace 'SportsDash.xcworkspace'
 target 'SportsDash' do
   project 'SportsDash.xcodeproj'
   pod 'MobileVLCKit', '~> 3.6'
+
+  target 'SportsDashTests' do
+    inherit! :search_paths
+  end
 end
 
 # tvOS app — separate platform block
@@ -17,6 +21,10 @@ target 'SportsDashTV' do
   platform :tvos, '17.0'
   project 'SportsDash.xcodeproj'
   pod 'TVVLCKit', '~> 3.6'
+
+  target 'SportsDashTVTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|
