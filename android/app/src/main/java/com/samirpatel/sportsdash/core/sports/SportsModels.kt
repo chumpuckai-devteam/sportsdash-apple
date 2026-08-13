@@ -154,6 +154,7 @@ data class LeagueFetchResult(
     val games: List<Game>,
     val successfulBoards: Int,
     val failedBoards: Int,
+    val defaultSucceeded: Boolean,
 ) {
     val allBoardsFailedForLeague: Boolean get() = successfulBoards == 0 && failedBoards > 0
 }
@@ -168,8 +169,8 @@ data class ScoreboardFetchResult(
     val failedBoards: Int,
     val failedLeagues: Set<SportLeague> = emptySet(),
 ) {
-    val allBoardsFailed: Boolean get() = successfulBoards == 0 && failedBoards > 0
-    val hasPartialFailures: Boolean get() = successfulBoards > 0 && failedBoards > 0
+    val allBoardsFailed: Boolean get() = successfulBoards == 0 && (failedLeagues.isNotEmpty() || failedBoards > 0)
+    val hasPartialFailures: Boolean get() = successfulBoards > 0 && failedLeagues.isNotEmpty()
 }
 
 /** Group games sport → league in stable [SportLeague.ALL] order (iOS ScoreboardGrouping). */
@@ -407,6 +408,13 @@ object ScoreboardGrouping {
             }
         }
 
+    fun warningMessageForFailedLeagues(failedLeagues: Set<SportLeague>): String? {
+        if (failedLeagues.isEmpty()) return null
+        val names = failedLeagues.map { it.label }.sorted()
+        val joined = names.joinToString(", ")
+        return "$joined could not refresh. Other scores are current."
+    }
+
     /**
      * Pure helpers for ordering/dedup (extracted for testability and reuse).
      */
@@ -436,7 +444,7 @@ object ScoreboardGrouping {
         for (r in results) {
             successfulBoards += r.successfulBoards
             failedBoards += r.failedBoards
-            if (r.failedBoards > 0) {
+            if (!r.defaultSucceeded) {
                 failedLeagues.add(r.league)
             }
             for (g in r.games) {

@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -49,7 +50,35 @@ class SportsRepository(
                 async { fetchLeagueResult(league) }
             }.awaitAll()
 
-            ScoreboardGrouping.aggregateResults(results)
+            var agg = ScoreboardGrouping.aggregateResults(results)
+            if (agg.failedLeagues.isNotEmpty()) {
+                delay(500L)
+                val toRetry = agg.failedLeagues.toList()
+                val retryResults: List<LeagueFetchResult> = toRetry.map { league ->
+                    async { fetchLeagueResult(league, onlyDefault = true) }
+                }.awaitAll()
+                // Merge retry with original: keep prior range/default games; only update failure/default flags.
+                val leagueToRes = results.associateBy { it.league }.toMutableMap()
+                for (rr in retryResults) {
+                    val prev = leagueToRes[rr.league]
+                    if (prev == null) {
+                        leagueToRes[rr.league] = rr
+                    } else {
+                        val byId = LinkedHashMap<String, Game>()
+                        for (g in prev.games) byId[g.id] = g
+                        for (g in rr.games) byId[g.id] = g
+                        leagueToRes[rr.league] = LeagueFetchResult(
+                            league = rr.league,
+                            games = byId.values.toList(),
+                            successfulBoards = prev.successfulBoards + rr.successfulBoards,
+                            failedBoards = if (prev.defaultSucceeded || rr.defaultSucceeded) prev.failedBoards else rr.failedBoards,
+                            defaultSucceeded = prev.defaultSucceeded || rr.defaultSucceeded,
+                        )
+                    }
+                }
+                agg = ScoreboardGrouping.aggregateResults(leagueToRes.values.toList())
+            }
+            agg
         }
     }
 
@@ -112,17 +141,40 @@ class SportsRepository(
         return out.sortedBy { it.name.lowercase() }
     }
 
-    private fun fetchLeagueResult(league: SportLeague): LeagueFetchResult {
+    private fun fetchLeagueResult(league: SportLeague, onlyDefault: Boolean = false): LeagueFetchResult {
         val urls = scoreboardUrls(league)
+        val defaultUrl = urls.firstOrNull() ?: league.scoreboardUrl
+        val rangeUrls = if (onlyDefault) emptyList() else urls.drop(1)
+
         val byId = linkedMapOf<String, Game>()
         var successfulBoards = 0
         var failedBoards = 0
-        for (url in urls) {
+        var defaultSucceeded = false
+
+        // Default board (primary for failure accounting)
+        val defBody = runCatching { httpGet(defaultUrl) }.getOrNull()
+        if (defBody != null) {
+            // HTTP success only counts if parse also succeeds.
+            // Legitimate empty list from parse is success (no events).
+            val parsed = runCatching { parseScoreboard(defBody, league) }.getOrNull()
+            if (parsed != null) {
+                successfulBoards += 1
+                defaultSucceeded = true
+                parsed.forEach { g ->
+                    val prev = byId[g.id]
+                    byId[g.id] = if (prev == null) g else ScoreboardGrouping.prefer(prev, g)
+                }
+            } else {
+                failedBoards += 1
+            }
+        } else {
+            failedBoards += 1
+        }
+
+        // Range supplements are best-effort; never affect defaultSucceeded or failure mark for league
+        for (url in rangeUrls) {
             val body = runCatching { httpGet(url) }.getOrNull()
             if (body != null) {
-                // HTTP success only counts if parse also succeeds.
-                // Legitimate empty list from parse is success (no events).
-                // Parse failure (bad JSON etc) counts as failed board, does not increment success.
                 val parsed = runCatching { parseScoreboard(body, league) }.getOrNull()
                 if (parsed != null) {
                     successfulBoards += 1
@@ -141,7 +193,8 @@ class SportsRepository(
             league = league,
             games = byId.values.toList(),
             successfulBoards = successfulBoards,
-            failedBoards = failedBoards
+            failedBoards = failedBoards,
+            defaultSucceeded = defaultSucceeded
         )
     }
 

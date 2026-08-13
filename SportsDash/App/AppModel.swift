@@ -38,6 +38,7 @@ final class AppModel: ObservableObject {
     private var scoresResultGeneration = 0
     /// Final applied token per gen: delayed partials after final must not overwrite or re-notify.
     private var finalAppliedGeneration = 0
+    private var silentPartialFailCount = 0
     private var visibleLoading = VisibleLoadingTracker()
     @Published var channelsError: String?
     @Published var lastUpdated: Date?
@@ -233,8 +234,11 @@ final class AppModel: ObservableObject {
     }
 
     func refreshScores(silent: Bool = false) async {
-        scoresError = nil
-        scoresWarning = nil
+        if !silent {
+            scoresError = nil
+            scoresWarning = nil
+            silentPartialFailCount = 0
+        }
         let myResultGen = { scoresResultGeneration += 1; return scoresResultGeneration }()
         var myVisibleToken: Int? = nil
         if !silent {
@@ -280,7 +284,9 @@ final class AppModel: ObservableObject {
                 ? "ESPN scoreboards are unavailable. Pull to try again."
                 : "ESPN scoreboards are unavailable. Showing the last successful update."
             scoresError = message
-            scoresWarning = games.isEmpty ? nil : message
+            if !silent {
+                scoresWarning = games.isEmpty ? nil : message
+            }
             finalAppliedGeneration = myResultGen
             return
         }
@@ -295,10 +301,20 @@ final class AppModel: ObservableObject {
         games = mergedGames
         lastUpdated = Date()
         if result.hasPartialFailures {
-            let count = result.failedLeagues.count
-            scoresWarning = count == 1
-                ? "One league could not refresh. Other scores are current."
-                : "Some leagues could not refresh. Other scores are current."
+            let warn = warningMessage(for: result.failedLeagues)
+            if silent {
+                silentPartialFailCount += 1
+                if silentPartialFailCount >= 2 {
+                    scoresWarning = warn
+                }
+                // else leave prior (or nil) — do not surface single transient
+            } else {
+                silentPartialFailCount = 0
+                scoresWarning = warn
+            }
+        } else {
+            silentPartialFailCount = 0
+            scoresWarning = nil
         }
         migrateLegacyFavoriteTeamIds(using: mergedGames)
         await processGameNotifications(using: mergedGames)
@@ -328,6 +344,14 @@ final class AppModel: ObservableObject {
     private static func upcomingCount(_ games: [Game]) -> Int {
         games.filter(\.isUpcoming).count
     }
+
+    private func warningMessage(for failed: Set<SportLeague>) -> String? {
+        guard !failed.isEmpty else { return nil }
+        let names = failed.sorted { $0.label < $1.label }.map { $0.label }
+        let list = names.joined(separator: ", ")
+        return "\(list) could not refresh. Other scores are current."
+    }
+
 
     /// Matching can be heavy with large playlists — keep off hot SwiftUI paths when possible.
     nonisolated func matchesSync(game: Game, channels: [IptvChannel]) -> [ChannelMatch] {

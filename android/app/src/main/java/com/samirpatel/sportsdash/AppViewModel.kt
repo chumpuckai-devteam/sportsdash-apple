@@ -201,6 +201,7 @@ class AppViewModel(
     private val leagueWriteChannel = Channel<LeagueWriteRequest>(Channel.CONFLATED)
 
     private var scoresGeneration = 0L
+    private var silentPartialFailCount = 0
     private var scoresRefreshJob: Job? = null
 
     init {
@@ -1015,7 +1016,7 @@ class AppViewModel(
         setScoresTickerMode(_state.value.scoresTickerMode.next())
     }
 
-    fun refreshScores() {
+    fun refreshScores(silent: Boolean = false) {
         viewModelScope.launch {
             // snapshot selected at request for generation guard
             val selectedSnapshot = _state.value.selectedLeagueIds
@@ -1036,8 +1037,11 @@ class AppViewModel(
                 return@launch
             }
 
-            _state.update {
-                it.copy(isLoadingScores = true, scoresError = null, scoresStatus = "Updating scores…", scoresWarning = null)
+            if (!silent) {
+                _state.update {
+                    it.copy(isLoadingScores = true, scoresError = null, scoresStatus = "Updating scores…", scoresWarning = null)
+                }
+                silentPartialFailCount = 0
             }
 
             val previousGames = _state.value.games
@@ -1052,7 +1056,7 @@ class AppViewModel(
                         it.copy(
                             isLoadingScores = false,
                             scoresError = "Scores failed",
-                            scoresWarning = null,
+                            scoresWarning = if (silent) _state.value.scoresWarning else null,
                             scoresStatus = null,
                         )
                     }
@@ -1074,7 +1078,7 @@ class AppViewModel(
                         games = it.games,  // preserve prior, do not take empty
                         isLoadingScores = false,
                         scoresError = message,
-                        scoresWarning = if (previousGames.isEmpty()) null else message,
+                        scoresWarning = if (previousGames.isEmpty() || silent) _state.value.scoresWarning else message,
                         scoresStatus = null,
                     )
                 }
@@ -1090,6 +1094,19 @@ class AppViewModel(
                 )
                 val live = merged.count { it.isLive }
                 val up = merged.count { it.isUpcoming }
+                val warn = ScoreboardGrouping.warningMessageForFailedLeagues(result.failedLeagues)
+                var finalWarn: String? = null
+                if (silent) {
+                    silentPartialFailCount += 1
+                    if (silentPartialFailCount >= 2) {
+                        finalWarn = warn
+                    } else {
+                        finalWarn = _state.value.scoresWarning
+                    }
+                } else {
+                    silentPartialFailCount = 0
+                    finalWarn = warn
+                }
                 _state.update {
                     it.copy(
                         games = merged,
@@ -1097,10 +1114,7 @@ class AppViewModel(
                         scoresUpdatedAtMs = System.currentTimeMillis(),
                         scoresStatus = "$live live · $up upcoming · ${merged.size} total",
                         scoresError = null,
-                        scoresWarning = if (result.failedLeagues.size == 1)
-                            "One league could not refresh. Other scores are current."
-                        else
-                            "Some leagues could not refresh. Other scores are current.",
+                        scoresWarning = finalWarn,
                     )
                 }
                 if (scoresGeneration != myGen) return@launch
@@ -1143,6 +1157,7 @@ class AppViewModel(
                 notifyStarts = s.notifyGameStarts,
                 notifyGoals = s.notifyGoals,
             )
+            silentPartialFailCount = 0
         }
     }
 
@@ -1201,7 +1216,7 @@ class AppViewModel(
                         val effective = PrefsStore.effectiveSelectedLeagueIds(persisted)
                         if (effective != _state.value.selectedLeagueIds) {
                             _state.update { it.copy(selectedLeagueIds = effective) }
-                            refreshScores()
+                            refreshScores(silent = true)
                         }
                     }
                     // older failure ignored
@@ -1227,7 +1242,7 @@ class AppViewModel(
                             pendingLeagueWriteRevision, emitted, _state.value.selectedLeagueIds
                         )) {
                         _state.update { it.copy(selectedLeagueIds = emitted) }
-                        refreshScores()
+                        refreshScores(silent = true)
                     }
                 }
         }
@@ -1394,7 +1409,7 @@ class AppViewModel(
                 delay(45_000L)
                 val cur = _state.value
                 if (cur.notificationsEnabled && (cur.notifyGoals || cur.notifyGameStarts)) {
-                    refreshScores()
+                    refreshScores(silent = true)
                 } else {
                     break
                 }

@@ -1,6 +1,7 @@
 package com.samirpatel.sportsdash.core.sports
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -197,6 +198,31 @@ class ScoreboardGroupingUpcomingTest {
         val nfl = SportLeague.byId("nfl")!!
         val res = runCatching { repo.parseScoreboard("notjson", nfl) }
         assertTrue("malformed fail", res.isFailure)
+    }
+
+
+    @Test
+    fun `warningMessageForFailedLeagues uses sorted short labels`() {
+        val mlb = makeLeague("mlb", "MLB")
+        val nba = makeLeague("nba", "NBA")
+        val nfl = makeLeague("nfl", "NFL")
+        val msg = ScoreboardGrouping.warningMessageForFailedLeagues(setOf(nba, mlb, nfl))
+        assertEquals("MLB, NBA, NFL could not refresh. Other scores are current.", msg)
+        assertNull(ScoreboardGrouping.warningMessageForFailedLeagues(emptySet()))
+    }
+
+    @Test
+    fun `aggregateResults only fails league on default failure (range fail ignored)`() {
+        val mlb = makeLeague("mlb", "MLB")
+        val nba = makeLeague("nba", "NBA")
+        // mlb default failed (even if range gave games? but here no)
+        val rMlb = LeagueFetchResult(league=mlb, games=emptyList(), successfulBoards=0, failedBoards=2, defaultSucceeded=false)
+        // nba default ok, but range failed (failedBoards>0 but default true)
+        val rNba = LeagueFetchResult(league=nba, games=listOf(makeGame(nba)), successfulBoards=1, failedBoards=1, defaultSucceeded=true)
+        val agg = ScoreboardGrouping.aggregateResults(listOf(rMlb, rNba))
+        assertTrue(agg.hasPartialFailures)
+        assertEquals(setOf(mlb), agg.failedLeagues)
+        assertTrue("nba games present", agg.games.any { it.league.id == "nba" })
     }
 
 }

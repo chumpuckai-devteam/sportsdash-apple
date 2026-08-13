@@ -9,11 +9,12 @@ actor SportsAPI {
         let failedLeagues: Set<SportLeague>
 
         var allBoardsFailed: Bool {
-            successfulBoards == 0 && failedBoards > 0
+            // Prefer league-set: board counters can include best-effort range + retries.
+            successfulBoards == 0 && (!failedLeagues.isEmpty || failedBoards > 0)
         }
 
         var hasPartialFailures: Bool {
-            successfulBoards > 0 && failedBoards > 0
+            successfulBoards > 0 && !failedLeagues.isEmpty
         }
     }
 
@@ -80,15 +81,28 @@ actor SportsAPI {
         }, into: &byId, onPartial: onPartial)
         successfulBoards += current.successfulBoards
         failedBoards += current.failedBoards
-        failedLeagues.formUnion(current.failedLeagues)
+        failedLeagues = current.failedLeagues  // only default determines failure (range is best-effort)
 
-        // Pass 2 — range supplement (scheduled days).
+        // Pass 2 — range supplement (scheduled days). Do not union range failures.
         let upcoming = await fetchLeagues(list, urlsForLeague: { league in
             self.upcomingRangeScoreboardURLs(for: league)
         }, into: &byId, onPartial: onPartial)
         successfulBoards += upcoming.successfulBoards
         failedBoards += upcoming.failedBoards
-        failedLeagues.formUnion(upcoming.failedLeagues)
+        // intentionally do not formUnion upcoming.failedLeagues
+
+        // Per-league retry (only failed, short delay) — retry default only.
+        if !failedLeagues.isEmpty {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let toRetry = Array(failedLeagues)
+            let retry = await fetchLeagues(toRetry, urlsForLeague: { league in
+                self.defaultScoreboardURL(for: league).map { [$0] } ?? []
+            }, into: &byId, onPartial: onPartial)
+            successfulBoards += retry.successfulBoards
+            // Remaining failures only (do not keep pre-retry failed board count for partial flags).
+            failedBoards = retry.failedBoards
+            failedLeagues = retry.failedLeagues
+        }
 
         return ScoreboardFetchResult(
             games: Array(byId.values).sorted(by: Self.sortGames),

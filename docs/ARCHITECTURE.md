@@ -51,6 +51,9 @@ Android's single-engine implementation is an intentional delta, not unfinished V
 
 - ESPN supplies Live, Upcoming, and Final boards.
 - Apple distinguishes a legitimate successful empty slate from aggregate board failure. A total failure preserves the last successful games and exposes `scoresError`; partial failures retain successful games and expose a warning.
+
+- Phase A score pull reliability (Apple+Android): named warnings e.g. "MLB could not refresh. Other scores are current." / "MLB, NBA could not refresh…" (sorted short labels); silent polls (timer/ticker) only surface after 2 consecutive partial failures (or always on non-silent); per-league retry (~500ms) on primary failures with merge/shrink; default board success clears failure flag (range supplement is best-effort).
+
 - Scores favorites = teams only, stored with league-scoped IDs such as `nfl:27` and `mlb:27`.
 - Guide favorites = IPTV channels. They are a separate domain and do not create score alerts.
 - Phone uses dense one-row filters and a vertical list; TV uses horizontal “My Games” first + per-league rails (Upcoming incl. empty selected leagues w/ None scheduled on both; Live/Final avoid empty). Sport headers ok in grouping but rails league-level (see tv-surfaces.md).
