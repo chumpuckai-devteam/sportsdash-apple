@@ -45,11 +45,22 @@ import com.samirpatel.sportsdash.AppUiState
 import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.core.model.PlaylistType
 import com.samirpatel.sportsdash.core.sports.SportLeague
+import com.samirpatel.sportsdash.ui.theme.BebasNeue
+import com.samirpatel.sportsdash.ui.theme.Danger
 import com.samirpatel.sportsdash.ui.theme.Gold
+import com.samirpatel.sportsdash.ui.theme.JumbotronLampCard
+import com.samirpatel.sportsdash.ui.theme.JumbotronScreenTitle
+import com.samirpatel.sportsdash.ui.theme.JumbotronSectionLabel
+import com.samirpatel.sportsdash.ui.theme.JumbotronToggle
+import com.samirpatel.sportsdash.ui.theme.LampKind
+import com.samirpatel.sportsdash.ui.theme.LiveMint
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
+import com.samirpatel.sportsdash.ui.theme.ScreenInset
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.theme.gridDotGround
+import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
 
 @Composable
 fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
@@ -106,14 +117,41 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
         labelColor = TextPrimary,
     )
 
+    val playlistLamp = if (state.playlist == null) LampKind.PENDING else if (state.channelError != null) LampKind.BLOCKED else LampKind.DONE
+    val epgLamp = when {
+        state.epgStatus?.contains("fail", true) == true -> LampKind.BLOCKED
+        state.epgByChannelId.isNotEmpty() -> LampKind.DONE
+        else -> LampKind.PENDING
+    }
+    val favLamp = if (state.favoriteTeamIds.isEmpty()) LampKind.PENDING else LampKind.DONE
+    val setupDone = listOf(playlistLamp, epgLamp, favLamp).count { it == LampKind.DONE }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(VoidBlack)
-            .padding(16.dp),
+            .gridDotGround()
+            .padding(horizontal = ScreenInset),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
+            JumbotronScreenTitle(first = "CONTROL ", gold = "ROOM", modifier = Modifier.padding(top = 4.dp))
+        }
+        item {
+            JumbotronLampCard(
+                playlist = playlistLamp,
+                epg = epgLamp,
+                favorites = favLamp,
+                setupCount = setupDone,
+                cta = when {
+                    state.playlist == null -> "ADD PLAYLIST ▸"
+                    state.favoriteTeamIds.isEmpty() -> "PICK TEAMS ▸"
+                    else -> "SETUP $setupDone/3"
+                },
+                onCta = {},
+            )
+        }
+        item {
+            JumbotronSectionLabel("SOURCE", LiveMint)
             Text(
                 text = "Playlist",
                 color = Gold,
@@ -332,35 +370,36 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
                 color = Muted,
                 style = MaterialTheme.typography.bodySmall,
             )
+            JumbotronSectionLabel("ALERTS", Danger)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Panel)
-                    .clickable {
+                    .jumbotronPanel()
+                    .padding(horizontal = 12.dp)
+                    .height(50.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "GAME ALERTS",
+                    color = TextPrimary,
+                    fontFamily = BebasNeue,
+                    fontSize = 22.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                JumbotronToggle(
+                    isOn = state.notificationsEnabled,
+                    onToggle = {
                         val turningOn = !state.notificationsEnabled
                         if (turningOn) {
                             if (Build.VERSION.SDK_INT >= 33) {
-                                // Launch; enable ONLY after granted result (denial keeps false)
                                 notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                // do NOT set here for 13+
                             } else {
-                                // Pre-13: enable immediately
                                 vm.setNotificationsEnabled(true)
                             }
                         } else {
-                            // turning off: immediate, no perm involved
                             vm.setNotificationsEnabled(false)
                         }
-                    }
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Enable alerts", color = TextPrimary, modifier = Modifier.weight(1f))
-                Text(
-                    text = if (state.notificationsEnabled) "ON" else "OFF",
-                    color = if (state.notificationsEnabled) Gold else Muted,
-                    fontWeight = FontWeight.Bold,
+                    },
                 )
             }
             if (state.notificationsEnabled) {

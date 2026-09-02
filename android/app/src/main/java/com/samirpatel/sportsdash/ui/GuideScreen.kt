@@ -2,6 +2,8 @@ package com.samirpatel.sportsdash.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,11 +12,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -62,11 +66,23 @@ import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.FAVORITES_GROUP
 import com.samirpatel.sportsdash.GuideLayout
 import com.samirpatel.sportsdash.core.model.IptvChannel
+import com.samirpatel.sportsdash.ui.theme.BebasNeue
+import com.samirpatel.sportsdash.ui.theme.Border
 import com.samirpatel.sportsdash.ui.theme.Gold
+import com.samirpatel.sportsdash.ui.theme.GuideRowHeight
+import com.samirpatel.sportsdash.ui.theme.JumbotronLed
+import com.samirpatel.sportsdash.ui.theme.JumbotronMessagePanel
+import com.samirpatel.sportsdash.ui.theme.JumbotronScreenTitle
+import com.samirpatel.sportsdash.ui.theme.LiveMint
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
+import com.samirpatel.sportsdash.ui.theme.ScreenInset
+import com.samirpatel.sportsdash.ui.theme.SpaceMono
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.theme.brandStripe
+import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
+import com.samirpatel.sportsdash.core.epg.nowPlaying
 import com.samirpatel.sportsdash.ui.tv.tvFocusGroup
 import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 
@@ -123,7 +139,7 @@ private fun GuideBrowseBody(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(modifier = Modifier.fillMaxSize()) {
-        GuideActionBar(
+        if (isTelevision || landscape) GuideActionBar(
             state = state,
             landscape = landscape,
             isTelevision = isTelevision,
@@ -141,7 +157,7 @@ private fun GuideBrowseBody(
             state.epgStatus?.takeIf { !state.isLoadingEpg },
             state.bulkEpgStatus?.takeIf { state.isLoadingEpg },
         ).joinToString(" · ")
-        if (status.isNotBlank()) {
+        if (status.isNotBlank() && (isTelevision || landscape)) {
             Text(
                 text = status + if (state.isLoadingEpg || state.isAutoFillingEpg) " …" else "",
                 color = if (state.isLoadingEpg || state.isAutoFillingEpg) Gold else Muted,
@@ -158,7 +174,7 @@ private fun GuideBrowseBody(
                 GuideLayout.LIST -> {
                     if (channels.isEmpty() && state.selectedGroup == FAVORITES_GROUP) {
                         EmptyFavoritesHint()
-                    } else {
+                    } else if (isTelevision) {
                         GuideTimeline(
                             channels = channels,
                             programsFor = { id -> vm.programsFor(id) },
@@ -181,9 +197,67 @@ private fun GuideBrowseBody(
                             tvFocus = isTelevision,
                             modifier = Modifier.fillMaxSize(),
                         )
+                    } else {
+                        GuideNowBarPhone(
+                            vm = vm,
+                            state = state,
+                            channels = channels.filter { it.url.isNotBlank() },
+                            onPlay = { ch -> vm.play(ch) },
+                            onLongPress = { ch -> favoriteTarget = ch },
+                            onOpenCategories = { showMenu = true },
+                            onGrid = { vm.setGuideLayout(GuideLayout.GRID) },
+                            onMovies = { vm.setMoviesNow(!state.moviesNow) },
+                        )
                     }
                 }
                 GuideLayout.GRID -> {
+                  Column(modifier = Modifier.fillMaxSize()) {
+                    if (!isTelevision && !landscape) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenInset, vertical = 4.dp)) {
+                            JumbotronScreenTitle(first = "CHANNEL ", gold = "GUIDE")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(38.dp)
+                                        .jumbotronPanel(Gold.copy(alpha = 0.5f))
+                                        .clickable { showMenu = true }
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    Text(
+                                        (state.selectedGroup.ifBlank { "★ FAVORITES" }).uppercase(),
+                                        color = Gold,
+                                        fontFamily = BebasNeue,
+                                        fontSize = 18.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .width(64.dp)
+                                        .height(38.dp)
+                                        .jumbotronPanel()
+                                        .clickable { vm.setGuideLayout(GuideLayout.LIST) },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text("LIST", color = Muted, fontFamily = BebasNeue, fontSize = 16.sp) }
+                                Box(
+                                    modifier = Modifier
+                                        .width(74.dp)
+                                        .height(38.dp)
+                                        .background(Gold)
+                                        .clickable { vm.setMoviesNow(!state.moviesNow) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text("MOVIES", color = VoidBlack, fontFamily = BebasNeue, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
                     if (channels.isEmpty() && state.selectedGroup == FAVORITES_GROUP) {
                         EmptyFavoritesHint()
                     } else {
@@ -192,7 +266,7 @@ private fun GuideBrowseBody(
                             contentPadding = PaddingValues(10.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                         ) {
                             gridItems(items = channels, key = { it.id }) { ch ->
                                 ChannelGridCard(
@@ -216,6 +290,7 @@ private fun GuideBrowseBody(
                             }
                         }
                     }
+                  }
                 }
             }
 
@@ -545,6 +620,183 @@ private fun EmptyFavoritesHint() {
             color = Muted,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GuideNowBarPhone(
+    vm: AppViewModel,
+    state: AppUiState,
+    channels: List<IptvChannel>,
+    onPlay: (IptvChannel) -> Unit,
+    onLongPress: (IptvChannel) -> Unit,
+    onOpenCategories: () -> Unit,
+    onGrid: () -> Unit,
+    onMovies: () -> Unit,
+) {
+    val now = System.currentTimeMillis()
+    val liveCount = channels.count { vm.programsFor(it.id).nowPlaying(now) != null }
+    val sdf = remember { java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()) }
+    val hourChips = remember {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        (1..3).map {
+            cal.add(java.util.Calendar.HOUR_OF_DAY, 1)
+            cal.timeInMillis
+        }
+    }
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = ScreenInset)) {
+        JumbotronScreenTitle(first = "CHANNEL ", gold = "GUIDE", modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+                    .jumbotronPanel(Gold.copy(alpha = 0.5f))
+                    .clickable(onClick = onOpenCategories)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    (state.selectedGroup.ifBlank { "★ FAVORITES" }).uppercase(),
+                    color = Gold,
+                    fontFamily = BebasNeue,
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Box(
+                modifier = Modifier.width(64.dp).height(38.dp).jumbotronPanel().clickable(onClick = onGrid),
+                contentAlignment = Alignment.Center,
+            ) { Text("GRID", color = Muted, fontFamily = BebasNeue, fontSize = 16.sp) }
+            Box(
+                modifier = Modifier
+                    .width(74.dp)
+                    .height(38.dp)
+                    .then(if (state.moviesNow) Modifier.background(Gold) else Modifier.jumbotronPanel())
+                    .clickable(onClick = onMovies),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("MOVIES", color = if (state.moviesNow) VoidBlack else Muted, fontFamily = BebasNeue, fontSize = 16.sp)
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
+        ) {
+            Box(
+                modifier = Modifier.background(LiveMint).padding(horizontal = 10.dp).height(26.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("NOW · $liveCount LIVE", color = VoidBlack, fontFamily = BebasNeue, fontSize = 14.sp)
+            }
+            hourChips.forEach { t ->
+                Box(
+                    modifier = Modifier.border(1.dp, Border).padding(horizontal = 10.dp).height(26.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(sdf.format(java.util.Date(t)), color = Muted, fontFamily = BebasNeue, fontSize = 14.sp)
+                }
+            }
+        }
+        if (channels.isEmpty()) {
+            JumbotronMessagePanel(
+                title = "NO CHANNELS IN THIS CATEGORY",
+                subtitle = "Pick another category.",
+                cta = "CHOOSE CATEGORY",
+                onClick = onOpenCategories,
+            )
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f).jumbotronPanel()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(28.dp).padding(start = 15.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("CH", color = Muted, fontFamily = SpaceMono, fontSize = 9.sp, modifier = Modifier.width(40.dp))
+                        Text("NAME", color = Muted, fontFamily = SpaceMono, fontSize = 9.sp, modifier = Modifier.width(74.dp))
+                        Text("NOW", color = Muted, fontFamily = SpaceMono, fontSize = 9.sp, modifier = Modifier.weight(1f))
+                        JumbotronLed("▼ ${sdf.format(java.util.Date(now))}", size = 9, color = LiveMint, glow = true)
+                    }
+                }
+                listItems(items = channels, key = { it.id }) { ch ->
+                    val idx = channels.indexOf(ch) + 1
+                    val programs = vm.programsFor(ch.id)
+                    val prog = programs.nowPlaying(now) ?: programs.firstOrNull()
+                    val live = programs.nowPlaying(now) != null
+                    val progress = if (prog != null && prog.durationMs > 0) {
+                        ((now - prog.startMs).toFloat() / prog.durationMs).coerceIn(0f, 1f)
+                    } else 0f
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(GuideRowHeight)
+                            .combinedClickable(onClick = { onPlay(ch) }, onLongClick = { onLongPress(ch) }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(5.dp).height(GuideRowHeight).background(brandStripe(ch.group)))
+                        JumbotronLed("%03d".format(idx), size = 13, color = Gold, glow = true, modifier = Modifier.width(40.dp).padding(start = 4.dp))
+                        Text(
+                            vm.displayChannelName(ch.name).uppercase(),
+                            color = TextPrimary,
+                            fontFamily = BebasNeue,
+                            fontSize = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.width(74.dp),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .padding(end = 8.dp)
+                                .background(VoidBlack)
+                                .border(1.dp, Border),
+                        ) {
+                            if (live) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(progress)
+                                        .background(LiveMint.copy(alpha = 0.22f)),
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        (prog?.title ?: "NO LISTING").uppercase(),
+                                        color = TextPrimary,
+                                        fontFamily = SpaceMono,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (prog != null) {
+                                        Text(
+                                            "ENDS ${sdf.format(java.util.Date(prog.endMs))}",
+                                            color = Muted,
+                                            fontFamily = SpaceMono,
+                                            fontSize = 8.sp,
+                                        )
+                                    }
+                                }
+                                if (live) {
+                                    JumbotronLed("LIVE", size = 8, color = LiveMint, glow = true)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

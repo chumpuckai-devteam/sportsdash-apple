@@ -14,6 +14,7 @@ struct SportsDashApp: App {
     #endif
 
     init() {
+        JumbotronFonts.register()
         let prefs = StorageService.shared.playerPrefs()
         PlaybackController.applyGlobal(prefs)
         // BG path independent of AppModel (see ScoresBackgroundRefresh)

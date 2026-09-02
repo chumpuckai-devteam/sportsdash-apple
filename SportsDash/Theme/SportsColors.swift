@@ -9,17 +9,33 @@ import SwiftUI
 // Content cards use standard materials / opaque panels so hierarchy stays clear.
 
 enum SportsColors {
-    static let voidBlack = Color(red: 0.027, green: 0.035, blue: 0.047)
-    static let panel = Color(red: 0.059, green: 0.075, blue: 0.094)
-    static let panelElevated = Color(red: 0.090, green: 0.110, blue: 0.141)
-    static let border = Color(red: 0.165, green: 0.200, blue: 0.251)
-    static let gold = Color(red: 1.0, green: 0.722, blue: 0.0)
-    static let goldDim = Color(red: 0.722, green: 0.525, blue: 0.043)
-    static let live = Color(red: 0.0, green: 0.898, blue: 0.627)
-    static let danger = Color(red: 1.0, green: 0.231, blue: 0.361)
-    static let muted = Color(red: 0.545, green: 0.588, blue: 0.659)
-    static let text = Color(red: 0.949, green: 0.957, blue: 0.969)
-    static let textSecondary = Color(red: 0.722, green: 0.753, blue: 0.808)
+    /// Screen ground — Jumbotron SPEC §1 `#070910`.
+    static let voidBlack = Color(sportsHex: "070910") ?? Color(red: 0.027, green: 0.035, blue: 0.063)
+    static let panel = Color(sportsHex: "0F131A") ?? Color(red: 0.059, green: 0.075, blue: 0.102)
+    static let panelElevated = Color(sportsHex: "171C24") ?? Color(red: 0.090, green: 0.110, blue: 0.141)
+    static let border = Color(sportsHex: "2A3340") ?? Color(red: 0.165, green: 0.200, blue: 0.251)
+    static let gold = Color(sportsHex: "FFB800") ?? Color(red: 1.0, green: 0.722, blue: 0.0)
+    static let goldDim = Color(sportsHex: "B8860B") ?? Color(red: 0.722, green: 0.525, blue: 0.043)
+    static let live = Color(sportsHex: "00E5A0") ?? Color(red: 0.0, green: 0.898, blue: 0.627)
+    static let danger = Color(sportsHex: "FF3B5C") ?? Color(red: 1.0, green: 0.231, blue: 0.361)
+    static let muted = Color(sportsHex: "8B96A8") ?? Color(red: 0.545, green: 0.588, blue: 0.659)
+    static let text = Color(sportsHex: "F2F4F7") ?? Color(red: 0.949, green: 0.957, blue: 0.969)
+    static let textSecondary = Color(sportsHex: "B8C0CE") ?? Color(red: 0.722, green: 0.753, blue: 0.808)
+
+    /// 1pt dots on a 6pt grid (screen ground).
+    static let gridDot = Color(sportsHex: "141B28") ?? Color(red: 0.078, green: 0.106, blue: 0.157)
+    /// Gold @ 0.80 — apply with `.shadow(color:ledGlow, radius: 6)`.
+    static let ledGlow = gold.opacity(0.80)
+    /// Live @ 0.75 — apply with `.shadow(color:liveGlow, radius: 5)`.
+    static let liveGlow = live.opacity(0.75)
+
+    static var panelGradient: LinearGradient {
+        LinearGradient(
+            colors: [panelElevated, panel],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     /// Soft scrim for sheets / floating chrome over video.
     static let scrim = Color.black.opacity(0.45)
@@ -32,6 +48,28 @@ enum SportsMetrics {
     static let cardPadding: CGFloat = 14
     static let sectionSpacing: CGFloat = 20
     static let gridGutter: CGFloat = 12
+    /// Jumbotron content panels / buttons / tab lamp — SPEC §3.
+    static let jumbotronRadius: CGFloat = 0
+    static let screenInset: CGFloat = 12
+    static let scoreRowHeight: CGFloat = 58
+    static let guideRowHeight: CGFloat = 62
+    static let settingsRowHeight: CGFloat = 50
+    static let tabBarHeight: CGFloat = 80
+    static let tabBarSafePad: CGFloat = 14
+    static let teamEdgeWidth: CGFloat = 5
+}
+
+extension Color {
+    /// Parse ESPN-style hex (`BA0021` or `#BA0021`).
+    init?(sportsHex: String) {
+        var s = sportsHex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt64(s, radix: 16) else { return nil }
+        let r = Double((v >> 16) & 0xFF) / 255
+        let g = Double((v >> 8) & 0xFF) / 255
+        let b = Double(v & 0xFF) / 255
+        self.init(red: r, green: g, blue: b)
+    }
 }
 
 /// tvOS focus geometry (HIG ~66pt preferred control size; scale needs margin).
@@ -126,7 +164,13 @@ extension View {
     }
 
     func sportsScreenBackground() -> some View {
-        self.background(SportsColors.voidBlack.ignoresSafeArea())
+        self.background {
+            ZStack {
+                SportsColors.voidBlack
+                JumbotronGridDot()
+            }
+            .ignoresSafeArea()
+        }
     }
 
     /// Toolbar / menu control styling with glass when available.

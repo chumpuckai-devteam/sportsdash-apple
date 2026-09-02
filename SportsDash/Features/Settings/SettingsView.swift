@@ -6,6 +6,9 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
+            #if os(iOS)
+            jumbotronHub
+            #else
             List {
                 if SetupChecklist.isIncomplete(appModel) {
                     Section {
@@ -216,8 +219,225 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sportsNavTitleMode(large: true)
             .sportsInsetGroupedList()
+            #endif
         }
     }
+
+    #if os(iOS)
+    private var jumbotronHub: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                JumbotronScreenTitle(first: "CONTROL ", gold: "ROOM")
+                    .padding(.top, 4)
+
+                SetupChecklistCard()
+
+                sectionLabel("SOURCE", tick: SportsColors.live)
+                VStack(spacing: 0) {
+                    NavigationLink {
+                        PlaylistSettingsView()
+                    } label: {
+                        settingsHubRow(
+                            icon: "list.bullet.rectangle",
+                            title: playlistHubTitle,
+                            value: playlistHubValue
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    if let account = appModel.xtreamAccount {
+                        hubMetaRow("STATUS", account.status?.uppercased() ?? "—",
+                                   color: account.isActive ? SportsColors.live : SportsColors.danger,
+                                   glow: account.isActive)
+                        hubMetaRow("EXPIRES", account.expDateLabel.uppercased(), color: SportsColors.gold, glow: true)
+                        hubMetaRow("CONNECTIONS", account.connectionsLabel, color: SportsColors.gold, glow: true)
+                    } else if appModel.isLoadingEpg {
+                        hubMetaRow("EPG", appModel.epgStatus?.uppercased() ?? "…", color: SportsColors.muted, glow: false)
+                    }
+                }
+                .jumbotronPanel()
+
+                sectionLabel("ALERTS", tick: SportsColors.danger)
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        settingsIcon("bell.fill", stroke: SportsColors.danger)
+                        Text("GAME ALERTS")
+                            .font(JumbotronFonts.display(22))
+                            .jumbotronDisplayTracking(22)
+                            .foregroundStyle(SportsColors.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(alertsCaption)
+                            .font(JumbotronFonts.body(11))
+                            .foregroundStyle(SportsColors.muted)
+                        JumbotronToggle(
+                            isOn: PrefsBinding.field(
+                                appModel,
+                                get: { $0.notificationsEnabled },
+                                set: { $0.notificationsEnabled = $1 }
+                            )
+                        )
+                        .onChange(of: appModel.playerPrefs.notificationsEnabled) { _, enabled in
+                            Task { await handleAlertsToggle(enabled) }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: SportsMetrics.settingsRowHeight)
+                    .frame(minHeight: 44)
+                    if appModel.playerPrefs.notificationsEnabled {
+                        hubToggleRow("GAME STARTING SOON", PrefsBinding.field(appModel, get: { $0.notifyGameStarts }, set: { $0.notifyGameStarts = $1 }))
+                        hubToggleRow("GOALS / SCORE CHANGES", PrefsBinding.field(appModel, get: { $0.notifyGoals }, set: { $0.notifyGoals = $1 }))
+                    }
+                }
+                .jumbotronPanel()
+
+                sectionLabel("SYSTEM", tick: SportsColors.gold)
+                VStack(spacing: 0) {
+                    NavigationLink { GeneralSettingsView() } label: {
+                        settingsHubRow(icon: "gearshape", title: "GENERAL", value: "›")
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { UISettingsView() } label: {
+                        settingsHubRow(icon: "line.3.horizontal", title: "USER INTERFACE", value: appModel.playerPrefs.cleanUpNames ? "CLEAN NAMES ›" : "›")
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { PlayerSettingsView() } label: {
+                        settingsHubRow(icon: "play.fill", title: "VIDEO PLAYER", value: playerValue, iconFill: SportsColors.live)
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { ScoresSettingsView() } label: {
+                        settingsHubRow(icon: "sportscourt", title: "LEAGUES ON SCORES", value: leaguesValue)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .jumbotronPanel()
+            }
+            .padding(.horizontal, SportsMetrics.screenInset)
+            .padding(.bottom, 28)
+        }
+        .sportsHideScrollBackground()
+        .sportsScreenBackground()
+        .navigationTitle("")
+        .sportsNavTitleMode(large: false)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .jumbotronAXCap()
+    }
+
+    private var playlistHubTitle: String {
+        if appModel.playlists.isEmpty { return "XTREAM · ADD SOURCE" }
+        let name = appModel.activePlaylist?.name.uppercased() ?? "PLAYLIST"
+        return "XTREAM · \(name)"
+    }
+
+    private var playlistHubValue: String {
+        if appModel.channels.isEmpty { return "0 CH ›" }
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return "\(f.string(from: NSNumber(value: appModel.channels.count)) ?? "\(appModel.channels.count)") CH ›"
+    }
+
+    private var alertsCaption: String {
+        var bits: [String] = []
+        if appModel.playerPrefs.notifyGameStarts { bits.append("STARTS") }
+        if appModel.playerPrefs.notifyGoals { bits.append("GOALS") }
+        return bits.isEmpty ? "OFF" : bits.joined(separator: " + ")
+    }
+
+    private var playerValue: String { "AUTO · VLC / AV ›" }
+
+    private var leaguesValue: String {
+        let n = appModel.selectedLeagues.isEmpty ? SportLeague.defaults.count : appModel.selectedLeagues.count
+        return "\(n) SELECTED ›"
+    }
+
+    private func sectionLabel(_ title: String, tick: Color) -> some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(tick).frame(width: 4, height: 14)
+            Text(title)
+                .font(JumbotronFonts.display(16))
+                .foregroundStyle(SportsColors.muted)
+                .tracking(2)
+        }
+        .padding(.top, 4)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func settingsHubRow(icon: String, title: String, value: String, iconFill: Color? = nil) -> some View {
+        HStack(spacing: 10) {
+            settingsIcon(icon, stroke: iconFill ?? SportsColors.gold, fill: iconFill)
+            Text(title)
+                .font(JumbotronFonts.display(22))
+                .jumbotronDisplayTracking(22)
+                .foregroundStyle(SportsColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(value)
+                .font(JumbotronFonts.body(11))
+                .foregroundStyle(SportsColors.muted)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: SportsMetrics.settingsRowHeight)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .overlay(alignment: .top) { Rectangle().fill(SportsColors.gridDot).frame(height: 2) }
+    }
+
+    private func settingsIcon(_ name: String, stroke: Color, fill: Color? = nil) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(fill ?? stroke)
+            .frame(width: 28, height: 28)
+            .overlay { Rectangle().stroke(SportsColors.border, lineWidth: 1) }
+    }
+
+    private func hubMetaRow(_ label: String, _ value: String, color: Color, glow: Bool) -> some View {
+        HStack {
+            Text(label)
+                .font(JumbotronFonts.body(11))
+                .foregroundStyle(SportsColors.muted)
+            Spacer()
+            JumbotronLED(text: value, size: 12, color: color, glow: glow)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .overlay(alignment: .top) { Rectangle().fill(SportsColors.gridDot).frame(height: 2) }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func hubToggleRow(_ title: String, _ binding: Binding<Bool>) -> some View {
+        HStack {
+            Text(title)
+                .font(JumbotronFonts.body(11))
+                .foregroundStyle(SportsColors.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            JumbotronToggle(isOn: binding)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .overlay(alignment: .top) { Rectangle().fill(SportsColors.gridDot).frame(height: 2) }
+    }
+
+    private func handleAlertsToggle(_ enabled: Bool) async {
+        if enabled {
+            let ok = await GameNotificationService.shared.requestAuthorizationIfNeeded()
+            if !ok {
+                var p = appModel.playerPrefs
+                p.notificationsEnabled = false
+                appModel.setPlayerPrefs(p)
+            } else {
+                appModel.scheduleScoresBackgroundRefresh()
+            }
+        } else {
+            await GameNotificationService.shared.process(
+                games: appModel.games,
+                favoriteTeamIds: appModel.favoriteTeamIds,
+                notifyStarts: false,
+                notifyGoals: false,
+                masterEnabled: false
+            )
+            appModel.scheduleScoresBackgroundRefresh()
+        }
+    }
+    #endif
 
     private var playlistTitle: String {
         if appModel.playlists.isEmpty { return "Playlists" }

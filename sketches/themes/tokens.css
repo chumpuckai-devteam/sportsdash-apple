@@ -1,17 +1,22 @@
 :root {
-  --void: #070a08;
-  --panel: #121816;
-  --panel-2: #1a221e;
-  --border: #24302a;
-  --ink: #f2f5f3;
-  --muted: #8b9a92;
-  --gold: #d4a017;
-  --gold-dim: rgba(212, 160, 23, 0.18);
-  --mint: #3dd68c;
-  --mint-dim: rgba(61, 214, 140, 0.16);
-  --danger: #ff5c5c;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  --safe-b: 72px;
+  --void: #070910;
+  --panel: #0F131A;
+  --panel-2: #171C24;
+  --border: #2A3340;
+  --ink: #F2F4F7;
+  --text-secondary: #B8C0CE;
+  --muted: #8B96A8;
+  --gold: #FFB800;
+  --gold-dim: #B8860B;
+  --mint: #00E5A0;
+  --danger: #FF3B5C;
+  --grid-dot: #141B28;
+  --led-glow: rgba(255, 184, 0, 0.80);
+  --live-glow: rgba(0, 229, 160, 0.75);
+  --radius: 0px;
+  --radius-sheet: 16px;
+  --font-display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+  --font-digits: "Orbitron Black", Orbitron, "Space Mono", monospace;
+  --font-body: "Space Mono", "Courier New", monospace;
+  --safe-b: 80px;
 }

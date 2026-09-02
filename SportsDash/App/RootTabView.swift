@@ -112,25 +112,34 @@ struct RootTabView: View {
     @ViewBuilder
     private var mainTabs: some View {
         #if os(iOS)
-        if #available(iOS 18.0, *) {
-            TabView(selection: $tab) {
-                Tab(AppTab.scores.title, systemImage: AppTab.scores.systemImage, value: AppTab.scores) {
-                    ScoresView()
-                }
-                Tab(AppTab.guide.title, systemImage: AppTab.guide.systemImage, value: AppTab.guide) {
-                    GuideView()
-                }
-                Tab(AppTab.settings.title, systemImage: AppTab.settings.systemImage, value: AppTab.settings) {
-                    SettingsView()
-                }
-            }
-        } else {
-            legacyTabView
-        }
+        jumbotronTabHost
         #else
         legacyTabView
         #endif
     }
+
+    #if os(iOS)
+    /// Opaque lamp tab bar — no Liquid Glass on the tab layer (SPEC §6).
+    private var jumbotronTabHost: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                ScoresView()
+                    .opacity(tab == .scores ? 1 : 0)
+                    .allowsHitTesting(tab == .scores)
+                GuideView()
+                    .opacity(tab == .guide ? 1 : 0)
+                    .allowsHitTesting(tab == .guide)
+                SettingsView()
+                    .opacity(tab == .settings ? 1 : 0)
+                    .allowsHitTesting(tab == .settings)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            JumbotronTabBar(selection: $tab)
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .tint(SportsColors.gold)
+    }
+    #endif
 
     private var legacyTabView: some View {
         TabView(selection: $tab) {

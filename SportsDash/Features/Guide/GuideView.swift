@@ -117,13 +117,33 @@ struct GuideView: View {
         NavigationStack {
             Group {
                 if appModel.channels.isEmpty {
+                    #if os(iOS)
+                    VStack(spacing: 16) {
+                        JumbotronScreenTitle(first: "CHANNEL ", gold: "GUIDE")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        SetupChecklistCard(forceTitle: "LOAD A PLAYLIST FIRST")
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, SportsMetrics.screenInset)
+                    .padding(.top, 8)
+                    #else
                     ContentUnavailableView(
                         "Load a playlist first",
                         systemImage: "rectangle.grid.1x2",
                         description: Text("Configure Xtream or M3U in Settings to show the guide.")
                     )
+                    #endif
                 } else if activeChannels.isEmpty {
                     VStack(spacing: 24) {
+                        #if os(iOS)
+                        JumbotronMessagePanel(
+                            title: "NO CHANNELS IN THIS CATEGORY",
+                            subtitle: "Pick another category.",
+                            cta: "CHOOSE CATEGORY",
+                            action: { showCategoryPicker = true }
+                        )
+                        .padding(.horizontal, SportsMetrics.screenInset)
+                        #else
                         ContentUnavailableView(
                             "No channels in this category",
                             systemImage: "tv",
@@ -160,14 +180,22 @@ struct GuideView: View {
                             .sportsTVFocusClean()
                         }
                         #endif
+                        #endif
                     }
                 } else {
                     guideContent
                 }
             }
-            .background(SportsColors.voidBlack)
+            .sportsScreenBackground()
+            #if os(iOS)
+            .navigationTitle("")
+            .sportsNavTitleMode(large: false)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .jumbotronAXCap()
+            #else
             .navigationTitle("Guide")
             .sportsNavTitleMode(large: false)
+            #endif
             .toolbar {
                 ToolbarItem(placement: SportsToolbarPlacement.leading) {
                     if !groupNames.isEmpty {
@@ -178,12 +206,14 @@ struct GuideView: View {
                             .foregroundStyle(SportsColors.gold)
                             .lineLimit(1)
                         #else
-                        SportsCategoryMenu(
-                            title: selectedGroup,
-                            selection: $selectedGroup,
-                            options: groupNames,
-                            onOpen: { showCategoryPicker = true }
-                        )
+                        if displayMode == .grid {
+                            SportsCategoryMenu(
+                                title: selectedGroup,
+                                selection: $selectedGroup,
+                                options: groupNames,
+                                onOpen: { showCategoryPicker = true }
+                            )
+                        }
                         #endif
                     }
                 }
@@ -274,7 +304,6 @@ struct GuideView: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(SportsColors.gold)
                 .frame(width: 32, height: 32)
-                .sportsGlass(in: Circle())
         }
         .menuOrder(.fixed)
         .accessibilityLabel("Guide settings")
@@ -563,6 +592,39 @@ struct GuideView: View {
 
             switch displayMode {
             case .list:
+                #if os(iOS)
+                ScrollView {
+                    GuideNowBarList(
+                        rows: guideRows,
+                        selectedGroup: selectedGroup,
+                        groupNames: groupNames,
+                        moviesOnly: moviesOnly,
+                        displayMode: displayMode,
+                        now: nowTick,
+                        cleanNames: cleanNames,
+                        favoriteChannelIds: appModel.favoriteChannelIds,
+                        epgError: appModel.epgError,
+                        isLoadingEpg: appModel.isLoadingEpg,
+                        onSelectGroup: { showCategoryPicker = true },
+                        onGrid: {
+                            var p = appModel.playerPrefs
+                            p.guideLayout = .grid
+                            appModel.setPlayerPrefs(p)
+                        },
+                        onMovies: { moviesOnly.toggle() },
+                        onPlay: { channel in
+                            playerRoute = PlayerRoute(channel: channel, game: nil, alternates: [])
+                        },
+                        onToggleFavorite: { channel in
+                            appModel.toggleFavoriteChannel(channel)
+                        },
+                        onChooseCategory: { showCategoryPicker = true },
+                        onReloadEPG: { Task { await appModel.reloadEpg(force: true) } }
+                    )
+                    .padding(.bottom, 28)
+                }
+                .sportsHideScrollBackground()
+                #else
                 GuideTimelineGrid(
                     rows: guideRows,
                     windowStart: windowStart,
@@ -576,6 +638,7 @@ struct GuideView: View {
                         appModel.toggleFavoriteChannel(channel)
                     }
                 )
+                #endif
             case .grid:
                 guideCardList
             }
@@ -834,7 +897,7 @@ private struct GuideCardRow: View {
 
 // MARK: - Row model
 
-private struct GuideChannelRowData: Identifiable {
+struct GuideChannelRowData: Identifiable {
     var id: String { channel.id }
     let channel: IptvChannel
     let programs: [EpgProgram]

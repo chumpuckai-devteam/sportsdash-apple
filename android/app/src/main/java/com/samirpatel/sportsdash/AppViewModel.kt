@@ -1353,6 +1353,14 @@ class AppViewModel(
         )
     }
 
+    fun streamMatchCount(game: Game): Int {
+        val channels = _state.value.channels
+        if (channels.isEmpty()) return 0
+        return matching.matchGameToChannels(game, channels).size
+    }
+
+    fun hasStreamMatch(game: Game): Boolean = streamMatchCount(game) > 0
+
     fun openStreamPicker(game: Game) {
         val channels = _state.value.channels
         if (channels.isEmpty()) {

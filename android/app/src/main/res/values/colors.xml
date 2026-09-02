@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="void_black">#FF0A0A0B</color>
-    <color name="gold">#FFD4A017</color>
-    <color name="panel">#FF16161A</color>
-    <color name="ic_launcher_background">#FF0A0A0B</color>
+    <color name="void_black">#FF070910</color>
+    <color name="gold">#FFFFB800</color>
+    <color name="panel">#FF0F131A</color>
+    <color name="ic_launcher_background">#FF070910</color>
 </resources>

@@ -404,7 +404,8 @@ class PrefsStore(private val context: Context) {
                     .put("name", team.name)
                     .put("abbreviation", team.abbreviation)
                     .put("logoUrl", team.logoUrl ?: "")
-                    .put("shortName", team.shortName ?: ""),
+                    .put("shortName", team.shortName ?: "")
+                    .put("colorHex", team.colorHex ?: ""),
             )
         }
         return arr.toString()
@@ -426,6 +427,7 @@ class PrefsStore(private val context: Context) {
                             abbreviation = o.optString("abbreviation"),
                             logoUrl = o.optString("logoUrl").takeIf { it.isNotBlank() },
                             shortName = o.optString("shortName").takeIf { it.isNotBlank() },
+                            colorHex = o.optString("colorHex").takeIf { it.isNotBlank() },
                         ),
                     )
                 }

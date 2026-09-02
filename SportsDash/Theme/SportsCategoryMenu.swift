@@ -74,7 +74,8 @@ struct SportsCategoryMenu: View {
         .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
         .animation(SportsTVFocusMotion.animation, value: focused)
         #else
-        .sportsGlass(in: Capsule(style: .continuous))
+        .background(SportsColors.panelGradient)
+        .overlay { Rectangle().stroke(SportsColors.gold.opacity(0.5), lineWidth: 1) }
         #endif
     }
 }

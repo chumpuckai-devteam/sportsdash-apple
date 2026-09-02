@@ -12,9 +12,13 @@ struct ScoresView: View {
         NavigationStack {
             scoresRoot
                 .sportsScreenBackground()
-                .navigationTitle("Scores")
                 #if os(iOS)
-                .sportsNavTitleMode(large: true)
+                .navigationTitle("")
+                .sportsNavTitleMode(large: false)
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .jumbotronAXCap()
+                #else
+                .navigationTitle("Scores")
                 #endif
                 .toolbar {
                     #if os(tvOS)
@@ -49,7 +53,7 @@ struct ScoresView: View {
                             }
                         }
                         .disabled(appModel.isLoadingScores)
-                        .sportsToolbarControl()
+                        .tint(SportsColors.gold)
                     }
                     #endif
                 }
@@ -75,7 +79,7 @@ struct ScoresView: View {
     private var scoresRoot: some View {
         VStack(spacing: 0) {
             #if os(iOS)
-            condensedTopChrome
+            jumbotronScoresChrome
             #else
             VStack(spacing: 0) {
                 filterBar
@@ -88,33 +92,64 @@ struct ScoresView: View {
     }
 
     #if os(iOS)
-    /// One short row: Live | Upcoming | Final | scrollable faves (logos only).
-    private var condensedTopChrome: some View {
-        HStack(alignment: .center, spacing: 6) {
-            ForEach(DashboardFilter.allCases) { f in
-                SportsFilterChip(
-                    title: f.label,
-                    count: nil,
-                    selected: appModel.dashboardFilter == f,
-                    compact: true
-                ) {
-                    withAnimation(.snappy(duration: 0.2)) {
-                        appModel.dashboardFilter = f
-                    }
-                }
+    private var jumbotronScoresChrome: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                JumbotronScreenTitle(first: "SCORE", gold: "BOARD")
+                Spacer(minLength: 8)
+                Circle()
+                    .fill(SportsColors.live)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: SportsColors.liveGlow, radius: 4)
+                    .opacity(appModel.isLoadingScores ? blinkOpacity : 1)
+                    .animation(
+                        appModel.isLoadingScores
+                            ? .easeInOut(duration: 0.5).repeatForever(autoreverses: true)
+                            : .default,
+                        value: appModel.isLoadingScores
+                    )
+                    .accessibilityHidden(true)
             }
-            favoriteTeamsRail
-                .frame(maxWidth: .infinity)
+            JumbotronSwitchboard(
+                filter: $appModel.dashboardFilter,
+                favoriteTeams: appModel.favoriteTeamsRail,
+                onFavorites: { showFavoritePicker = true }
+            )
+            if let warning = appModel.scoresWarning, appModel.scoresError == nil {
+                HStack(spacing: 8) {
+                    Rectangle().fill(SportsColors.danger).frame(width: 4, height: 12)
+                    Text(warning)
+                        .font(JumbotronFonts.body(10))
+                        .foregroundStyle(SportsColors.danger)
+                        .lineLimit(2)
+                }
+                .accessibilityLabel("Scores warning: \(warning)")
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(SportsColors.voidBlack)
+        .padding(.horizontal, SportsMetrics.screenInset)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
+
+    private var blinkOpacity: Double { 0.25 }
     #endif
 
     @ViewBuilder
     private var scoresBody: some View {
         if appModel.isLoadingScores && appModel.games.isEmpty {
+            #if os(iOS)
+            VStack(spacing: 12) {
+                if SetupChecklist.needsPlaylist(appModel) {
+                    SetupChecklistCard()
+                }
+                JumbotronSkeletonPanel()
+                JumbotronSkeletonPanel()
+                JumbotronSkeletonPanel()
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, SportsMetrics.screenInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #else
             VStack(spacing: 16) {
                 if SetupChecklist.isIncomplete(appModel) {
                     SetupChecklistCard()
@@ -126,20 +161,31 @@ struct ScoresView: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #endif
         } else if let err = appModel.scoresError, appModel.games.isEmpty {
             ScrollView {
-                VStack(spacing: 22) {
-                    if SetupChecklist.isIncomplete(appModel) {
+                VStack(spacing: 12) {
+                    if SetupChecklist.needsPlaylist(appModel) {
                         SetupChecklistCard()
-                            .padding(.horizontal, 10)
                     }
+                    #if os(iOS)
+                    JumbotronMessagePanel(
+                        tick: SportsColors.danger,
+                        title: "SCORES UNAVAILABLE",
+                        subtitle: err,
+                        cta: "RETRY",
+                        action: { Task { await appModel.refreshScores() } }
+                    )
+                    #else
                     ContentUnavailableView(
                         "Scores unavailable",
                         systemImage: "wifi.exclamationmark",
                         description: Text(err)
                     )
-                    .frame(maxWidth: .infinity, minHeight: SetupChecklist.isIncomplete(appModel) ? 240 : 320)
+                    .frame(maxWidth: .infinity, minHeight: 240)
+                    #endif
                 }
+                .padding(.horizontal, SportsMetrics.screenInset)
                 .padding(.vertical, 6)
             }
             .sportsRefreshable { await appModel.refreshScores() }
@@ -166,6 +212,7 @@ struct ScoresView: View {
         #else
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                #if os(tvOS)
                 if let warning = appModel.scoresWarning {
                     Label(warning, systemImage: "exclamationmark.triangle")
                         .font(.caption)
@@ -173,24 +220,52 @@ struct ScoresView: View {
                         .padding(.horizontal, 10)
                         .accessibilityLabel("Scores warning: \(warning)")
                 }
+                #endif
 
-                if SetupChecklist.isIncomplete(appModel) {
+                if SetupChecklist.needsPlaylist(appModel) {
                     SetupChecklistCard()
-                        .padding(.horizontal, 10)
-                        .padding(.top, 8)
+                        .padding(.horizontal, SportsMetrics.screenInset)
                 }
 
+                #if os(iOS)
+                if let hero = pin.first {
+                    JumbotronHeroBoard(
+                        game: hero,
+                        isAwayFavorite: appModel.isTeamFavorite(hero.away.id),
+                        isHomeFavorite: appModel.isTeamFavorite(hero.home.id),
+                        matchCount: appModel.matches(for: hero).count,
+                        onSelect: { selectedGame = hero },
+                        onWatch: { selectedGame = hero }
+                    )
+                    .padding(.horizontal, SportsMetrics.screenInset)
+                    ForEach(pin.dropFirst()) { game in
+                        scoreRow(game)
+                            .padding(.horizontal, SportsMetrics.screenInset)
+                    }
+                }
+                #else
                 if !pin.isEmpty {
                     myGamesSection(pin)
                 }
+                #endif
 
                 if sections.isEmpty && pin.isEmpty {
+                    #if os(iOS)
+                    JumbotronMessagePanel(
+                        title: emptyTitle.uppercased(),
+                        subtitle: emptySubtitle,
+                        cta: emptyCTA,
+                        action: emptyCTAAction
+                    )
+                    .padding(.horizontal, SportsMetrics.screenInset)
+                    #else
                     ContentUnavailableView(
                         emptyTitle,
                         systemImage: "sportscourt",
                         description: Text(emptySubtitle)
                     )
                     .frame(maxWidth: .infinity, minHeight: SetupChecklist.isIncomplete(appModel) ? 180 : 280)
+                    #endif
                 } else {
                     ForEach(sections) { section in
                         sportSectionBlock(section)
@@ -570,8 +645,19 @@ struct ScoresView: View {
 
     @ViewBuilder
     private func sportSectionBlock(_ section: SportScoreSection) -> some View {
+        #if os(iOS)
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(section.leagues) { shelf in
+                leagueBlock(
+                    title: shelf.title,
+                    systemImage: nil,
+                    goldTitle: false,
+                    games: shelf.games
+                )
+            }
+        }
+        #else
         let collapsed = collapsedSports.contains(section.sportKey)
-        // Sport header primary; leagues closer underneath than sport-to-sport gap.
         VStack(alignment: .leading, spacing: collapsed ? 0 : 16) {
             sportHeader(section, collapsed: collapsed)
             if !collapsed {
@@ -587,6 +673,7 @@ struct ScoresView: View {
                 }
             }
         }
+        #endif
     }
 
     private func sportHeader(_ section: SportScoreSection, collapsed: Bool) -> some View {
@@ -750,7 +837,19 @@ struct ScoresView: View {
         games: [Game]
     ) -> some View {
         let live = games.filter(\.isLive).count
-        return VStack(alignment: .leading, spacing: 0) {
+        let league = SportLeague.allCases.first { $0.label == title }
+        return VStack(alignment: .leading, spacing: 6) {
+            #if os(iOS)
+            JumbotronLeagueHeader(
+                title: title,
+                tick: league?.jumbotronTick ?? SportsColors.gold,
+                liveCount: live,
+                upcomingCount: games.filter(\.isUpcoming).count,
+                finalCount: games.filter(\.isFinal).count,
+                filter: appModel.dashboardFilter
+            )
+            .padding(.horizontal, SportsMetrics.screenInset)
+            #else
             HStack(spacing: 8) {
                 if let systemImage {
                     Image(systemName: systemImage)
@@ -780,29 +879,18 @@ struct ScoresView: View {
             .padding(.horizontal, 10)
             .padding(.bottom, 6)
             .padding(.top, 2)
+            #endif
 
             if games.isEmpty {
                 Text("No upcoming games in the next week for this league.")
-                    .font(.caption)
+                    .font(JumbotronFonts.body(11))
                     .foregroundStyle(SportsColors.muted)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, SportsMetrics.screenInset)
                     .padding(.bottom, 12)
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: 6) {
                     ForEach(games) { game in
-                        GameScoreFocusRow(
-                            game: game,
-                            isFavorite: appModel.isFavorite(game),
-                            isAwayFavorite: appModel.isTeamFavorite(game.away.id),
-                            isHomeFavorite: appModel.isTeamFavorite(game.home.id),
-                            onSelect: { selectedGame = game },
-                            onToggleAwayFavorite: {
-                                appModel.toggleFavorite(teamId: game.away.id)
-                            },
-                            onToggleHomeFavorite: {
-                                appModel.toggleFavorite(teamId: game.home.id)
-                            }
-                        )
+                        scoreRow(game)
                     }
                 }
                 #if os(tvOS)
@@ -811,12 +899,24 @@ struct ScoresView: View {
                 .padding(.horizontal, SportsTVMetrics.scoreHorizontalInset)
                 .focusSection()
                 #else
-                // No gray group plate — games sit on void dashboard background
                 .background(Color.clear)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, SportsMetrics.screenInset)
                 #endif
             }
         }
+    }
+
+    private func scoreRow(_ game: Game) -> some View {
+        GameScoreFocusRow(
+            game: game,
+            isFavorite: appModel.isFavorite(game),
+            isAwayFavorite: appModel.isTeamFavorite(game.away.id),
+            isHomeFavorite: appModel.isTeamFavorite(game.home.id),
+            hasMatch: !appModel.matches(for: game).isEmpty,
+            onSelect: { selectedGame = game },
+            onToggleAwayFavorite: { appModel.toggleFavorite(teamId: game.away.id) },
+            onToggleHomeFavorite: { appModel.toggleFavorite(teamId: game.home.id) }
+        )
     }
 
     private var emptyTitle: String {
@@ -840,6 +940,27 @@ struct ScoresView: View {
             return "Nothing in progress right now. Check Upcoming or pull to refresh. Star a team on a matchup to pin their games first."
         case .final:
             return "No completed games in the current slate. Check Live or Upcoming, or pull to refresh."
+        }
+    }
+
+    private var emptyCTA: String {
+        switch appModel.dashboardFilter {
+        case .live: return "UPCOMING ▸"
+        case .upcoming: return "LEAGUES ▸"
+        case .final: return "LIVE ▸"
+        }
+    }
+
+    private var emptyCTAAction: () -> Void {
+        {
+            switch appModel.dashboardFilter {
+            case .live:
+                withAnimation(.easeOut(duration: 0.15)) { appModel.dashboardFilter = .upcoming }
+            case .upcoming:
+                showLeaguesSettings = true
+            case .final:
+                withAnimation(.easeOut(duration: 0.15)) { appModel.dashboardFilter = .live }
+            }
         }
     }
 }

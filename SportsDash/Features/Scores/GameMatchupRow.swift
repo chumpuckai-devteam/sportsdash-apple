@@ -18,19 +18,6 @@ enum TeamTheme {
     }
 }
 
-extension Color {
-    /// Parse ESPN-style hex (`BA0021` or `#BA0021`).
-    init?(sportsHex: String) {
-        var s = sportsHex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let v = UInt64(s, radix: 16) else { return nil }
-        let r = Double((v >> 16) & 0xFF) / 255
-        let g = Double((v >> 8) & 0xFF) / 255
-        let b = Double(v & 0xFF) / 255
-        self.init(red: r, green: g, blue: b)
-    }
-}
-
 // MARK: - Team logo / monogram
 
 struct TeamMarkView: View {
@@ -262,24 +249,21 @@ struct GameScoreFocusRow: View {
     var isFavorite: Bool = false
     var isAwayFavorite: Bool = false
     var isHomeFavorite: Bool = false
+    var hasMatch: Bool = false
     var onSelect: () -> Void
     var onToggleAwayFavorite: (() -> Void)?
     var onToggleHomeFavorite: (() -> Void)?
 
     var body: some View {
-        Button(action: onSelect) {
-            #if os(tvOS)
-            SportsTVFocused { focused in
-                scoreLabel(focused: focused)
-            }
-            #else
-            scoreLabel(focused: false)
-            #endif
-        }
-        #if os(tvOS)
-        .sportsTVFocusClean()
-        #else
-        .buttonStyle(.plain)
+        #if os(iOS)
+        JumbotronScoreRow(
+            game: game,
+            isAwayFavorite: isAwayFavorite,
+            isHomeFavorite: isHomeFavorite,
+            hasMatch: hasMatch,
+            onSelect: onSelect,
+            onWatch: onSelect
+        )
         .contextMenu {
             if game.usesMatchupLayout {
                 if !game.away.id.isEmpty, let onToggleAwayFavorite {
@@ -303,7 +287,6 @@ struct GameScoreFocusRow: View {
                     }
                 }
             } else {
-                // Event rows: star individual team ids when present (never a whole-game fav).
                 if !game.away.id.isEmpty, let onToggleAwayFavorite {
                     Button(action: onToggleAwayFavorite) {
                         Label(
@@ -322,10 +305,17 @@ struct GameScoreFocusRow: View {
                 }
             }
         }
-        #endif
+        #else
+        Button(action: onSelect) {
+            SportsTVFocused { focused in
+                scoreLabel(focused: focused)
+            }
+        }
+        .sportsTVFocusClean()
         .compositingGroup()
         .accessibilityLabel(scoreRowAccessibilityLabel)
-        .accessibilityHint("Opens game details and streams. Long-press to favorite a team.")
+        .accessibilityHint("Opens game details and streams.")
+        #endif
     }
 
     private var scoreRowAccessibilityLabel: String {

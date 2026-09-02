@@ -300,6 +300,7 @@ class SportsRepository(
                         shortName = team.optString("shortDisplayName")
                             .ifBlank { team.optString("name") }
                             .takeIf { it.isNotBlank() },
+                        colorHex = team.optString("color").takeIf { it.isNotBlank() },
                     )
                     if (row.optString("homeAway") == "home") home = info else away = info
                 }
@@ -322,6 +323,13 @@ class SportsRepository(
             val eventName = event.optString("name").ifBlank { event.optString("shortName") }
                 .takeIf { it.isNotBlank() }
             val clock = statusObj.optString("displayClock").takeIf { it.isNotBlank() }
+            val period = statusObj.opt("period")?.let { p ->
+                when (p) {
+                    is Number -> p.toInt().toString()
+                    is String -> p.takeIf { it.isNotBlank() }
+                    else -> null
+                }
+            }
 
             out.add(
                 Game(
@@ -333,6 +341,7 @@ class SportsRepository(
                     startTimeMs = startMs,
                     statusDetail = shortDetail ?: detail,
                     clock = clock,
+                    period = period,
                     venue = venue,
                     eventName = eventName,
                     broadcasts = broadcasts,

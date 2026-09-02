@@ -22,143 +22,129 @@ enum SetupChecklist {
         KeychainStore.hasValue(account: MovieRatingsService.omdbKeyAccount)
             || KeychainStore.hasValue(account: MovieRatingsService.tmdbKeyAccount)
     }
+
+    static func playlistLamp(_ appModel: AppModel) -> JumbotronLampKind {
+        if let err = appModel.channelsError, !err.isEmpty { return .blocked }
+        return needsPlaylist(appModel) ? .pending : .done
+    }
+
+    static func epgLamp(_ appModel: AppModel) -> JumbotronLampKind {
+        if let err = appModel.epgError, !err.isEmpty { return .blocked }
+        if appModel.epgLoadedCount > 0 { return .done }
+        return .pending
+    }
+
+    static func favoritesLamp(_ appModel: AppModel) -> JumbotronLampKind {
+        appModel.favoriteTeamIds.isEmpty ? .pending : .done
+    }
+
+    static func setupDoneCount(_ appModel: AppModel) -> Int {
+        [playlistLamp(appModel) == .done, epgLamp(appModel) == .done, favoritesLamp(appModel) == .done]
+            .filter { $0 }.count
+    }
+
+    static func ctaTitle(_ appModel: AppModel) -> String {
+        if needsPlaylist(appModel) { return "ADD PLAYLIST ▸" }
+        if appModel.favoriteTeamIds.isEmpty { return "PICK TEAMS ▸" }
+        if epgLamp(appModel) != .done { return "RELOAD EPG ▸" }
+        return "SETTINGS ▸"
+    }
 }
 
 /// First-run orientation when playlist or leagues aren't set up yet.
 /// Deep-links into the right settings screens (not buried under Advanced).
 struct SetupChecklistCard: View {
     @EnvironmentObject private var appModel: AppModel
+    var forceTitle: String? = nil
 
-    private var needsPlaylist: Bool { SetupChecklist.needsPlaylist(appModel) }
-    private var needsLeagues: Bool { SetupChecklist.needsLeagues(appModel) }
-    private var ratingsDone: Bool { SetupChecklist.hasRatingsKeys() }
+    private var playlist: JumbotronLampKind { SetupChecklist.playlistLamp(appModel) }
+    private var epg: JumbotronLampKind { SetupChecklist.epgLamp(appModel) }
+    private var favorites: JumbotronLampKind { SetupChecklist.favoritesLamp(appModel) }
+    private var setupCount: Int { SetupChecklist.setupDoneCount(appModel) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: "checklist")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(SportsColors.gold)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Finish setup")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(SportsColors.text)
-                    Text("A few steps so Scores and Guide light up.")
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
-                }
-                Spacer(minLength: 0)
-            }
-
-            VStack(spacing: 10) {
-                NavigationLink {
-                    PlaylistSettingsView()
-                } label: {
-                    setupRow(
-                        done: !needsPlaylist,
-                        title: "Add a playlist",
-                        subtitle: playlistSubtitle,
-                        icon: "list.bullet.rectangle"
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    ScoresSettingsView()
-                } label: {
-                    setupRow(
-                        done: !needsLeagues,
-                        title: "Choose leagues",
-                        subtitle: leaguesSubtitle,
-                        icon: "sportscourt"
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    GeneralSettingsView()
-                } label: {
-                    setupRow(
-                        done: ratingsDone,
-                        title: "Movie ratings (optional)",
-                        subtitle: ratingsDone
-                            ? "OMDb / TMDB key saved"
-                            : "OMDb / TMDB keys in General",
-                        icon: "star.circle"
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(SportsColors.panelElevated.opacity(0.95))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(SportsColors.gold.opacity(0.35), lineWidth: 1)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Finish setup checklist")
-    }
-
-    private var playlistSubtitle: String {
-        if needsPlaylist {
-            return "Xtream or M3U"
-        }
-        if appModel.channels.isEmpty {
-            return appModel.isLoadingChannels
-                ? "Loading channels…"
-                : "Configured · no channels yet"
-        }
-        return "\(appModel.channels.count) channels"
-    }
-
-    private var leaguesSubtitle: String {
-        if needsLeagues {
-            return "MLB, NBA, soccer, …"
-        }
-        let labels = appModel.selectedLeagues.map(\.label)
-        let head = labels.prefix(4).joined(separator: ", ")
-        return labels.count > 4 ? "\(head)…" : head
-    }
-
-    private func setupRow(done: Bool, title: String, subtitle: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: done ? "checkmark.circle.fill" : icon)
-                .font(.title3)
-                .foregroundStyle(done ? SportsColors.live : SportsColors.gold)
-                .frame(width: 28)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(SportsColors.text)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(SportsColors.muted)
-                    .lineLimit(2)
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                lampRow("PLAYLIST", playlist)
+                lampRow("EPG", epg)
+                lampRow("FAVORITES", favorites)
             }
             Spacer(minLength: 8)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SportsColors.muted)
-                .opacity(done ? 0.35 : 1)
-                .accessibilityHidden(true)
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(forceTitle ?? "SETUP")
+                        .font(JumbotronFonts.display(22))
+                        .foregroundStyle(SportsColors.text)
+                    JumbotronLED(text: "\(setupCount)/3", size: 20, color: SportsColors.gold, glow: true)
+                }
+                ctaLink
+            }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .frame(minHeight: 44)
-        #if os(tvOS)
-        .frame(minHeight: SportsTVMetrics.minFocusSize)
-        #endif
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(SportsColors.panel.opacity(0.9))
+            LinearGradient(
+                stops: [
+                    .init(color: Color(sportsHex: "E31837")?.opacity(0.35) ?? SportsColors.danger.opacity(0.35), location: 0),
+                    .init(color: SportsColors.panel.opacity(0.95), location: 0.40),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
         }
-        .contentShape(Rectangle())
-        .accessibilityHint(done ? "Completed. Opens settings." : "Opens settings.")
+        .overlay { Rectangle().stroke(SportsColors.gold.opacity(0.45), lineWidth: 2) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Setup \(setupCount) of 3")
+    }
+
+    @ViewBuilder
+    private var ctaLink: some View {
+        let title = SetupChecklist.ctaTitle(appModel)
+        if SetupChecklist.needsPlaylist(appModel) {
+            NavigationLink { PlaylistSettingsView() } label: { ctaLabel(title) }
+                .buttonStyle(.plain)
+        } else if appModel.favoriteTeamIds.isEmpty {
+            NavigationLink { FavoriteTeamPickerView() } label: { ctaLabel(title) }
+                .buttonStyle(.plain)
+        } else if SetupChecklist.epgLamp(appModel) != .done {
+            Button {
+                Task { await appModel.reloadEpg(force: true) }
+            } label: { ctaLabel(title) }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink { ScoresSettingsView() } label: { ctaLabel(title) }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private func ctaLabel(_ title: String) -> some View {
+        Text(title)
+            .font(JumbotronFonts.display(16))
+            .foregroundStyle(SportsColors.voidBlack)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(SportsColors.gold)
+            .shadow(color: SportsColors.ledGlow.opacity(0.55), radius: 6)
+            .frame(minHeight: 44)
+    }
+
+    private func lampRow(_ title: String, _ kind: JumbotronLampKind) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(lampColor(kind))
+                .frame(width: 10, height: 10)
+                .shadow(color: lampColor(kind).opacity(0.9), radius: 4)
+            Text(title)
+                .font(JumbotronFonts.body(11))
+                .foregroundStyle(SportsColors.text)
+        }
+    }
+
+    private func lampColor(_ kind: JumbotronLampKind) -> Color {
+        switch kind {
+        case .done: return SportsColors.live
+        case .pending: return SportsColors.gold
+        case .blocked: return SportsColors.danger
+        }
     }
 }

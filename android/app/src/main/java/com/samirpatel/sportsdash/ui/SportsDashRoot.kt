@@ -46,10 +46,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.ui.theme.Gold
+import com.samirpatel.sportsdash.ui.theme.JumbotronTabBar
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.theme.gridDotGround
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,7 +121,7 @@ fun SportsDashRoot(
         containerColor = VoidBlack,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (!hideShellChrome) {
+            if (!hideShellChrome && isTelevision) {
                 TopAppBar(
                     title = {
                         Text(
@@ -153,31 +155,35 @@ fun SportsDashRoot(
         },
         bottomBar = {
             if (!hideShellChrome) {
-                NavigationBar(
-                    containerColor = Panel,
-                    windowInsets = WindowInsets.safeDrawing,
-                ) {
-                    NavigationBarItem(
-                        selected = tab == 0,
-                        onClick = { tab = 0 },
-                        icon = { Icon(Icons.Default.Sports, contentDescription = "Scores") },
-                        label = { Text("Scores") },
-                        colors = navColors,
-                    )
-                    NavigationBarItem(
-                        selected = tab == 1,
-                        onClick = { tab = 1 },
-                        icon = { Icon(Icons.Default.LiveTv, contentDescription = "Guide") },
-                        label = { Text("Guide") },
-                        colors = navColors,
-                    )
-                    NavigationBarItem(
-                        selected = tab == 2,
-                        onClick = { tab = 2 },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                        label = { Text("Settings") },
-                        colors = navColors,
-                    )
+                if (isTelevision) {
+                    NavigationBar(
+                        containerColor = Panel,
+                        windowInsets = WindowInsets.safeDrawing,
+                    ) {
+                        NavigationBarItem(
+                            selected = tab == 0,
+                            onClick = { tab = 0 },
+                            icon = { Icon(Icons.Default.Sports, contentDescription = "Scores") },
+                            label = { Text("Scores") },
+                            colors = navColors,
+                        )
+                        NavigationBarItem(
+                            selected = tab == 1,
+                            onClick = { tab = 1 },
+                            icon = { Icon(Icons.Default.LiveTv, contentDescription = "Guide") },
+                            label = { Text("Guide") },
+                            colors = navColors,
+                        )
+                        NavigationBarItem(
+                            selected = tab == 2,
+                            onClick = { tab = 2 },
+                            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                            label = { Text("Settings") },
+                            colors = navColors,
+                        )
+                    }
+                } else {
+                    JumbotronTabBar(selected = tab, onSelect = { tab = it })
                 }
             }
         },
@@ -185,7 +191,7 @@ fun SportsDashRoot(
         Column(
             modifier = Modifier
                 .padding(padding)
-                .then(if (hideShellChrome) Modifier.statusBarsPadding() else Modifier)
+                .then(if (hideShellChrome || !isTelevision) Modifier.statusBarsPadding() else Modifier)
                 .fillMaxSize(),
         ) {
             if (hideShellChrome) {
@@ -194,7 +200,8 @@ fun SportsDashRoot(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .then(if (isTelevision) Modifier.background(VoidBlack) else Modifier.gridDotGround()),
             ) {
                 when (tab) {
                     0 -> ScoresScreen(

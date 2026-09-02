@@ -9,6 +9,7 @@ data class TeamInfo(
     val score: Int? = null,
     val logoUrl: String? = null,
     val shortName: String? = null,
+    val colorHex: String? = null,
 ) {
     val displayScore: String get() = score?.toString() ?: "—"
     val rowLabel: String
@@ -70,6 +71,7 @@ data class Game(
     val startTimeMs: Long,
     val statusDetail: String? = null,
     val clock: String? = null,
+    val period: String? = null,
     val venue: String? = null,
     val eventName: String? = null,
     val broadcasts: List<String> = emptyList(),

@@ -3,6 +3,7 @@ package com.samirpatel.sportsdash.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +65,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -77,12 +79,31 @@ import com.samirpatel.sportsdash.core.sports.LeagueShelf
 import com.samirpatel.sportsdash.core.sports.ScoreboardGrouping
 import com.samirpatel.sportsdash.core.sports.SportScoreSection
 import com.samirpatel.sportsdash.core.sports.TeamInfo
+import com.samirpatel.sportsdash.ui.theme.BebasNeue
+import com.samirpatel.sportsdash.ui.theme.Border
+import com.samirpatel.sportsdash.ui.theme.Danger
 import com.samirpatel.sportsdash.ui.theme.Gold
+import com.samirpatel.sportsdash.ui.theme.JumbotronLampCard
+import com.samirpatel.sportsdash.ui.theme.JumbotronLed
+import com.samirpatel.sportsdash.ui.theme.JumbotronMessagePanel
+import com.samirpatel.sportsdash.ui.theme.JumbotronScreenTitle
+import com.samirpatel.sportsdash.ui.theme.JumbotronSkeleton
+import com.samirpatel.sportsdash.ui.theme.JumbotronSwitchboard
+import com.samirpatel.sportsdash.ui.theme.JumbotronWatchButton
+import com.samirpatel.sportsdash.ui.theme.LampKind
 import com.samirpatel.sportsdash.ui.theme.LiveMint
 import com.samirpatel.sportsdash.ui.theme.Muted
+import com.samirpatel.sportsdash.ui.theme.OrbitronBlack
 import com.samirpatel.sportsdash.ui.theme.Panel
+import com.samirpatel.sportsdash.ui.theme.ScoreRowHeight
+import com.samirpatel.sportsdash.ui.theme.ScreenInset
+import com.samirpatel.sportsdash.ui.theme.SpaceMono
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
+import com.samirpatel.sportsdash.ui.theme.TextSecondary
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
+import com.samirpatel.sportsdash.ui.theme.teamAccent
+import com.samirpatel.sportsdash.ui.theme.teamEdges
 import com.samirpatel.sportsdash.ui.tv.tvFocusGroup
 import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 
@@ -91,6 +112,8 @@ private sealed class ScoreRow {
     data class LeagueHeader(val shelf: LeagueShelf, val sportKey: String) : ScoreRow()
     data class GameItem(val game: Game, val rowKey: String) : ScoreRow()
     data object MyTeamsHeader : ScoreRow()
+    data class Hero(val game: Game) : ScoreRow()
+    data object Lamp : ScoreRow()
 }
 
 @Composable
@@ -123,18 +146,61 @@ fun ScoresScreen(
         ) {
             // Condensed chrome: landscape = filters stacked left + faves row right;
             // portrait = one tight row of filters then compact faves rail.
-            ScoresTopChrome(
-                landscape = landscape,
-                isTelevision = isTelevision,
-                filter = state.scoresFilter,
-                status = state.scoresStatus,
-                teams = vm.favoriteTeamsRail(),
-                onFilter = { vm.setScoresFilter(it) },
-                onOpenPicker = { showTeamPicker = true },
-                onTeamClick = { showTeamPicker = true },
-            )
+            if (isTelevision) {
+                ScoresTopChrome(
+                    landscape = landscape,
+                    isTelevision = isTelevision,
+                    filter = state.scoresFilter,
+                    status = state.scoresStatus,
+                    teams = vm.favoriteTeamsRail(),
+                    onFilter = { vm.setScoresFilter(it) },
+                    onOpenPicker = { showTeamPicker = true },
+                    onTeamClick = { showTeamPicker = true },
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ScreenInset, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    JumbotronScreenTitle(first = "SCORE", gold = "BOARD")
+                    JumbotronSwitchboard(
+                        selected = when (state.scoresFilter) {
+                            ScoresFilter.LIVE -> "LIVE"
+                            ScoresFilter.UPCOMING -> "UPCOMING"
+                            ScoresFilter.FINAL -> "FINAL"
+                        },
+                        onSelect = {
+                            vm.setScoresFilter(
+                                when (it) {
+                                    "UPCOMING" -> ScoresFilter.UPCOMING
+                                    "FINAL" -> ScoresFilter.FINAL
+                                    else -> ScoresFilter.LIVE
+                                },
+                            )
+                        },
+                        teams = vm.favoriteTeamsRail(),
+                        onFavorites = { showTeamPicker = true },
+                    )
+                    if (state.scoresWarning != null && state.scoresError == null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(Modifier.width(4.dp).height(12.dp).background(Danger))
+                            Text(
+                                state.scoresWarning!!,
+                                color = Danger,
+                                fontFamily = SpaceMono,
+                                fontSize = 10.sp,
+                            )
+                        }
+                    }
+                }
+            }
 
-            if (!landscape && state.playlist == null) {
+            if (isTelevision && !landscape && state.playlist == null) {
                 Text(
                     text = "Add IPTV in Settings to watch from scores.",
                     color = Muted,
@@ -146,7 +212,7 @@ fun ScoresScreen(
             }
 
             val scoresErr = state.scoresError
-            if (scoresErr != null) {
+            if (isTelevision && scoresErr != null) {
                 Text(
                     text = scoresErr,
                     color = MaterialTheme.colorScheme.error,
@@ -154,7 +220,7 @@ fun ScoresScreen(
                 )
             }
             val scoresWarn = state.scoresWarning
-            if (scoresWarn != null && scoresErr == null) {
+            if (isTelevision && scoresWarn != null && scoresErr == null) {
                 Text(
                     text = scoresWarn,
                     color = Muted,
@@ -167,34 +233,79 @@ fun ScoresScreen(
             val favoritePin = vm.myGamesPin()
             when {
                 state.isLoadingScores && state.games.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(color = Gold)
+                    if (isTelevision) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(color = Gold)
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = ScreenInset),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (state.playlist == null) {
+                                ScoresLampCard(state = state, onGoSettings = onGoSettings)
+                            }
+                            JumbotronSkeleton()
+                            JumbotronSkeleton()
+                            JumbotronSkeleton()
+                        }
                     }
                 }
 
                 sections.isEmpty() && favoritePin.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Sports,
-                                contentDescription = null,
-                                tint = Muted,
-                                modifier = Modifier.size(40.dp),
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = emptyFilterMessage(state.scoresFilter), color = Muted)
-                            Text(
-                                text = "Long-press a game to ★ a team",
-                                color = Muted,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
+                    if (isTelevision) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Sports,
+                                    contentDescription = null,
+                                    tint = Muted,
+                                    modifier = Modifier.size(40.dp),
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(text = emptyFilterMessage(state.scoresFilter), color = Muted)
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = ScreenInset),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (state.playlist == null) {
+                                ScoresLampCard(state = state, onGoSettings = onGoSettings)
+                            }
+                            if (scoresErr != null) {
+                                JumbotronMessagePanel(
+                                    title = "SCORES UNAVAILABLE",
+                                    subtitle = scoresErr,
+                                    cta = "RETRY",
+                                    tick = Danger,
+                                    onClick = { vm.refreshScores() },
+                                )
+                            } else {
+                                JumbotronMessagePanel(
+                                    title = emptyFilterMessage(state.scoresFilter).uppercase(),
+                                    subtitle = "Star a team to pin My Game, or switch filters.",
+                                    cta = if (state.scoresFilter == ScoresFilter.LIVE) "UPCOMING ▸" else "LEAGUES ▸",
+                                    onClick = {
+                                        if (state.scoresFilter == ScoresFilter.LIVE) {
+                                            vm.setScoresFilter(ScoresFilter.UPCOMING)
+                                        } else {
+                                            onGoSettings()
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -215,9 +326,11 @@ fun ScoresScreen(
                             collapsedSports = collapsedSports,
                             favoritePin = favoritePin,
                             favoritesOnly = false,
+                            jumbotron = true,
+                            showLamp = state.playlist == null,
                         )
                         LazyColumn(
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = ScreenInset, vertical = 6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxSize(),
                         ) {
@@ -229,29 +342,31 @@ fun ScoresScreen(
                                         is ScoreRow.LeagueHeader -> "league-${row.sportKey}-${row.shelf.key}"
                                         is ScoreRow.GameItem -> row.rowKey
                                         ScoreRow.MyTeamsHeader -> "my-games"
+                                        is ScoreRow.Hero -> "hero-${row.game.id}"
+                                        ScoreRow.Lamp -> "lamp"
                                     }
                                 },
                             ) { row ->
                                 when (row) {
-                                    is ScoreRow.SportHeader -> SportSectionHeader(
-                                        section = row.section,
-                                        collapsed = row.collapsed,
-                                        tvFocus = false,
-                                        onToggle = { toggleSport(row.section.sportKey) },
-                                    )
-                                    is ScoreRow.LeagueHeader -> LeagueSectionHeader(shelf = row.shelf)
-                                    is ScoreRow.GameItem -> GameRow(
+                                    is ScoreRow.SportHeader -> {}
+                                    is ScoreRow.LeagueHeader -> JumbotronLeagueHead(shelf = row.shelf, filter = state.scoresFilter)
+                                    is ScoreRow.GameItem -> JumbotronGameRow(
                                         game = row.game,
-                                        isFavoriteMatch = vm.gameHasFavoriteTeam(row.game),
                                         isAwayFavorite = vm.isTeamFavorite(row.game.away.id),
                                         isHomeFavorite = vm.isTeamFavorite(row.game.home.id),
-                                        tvFocus = false,
+                                        hasMatch = vm.hasStreamMatch(row.game),
                                         onClick = { vm.openStreamPicker(row.game) },
                                         onLongClick = { teamFavGame = row.game },
                                     )
-                                    ScoreRow.MyTeamsHeader -> MyTeamsSectionHeader(
-                                        liveCount = favoritePin.count { it.isLive },
+                                    ScoreRow.MyTeamsHeader -> {}
+                                    is ScoreRow.Hero -> JumbotronHero(
+                                        game = row.game,
+                                        isAwayFavorite = vm.isTeamFavorite(row.game.away.id),
+                                        isHomeFavorite = vm.isTeamFavorite(row.game.home.id),
+                                        matchCount = vm.streamMatchCount(row.game),
+                                        onClick = { vm.openStreamPicker(row.game) },
                                     )
+                                    ScoreRow.Lamp -> ScoresLampCard(state = state, onGoSettings = onGoSettings)
                                 }
                             }
                         }
@@ -342,8 +457,11 @@ private fun flattenScoreRows(
     collapsedSports: Set<String>,
     favoritePin: List<Game>,
     favoritesOnly: Boolean,
+    jumbotron: Boolean = false,
+    showLamp: Boolean = false,
 ): List<ScoreRow> {
     val out = ArrayList<ScoreRow>()
+    if (jumbotron && showLamp) out.add(ScoreRow.Lamp)
     if (favoritesOnly) {
         out.add(ScoreRow.MyTeamsHeader)
         for (section in sections) {
@@ -358,15 +476,22 @@ private fun flattenScoreRows(
     }
     val pinIds = favoritePin.map { it.id }.toSet()
     if (favoritePin.isNotEmpty()) {
-        out.add(ScoreRow.MyTeamsHeader)
-        for (g in favoritePin) {
-            out.add(ScoreRow.GameItem(g, rowKey = "fav-${g.id}"))
+        if (jumbotron) {
+            out.add(ScoreRow.Hero(favoritePin.first()))
+            for (g in favoritePin.drop(1)) {
+                out.add(ScoreRow.GameItem(g, rowKey = "fav-${g.id}"))
+            }
+        } else {
+            out.add(ScoreRow.MyTeamsHeader)
+            for (g in favoritePin) {
+                out.add(ScoreRow.GameItem(g, rowKey = "fav-${g.id}"))
+            }
         }
     }
     for (section in sections) {
         val collapsed = section.sportKey in collapsedSports
-        out.add(ScoreRow.SportHeader(section, collapsed))
-        if (collapsed) continue
+        if (!jumbotron) out.add(ScoreRow.SportHeader(section, collapsed))
+        if (collapsed && !jumbotron) continue
         for (shelf in section.leagues) {
             val rest = shelf.games.filter { it.id !in pinIds }
             out.add(ScoreRow.LeagueHeader(shelf, section.sportKey))
@@ -1168,6 +1293,248 @@ private fun TeamLogo(
                 fontSize = (size.value * 0.28f).sp,
                 fontWeight = FontWeight.Bold,
             )
+        }
+    }
+}
+
+@Composable
+private fun ScoresLampCard(state: AppUiState, onGoSettings: () -> Unit) {
+    val playlist = if (state.playlist == null) LampKind.PENDING else if (state.channelError != null) LampKind.BLOCKED else LampKind.DONE
+    val epg = when {
+        state.epgStatus?.contains("fail", true) == true -> LampKind.BLOCKED
+        state.epgByChannelId.isNotEmpty() -> LampKind.DONE
+        else -> LampKind.PENDING
+    }
+    val fav = if (state.favoriteTeamIds.isEmpty()) LampKind.PENDING else LampKind.DONE
+    val done = listOf(playlist, epg, fav).count { it == LampKind.DONE }
+    JumbotronLampCard(
+        playlist = playlist,
+        epg = epg,
+        favorites = fav,
+        setupCount = done,
+        cta = when {
+            state.playlist == null -> "ADD PLAYLIST ▸"
+            state.favoriteTeamIds.isEmpty() -> "PICK TEAMS ▸"
+            else -> "SETTINGS ▸"
+        },
+        onCta = onGoSettings,
+    )
+}
+
+private fun Game.jumbotronDigits(): Pair<String, String> =
+    if (isUpcoming) "–" to "–" else {
+        (if (away.displayScore == "—") "–" else away.displayScore) to
+            (if (home.displayScore == "—") "–" else home.displayScore)
+    }
+
+private fun Game.jumbotronLosing(team: TeamInfo): Boolean {
+    val a = away.score ?: return false
+    val h = home.score ?: return false
+    if (!isLive && !isFinal) return false
+    if (a == h) return false
+    return if (team.id == away.id) a < h else h < a
+}
+
+private fun Game.jumbotronLed(): String = when {
+    isFinal -> "FINAL"
+    isUpcoming -> statusLine.uppercase()
+    !clock.isNullOrBlank() -> if (clock.contains("'")) clock else "$clock'"
+    !period.isNullOrBlank() -> "Q$period"
+    else -> statusLine.uppercase()
+}
+
+@Composable
+private fun JumbotronLeagueHead(shelf: LeagueShelf, filter: ScoresFilter) {
+    val live = shelf.games.count { it.isLive }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(4.dp).height(16.dp).background(Gold))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            shelf.title.uppercase(),
+            color = TextSecondary,
+            fontFamily = BebasNeue,
+            fontSize = 20.sp,
+            letterSpacing = 0.04.em,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        when (filter) {
+            ScoresFilter.LIVE -> if (live > 0) JumbotronLed("$live LIVE", size = 10, color = LiveMint, glow = true)
+            ScoresFilter.UPCOMING -> JumbotronLed("${shelf.games.size} UPCOMING", size = 10, color = Muted, glow = false)
+            ScoresFilter.FINAL -> JumbotronLed("${shelf.games.size} FINAL", size = 10, color = Muted, glow = false)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun JumbotronGameRow(
+    game: Game,
+    isAwayFavorite: Boolean,
+    isHomeFavorite: Boolean,
+    hasMatch: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val digits = game.jumbotronDigits()
+    val a11y = "${game.away.rowLabel}, ${digits.first}, ${game.jumbotronLed()}, ${game.home.rowLabel}, ${digits.second}${if (hasMatch) ", Watch" else ""}"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ScoreRowHeight)
+            .jumbotronPanel()
+            .teamEdges(teamAccent(game.away), teamAccent(game.home))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .semantics(mergeDescendants = true) { contentDescription = a11y }
+            .padding(start = 16.dp, end = if (hasMatch) 8.dp else 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            game.away.abbreviation + if (isAwayFavorite) " ★" else "",
+            color = TextPrimary,
+            fontFamily = BebasNeue,
+            fontSize = 22.sp,
+            letterSpacing = 0.04.em,
+            modifier = Modifier.width(60.dp),
+            maxLines = 1,
+        )
+        JumbotronLed(
+            digits.first,
+            size = 26,
+            color = if (game.isUpcoming) Muted else Gold,
+            glow = !game.isUpcoming,
+            dimmed = game.jumbotronLosing(game.away),
+            modifier = Modifier.width(44.dp),
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+            JumbotronLed(
+                game.jumbotronLed(),
+                size = 12,
+                color = if (game.isLive) LiveMint else Muted,
+                glow = game.isLive,
+            )
+        }
+        JumbotronLed(
+            digits.second,
+            size = 26,
+            color = if (game.isUpcoming) Muted else Gold,
+            glow = !game.isUpcoming,
+            dimmed = game.jumbotronLosing(game.home),
+            modifier = Modifier.width(44.dp),
+        )
+        Text(
+            (if (isHomeFavorite) "★ " else "") + game.home.abbreviation,
+            color = TextPrimary,
+            fontFamily = BebasNeue,
+            fontSize = 22.sp,
+            letterSpacing = 0.04.em,
+            modifier = Modifier.width(60.dp),
+            maxLines = 1,
+        )
+        if (hasMatch) {
+            JumbotronWatchButton(filled = false, onClick = onClick)
+        }
+    }
+}
+
+@Composable
+private fun JumbotronHero(
+    game: Game,
+    isAwayFavorite: Boolean,
+    isHomeFavorite: Boolean,
+    matchCount: Int,
+    onClick: () -> Unit,
+) {
+    val digits = game.jumbotronDigits()
+    val away = teamAccent(game.away).copy(alpha = 0.55f)
+    val home = teamAccent(game.home).copy(alpha = 0.60f)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    0f to away,
+                    0.34f to Panel.copy(alpha = 0.95f),
+                    0.66f to Panel.copy(alpha = 0.95f),
+                    1f to home,
+                ),
+            )
+            .border(2.dp, LiveMint.copy(alpha = 0.45f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                "★ MY GAME · ${game.league.label.uppercase()}",
+                color = Gold,
+                fontFamily = BebasNeue,
+                fontSize = 16.sp,
+            )
+            JumbotronLed(
+                if (game.isLive) "● LIVE" else if (game.isFinal) "FINAL" else game.statusLine.uppercase(),
+                size = 11,
+                color = if (game.isLive) LiveMint else Muted,
+                glow = game.isLive,
+            )
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(game.away.rowLabel.uppercase(), color = TextPrimary, fontFamily = BebasNeue, fontSize = 32.sp, maxLines = 1)
+                Text(game.away.abbreviation + if (isAwayFavorite) " ★" else "", color = TextSecondary, fontFamily = SpaceMono, fontSize = 10.sp)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(84.dp)) {
+                Text(if (game.isUpcoming) "START" else "CLOCK", color = Muted, fontFamily = BebasNeue, fontSize = 13.sp)
+                JumbotronLed(
+                    if (game.isUpcoming) game.statusLine.uppercase() else (game.clock ?: "LIVE"),
+                    size = 22,
+                    color = if (game.isLive) LiveMint else if (game.isUpcoming) Muted else Gold,
+                    glow = game.isLive,
+                )
+            }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                Text(game.home.rowLabel.uppercase(), color = TextPrimary, fontFamily = BebasNeue, fontSize = 32.sp, maxLines = 1)
+                Text(game.home.abbreviation + if (isHomeFavorite) " ★" else "", color = TextSecondary, fontFamily = SpaceMono, fontSize = 10.sp)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.weight(1f).background(VoidBlack).border(1.dp, Border).padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                JumbotronLed(digits.first, size = 58, color = if (game.isUpcoming) Muted else Gold, glow = !game.isUpcoming, dimmed = game.jumbotronLosing(game.away))
+            }
+            Spacer(Modifier.width(84.dp))
+            Box(
+                Modifier.weight(1f).background(VoidBlack).border(1.dp, Border).padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                JumbotronLed(digits.second, size = 58, color = if (game.isUpcoming) Muted else Gold, glow = !game.isUpcoming, dimmed = game.jumbotronLosing(game.home))
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                if (game.broadcasts.isNotEmpty()) {
+                    Text(game.broadcasts.take(2).joinToString(" · "), color = TextSecondary, fontFamily = SpaceMono, fontSize = 10.sp)
+                }
+                if (matchCount > 0) {
+                    JumbotronLed(if (matchCount == 1) "1 STREAM OK" else "$matchCount STREAMS OK", size = 10, color = LiveMint, glow = true)
+                } else {
+                    Text("NO STREAM MATCHED", color = Muted, fontFamily = SpaceMono, fontSize = 10.sp)
+                }
+            }
+            if (matchCount > 0) {
+                JumbotronWatchButton(filled = true, onClick = onClick)
+            }
         }
     }
 }
