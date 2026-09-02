@@ -120,23 +120,27 @@ struct RootTabView: View {
 
     #if os(iOS)
     /// Opaque lamp tab bar — no Liquid Glass on the tab layer (SPEC §6).
+    /// TabView keeps each screen's state without stacking three live trees
+    /// (the opacity-ZStack was slow and ate Guide/Settings taps).
     private var jumbotronTabHost: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                ScoresView()
-                    .opacity(tab == .scores ? 1 : 0)
-                    .allowsHitTesting(tab == .scores)
-                GuideView()
-                    .opacity(tab == .guide ? 1 : 0)
-                    .allowsHitTesting(tab == .guide)
-                SettingsView()
-                    .opacity(tab == .settings ? 1 : 0)
-                    .allowsHitTesting(tab == .settings)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            JumbotronTabBar(selection: $tab)
+        TabView(selection: $tab) {
+            ScoresView()
+                .tabItem { Label(AppTab.scores.title, systemImage: AppTab.scores.systemImage) }
+                .tag(AppTab.scores)
+                .toolbar(.hidden, for: .tabBar)
+            GuideView()
+                .tabItem { Label(AppTab.guide.title, systemImage: AppTab.guide.systemImage) }
+                .tag(AppTab.guide)
+                .toolbar(.hidden, for: .tabBar)
+            SettingsView()
+                .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.systemImage) }
+                .tag(AppTab.settings)
+                .toolbar(.hidden, for: .tabBar)
         }
-        .ignoresSafeArea(edges: .bottom)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            JumbotronTabBar(selection: $tab)
+                .ignoresSafeArea(edges: .bottom)
+        }
         .tint(SportsColors.gold)
     }
     #endif

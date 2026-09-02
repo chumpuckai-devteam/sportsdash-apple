@@ -1,5 +1,8 @@
 import SwiftUI
 import CoreText
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Font registration (no runtime fetch)
 
@@ -76,23 +79,32 @@ extension View {
 
 struct JumbotronGridDot: View {
     var body: some View {
-        Canvas { ctx, size in
-            let step: CGFloat = 6
-            let dot = Path(ellipseIn: CGRect(x: 0, y: 0, width: 1, height: 1))
-            var y: CGFloat = 0
-            while y < size.height {
-                var x: CGFloat = 0
-                while x < size.width {
-                    var t = CGAffineTransform(translationX: x, y: y)
-                    ctx.fill(dot.applying(t), with: .color(SportsColors.gridDot))
-                    x += step
-                }
-                y += step
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        #if canImport(UIKit)
+        Image(uiImage: Self.tile)
+            .resizable(resizingMode: .tile)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        #else
+        SportsColors.voidBlack
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        #endif
     }
+
+    #if canImport(UIKit)
+    /// One 6pt cell with a 1pt dot — GPU-tiled instead of thousands of Canvas fills.
+    private static let tile: UIImage = {
+        let step: CGFloat = 6
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: step, height: step), format: format)
+        return renderer.image { ctx in
+            UIColor(SportsColors.gridDot).setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+    }()
+    #endif
 }
 
 // MARK: - Type primitives

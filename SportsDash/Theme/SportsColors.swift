@@ -170,6 +170,7 @@ extension View {
                 JumbotronGridDot()
             }
             .ignoresSafeArea()
+            .allowsHitTesting(false)
         }
     }
 
