@@ -125,6 +125,7 @@ struct GuideNowBarList: View {
                     action: onReloadEPG
                 )
                 .padding(.horizontal, SportsMetrics.screenInset)
+                Spacer(minLength: 0)
             } else if playable.isEmpty {
                 JumbotronMessagePanel(
                     title: "NO CHANNELS IN THIS CATEGORY",
@@ -133,50 +134,66 @@ struct GuideNowBarList: View {
                     action: onChooseCategory
                 )
                 .padding(.horizontal, SportsMetrics.screenInset)
+                Spacer(minLength: 0)
             } else {
-                VStack(spacing: 0) {
-                    HStack(spacing: 10) {
-                        Text("CH")
-                            .frame(width: 40, alignment: .leading)
-                        Text("NAME")
-                            .frame(width: 74, alignment: .leading)
-                        HStack {
-                            Text("NOW")
-                            Spacer()
-                            JumbotronLED(
-                                text: "▼ \(Self.hhmm.string(from: now))",
-                                size: 9,
-                                color: SportsColors.live,
-                                glow: true
+                // Chrome stays mounted; only visible rows are built. A VStack of every
+                // channel (Xtream groups can be hundreds+) blocked taps for 1–2s.
+                ScrollView {
+                    LazyVStack(spacing: 0, pinnedViews: []) {
+                        nowBarHeader
+                        ForEach(Array(playable.enumerated()), id: \.element.id) { idx, row in
+                            GuideNowBarRow(
+                                index: idx + 1,
+                                row: row,
+                                now: anchor,
+                                wallNow: now,
+                                cleanNames: cleanNames,
+                                isFavorite: favoriteChannelIds.contains(row.channel.id),
+                                onPlay: { onPlay(row.channel) },
+                                onToggleFavorite: { onToggleFavorite(row.channel) }
                             )
-                            Spacer()
-                            Text("ENDS")
                         }
                     }
-                    .font(JumbotronFonts.body(9))
-                    .foregroundStyle(SportsColors.muted)
-                    .padding(.leading, 15)
-                    .padding(.trailing, 8)
-                    .frame(height: 28)
-
-                    ForEach(Array(playable.enumerated()), id: \.element.id) { idx, row in
-                        GuideNowBarRow(
-                            index: idx + 1,
-                            row: row,
-                            now: anchor,
-                            wallNow: now,
-                            cleanNames: cleanNames,
-                            isFavorite: favoriteChannelIds.contains(row.channel.id),
-                            onPlay: { onPlay(row.channel) },
-                            onToggleFavorite: { onToggleFavorite(row.channel) }
-                        )
+                    .background(SportsColors.panelGradient)
+                    .overlay { Rectangle().stroke(SportsColors.border, lineWidth: 2) }
+                    .overlay {
+                        Rectangle()
+                            .stroke(SportsColors.voidBlack, lineWidth: 1)
+                            .padding(2)
                     }
+                    .padding(.horizontal, SportsMetrics.screenInset)
+                    .padding(.bottom, 28)
                 }
-                .jumbotronPanel()
-                .padding(.horizontal, SportsMetrics.screenInset)
+                .sportsHideScrollBackground()
             }
         }
         .jumbotronAXCap()
+    }
+
+    private var nowBarHeader: some View {
+        HStack(spacing: 10) {
+            Text("CH")
+                .frame(width: 40, alignment: .leading)
+            Text("NAME")
+                .frame(width: 74, alignment: .leading)
+            HStack {
+                Text("NOW")
+                Spacer()
+                JumbotronLED(
+                    text: "▼ \(Self.hhmm.string(from: now))",
+                    size: 9,
+                    color: SportsColors.live,
+                    glow: true
+                )
+                Spacer()
+                Text("ENDS")
+            }
+        }
+        .font(JumbotronFonts.body(9))
+        .foregroundStyle(SportsColors.muted)
+        .padding(.leading, 15)
+        .padding(.trailing, 8)
+        .frame(height: 28)
     }
 
     private var nowChip: some View {

@@ -593,37 +593,33 @@ struct GuideView: View {
             switch displayMode {
             case .list:
                 #if os(iOS)
-                ScrollView {
-                    GuideNowBarList(
-                        rows: guideRows,
-                        selectedGroup: selectedGroup,
-                        groupNames: groupNames,
-                        moviesOnly: moviesOnly,
-                        displayMode: displayMode,
-                        now: nowTick,
-                        cleanNames: cleanNames,
-                        favoriteChannelIds: appModel.favoriteChannelIds,
-                        epgError: appModel.epgError,
-                        isLoadingEpg: appModel.isLoadingEpg,
-                        onSelectGroup: { showCategoryPicker = true },
-                        onGrid: {
-                            var p = appModel.playerPrefs
-                            p.guideLayout = .grid
-                            appModel.setPlayerPrefs(p)
-                        },
-                        onMovies: { moviesOnly.toggle() },
-                        onPlay: { channel in
-                            playerRoute = PlayerRoute(channel: channel, game: nil, alternates: [])
-                        },
-                        onToggleFavorite: { channel in
-                            appModel.toggleFavoriteChannel(channel)
-                        },
-                        onChooseCategory: { showCategoryPicker = true },
-                        onReloadEPG: { Task { await appModel.reloadEpg(force: true) } }
-                    )
-                    .padding(.bottom, 28)
-                }
-                .sportsHideScrollBackground()
+                GuideNowBarList(
+                    rows: guideRows,
+                    selectedGroup: selectedGroup,
+                    groupNames: groupNames,
+                    moviesOnly: moviesOnly,
+                    displayMode: displayMode,
+                    now: nowTick,
+                    cleanNames: cleanNames,
+                    favoriteChannelIds: appModel.favoriteChannelIds,
+                    epgError: appModel.epgError,
+                    isLoadingEpg: appModel.isLoadingEpg,
+                    onSelectGroup: { showCategoryPicker = true },
+                    onGrid: {
+                        var p = appModel.playerPrefs
+                        p.guideLayout = .grid
+                        appModel.setPlayerPrefs(p)
+                    },
+                    onMovies: { moviesOnly.toggle() },
+                    onPlay: { channel in
+                        playerRoute = PlayerRoute(channel: channel, game: nil, alternates: [])
+                    },
+                    onToggleFavorite: { channel in
+                        appModel.toggleFavoriteChannel(channel)
+                    },
+                    onChooseCategory: { showCategoryPicker = true },
+                    onReloadEPG: { Task { await appModel.reloadEpg(force: true) } }
+                )
                 #else
                 GuideTimelineGrid(
                     rows: guideRows,
