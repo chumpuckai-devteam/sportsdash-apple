@@ -305,13 +305,23 @@ final class StorageService {
     }
 
     func saveEpgCache(_ map: [String: [EpgProgram]]) {
+        let compact = map.filter { !$0.value.isEmpty }
+        Task.detached(priority: .utility) {
+            StorageService.writeEpgCache(compact)
+        }
+    }
+
+    /// Encode off the main actor — a full Xtream guide is multi-MB JSON.
+    nonisolated static func writeEpgCache(_ map: [String: [EpgProgram]]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        // Cap payload: drop empty lists
         let compact = map.filter { !$0.value.isEmpty }
         guard let data = try? encoder.encode(compact) else { return }
-        try? data.write(to: epgCacheURL, options: .atomic)
-        defaults.set(Date(), forKey: epgCacheDateKey)
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("sportsdash_epg_cache.json")
+        try? data.write(to: url, options: .atomic)
+        UserDefaults.standard.set(Date(), forKey: "epg_cache_saved_at")
     }
 
     func clearEpgCache() {

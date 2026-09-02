@@ -87,13 +87,19 @@ struct SportsCategoryPickerScreen: View {
     var onDone: () -> Void
 
     @State private var query = ""
+    /// Snapshot at present so AppModel EPG publishes don't rebuild/reset this list.
+    @State private var lockedOptions: [String] = []
     #if os(tvOS)
     @FocusState private var searchFocused: Bool
     #endif
 
+    private var groups: [String] {
+        lockedOptions.isEmpty ? options : lockedOptions
+    }
+
     /// Case-insensitive substring filter over group names.
     private var filtered: [String] {
-        Self.filteredGroups(options: options, query: query)
+        Self.filteredGroups(options: groups, query: query)
     }
 
     private var trimmedQuery: String {
@@ -102,9 +108,9 @@ struct SportsCategoryPickerScreen: View {
 
     private var headerText: String {
         if trimmedQuery.isEmpty {
-            return "\(options.count) groups"
+            return "\(groups.count) groups"
         }
-        return "\(filtered.count) of \(options.count) groups"
+        return "\(filtered.count) of \(groups.count) groups"
     }
 
     /// Pure filter helper (testable / shared).
@@ -183,6 +189,11 @@ struct SportsCategoryPickerScreen: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if lockedOptions.isEmpty {
+                lockedOptions = options
+            }
+        }
     }
 
     @ViewBuilder
@@ -237,11 +248,11 @@ struct SportsCategoryPickerScreen: View {
     }
 
     private var emptyTitle: String {
-        options.isEmpty ? "No categories" : "No groups match"
+        groups.isEmpty ? "No categories" : "No groups match"
     }
 
     private var emptySubtitle: String {
-        if options.isEmpty {
+        if groups.isEmpty {
             return "Load a playlist with groups to pick a category."
         }
         if trimmedQuery.isEmpty {

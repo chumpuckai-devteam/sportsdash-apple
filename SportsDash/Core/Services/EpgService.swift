@@ -119,7 +119,8 @@ actor EpgService {
                 for (k, v) in short where !v.isEmpty {
                     result[k] = v
                 }
-                onBatch?(result)
+                // Delta only — sending the full map every wave froze the UI.
+                onBatch?(short)
             }
             let attempted = Set(slice.map(\.id))
             missing = missing.filter { !attempted.contains($0.id) }
