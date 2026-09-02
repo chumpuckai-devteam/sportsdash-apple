@@ -75,7 +75,13 @@ struct GuideNowBarList: View {
                         .font(JumbotronFonts.display(16))
                         .foregroundStyle(displayMode == .grid ? SportsColors.voidBlack : SportsColors.muted)
                         .frame(width: 64, height: 38)
-                        .background(displayMode == .grid ? SportsColors.gold : SportsColors.panelGradient)
+                        .background {
+                            if displayMode == .grid {
+                                SportsColors.gold
+                            } else {
+                                SportsColors.panelGradient
+                            }
+                        }
                         .overlay { Rectangle().stroke(SportsColors.border, lineWidth: 2) }
                 }
                 .buttonStyle(.plain)
@@ -86,7 +92,13 @@ struct GuideNowBarList: View {
                         .font(JumbotronFonts.display(16))
                         .foregroundStyle(moviesOnly ? SportsColors.voidBlack : SportsColors.muted)
                         .frame(width: 74, height: 38)
-                        .background(moviesOnly ? SportsColors.gold : SportsColors.panelGradient)
+                        .background {
+                            if moviesOnly {
+                                SportsColors.gold
+                            } else {
+                                SportsColors.panelGradient
+                            }
+                        }
                         .overlay { Rectangle().stroke(SportsColors.border, lineWidth: 2) }
                 }
                 .buttonStyle(.plain)

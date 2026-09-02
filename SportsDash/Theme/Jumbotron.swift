@@ -284,7 +284,13 @@ struct JumbotronSwitchboard: View {
                         .foregroundStyle(on ? SportsColors.voidBlack : SportsColors.muted)
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
-                        .background(on ? SportsColors.gold : SportsColors.panelGradient)
+                        .background {
+                            if on {
+                                SportsColors.gold
+                            } else {
+                                SportsColors.panelGradient
+                            }
+                        }
                         .overlay { Rectangle().stroke(on ? SportsColors.gold : SportsColors.border, lineWidth: 2) }
                         .shadow(color: on ? SportsColors.ledGlow.opacity(0.55) : .clear, radius: 7)
                 }
