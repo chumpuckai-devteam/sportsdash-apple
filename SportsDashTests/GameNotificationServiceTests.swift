@@ -26,6 +26,7 @@ final class GameNotificationServiceTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testScoreDidIncrease_detectsIncrease() {
         // pure helper
         XCTAssertTrue(GameNotificationService.test_scoreDidIncrease(currentHome: 1, currentAway: 0, prevHome: 0, prevAway: 0))
@@ -37,6 +38,7 @@ final class GameNotificationServiceTests: XCTestCase {
         XCTAssertTrue(GameNotificationService.test_scoreDidIncrease(currentHome: 1, currentAway: nil, prevHome: nil, prevAway: nil))
     }
 
+    @MainActor
     func testGoalId_stableForSameScore() {
         let id1 = GameNotificationService.test_goalId(gameId: "g1", home: 2, away: 1)
         let id2 = GameNotificationService.test_goalId(gameId: "g1", home: 2, away: 1)
@@ -45,6 +47,7 @@ final class GameNotificationServiceTests: XCTestCase {
         XCTAssertNotEqual(id1, id3)
     }
 
+    @MainActor
     func testMergeSnapshots_neverDropsKeysMissingFromObserved() {
         let existing: [String: GameNotificationService.TestSnapshot] = [
             "g1": GameNotificationService.TestSnapshot(home: 0, away: 0, status: .upcoming),
@@ -61,6 +64,7 @@ final class GameNotificationServiceTests: XCTestCase {
         XCTAssertNotNil(merged["g3"])
     }
 
+    @MainActor
     func testPruneByAge_removesOld() {
         let now = Date()
         let old = now.addingTimeInterval(-50 * 3600)
@@ -122,6 +126,7 @@ final class GameNotificationServiceTests: XCTestCase {
         XCTAssertTrue(IOSImpl.scoreDidIncrease(currentHome: 1, currentAway: 0, prevHome: prevG1.home, prevAway: prevG1.away))
     }
 
+    @MainActor
     func test_startScheduleAction_decisions() {
         // pure decision helper
         XCTAssertEqual(GameNotificationService.test_startScheduleAction(touchStartSchedules: false, notifyStarts: true), "none")
