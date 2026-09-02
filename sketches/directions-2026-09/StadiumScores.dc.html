@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#070910; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; color:#F2F4F7; -webkit-font-smoothing: antialiased; }
+    a { color:#FFB800; } a:hover { color:#FFD25A; }
+    .d { font-family:"Barlow Condensed", "Arial Narrow", Impact, sans-serif; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#070910; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <!-- header -->
+  <div style="padding:58px 16px 8px 16px; display:flex; align-items:flex-end; justify-content:space-between;">
+    <div class="d" style="font-size:38px; font-weight:800; letter-spacing:-0.01em; line-height:1;">SCORES</div>
+    <div style="display:flex; gap:8px;">
+      <div style="width:34px; height:34px; border-radius:17px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(42,51,64,0.9); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"></polygon></svg></div>
+      <div style="width:34px; height:34px; border-radius:17px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(42,51,64,0.9); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg></div>
+    </div>
+  </div>
+  <!-- filters + fav rail -->
+  <div style="display:flex; align-items:center; gap:6px; padding:4px 12px 10px 12px;">
+    <div style="height:30px; padding:0 14px; border-radius:15px; background:#FFB800; color:#070910; font-size:13px; font-weight:700; display:flex; align-items:center;">Live</div>
+    <div style="height:30px; padding:0 14px; border-radius:15px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(42,51,64,0.9); font-size:13px; font-weight:600; display:flex; align-items:center; color:#B8C0CE;">Upcoming</div>
+    <div style="height:30px; padding:0 14px; border-radius:15px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(42,51,64,0.9); font-size:13px; font-weight:600; display:flex; align-items:center; color:#B8C0CE;">Final</div>
+    <div style="flex-grow:1; display:flex; gap:6px; justify-content:flex-end;">
+      <div style="width:28px; height:28px; border-radius:14px; background:#E31837; border:2px solid #FFB800; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900;">KC</div>
+      <div style="width:28px; height:28px; border-radius:14px; background:#552583; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900;">LAL</div>
+      <div style="width:28px; height:28px; border-radius:14px; background:#EF0107; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900;">ARS</div>
+    </div>
+  </div>
+  <!-- hero: my game -->
+  <div style="margin:0 12px; border-radius:18px; overflow:hidden; position:relative; background:linear-gradient(115deg, #7A0C1F 0%, #1A0B10 48%, #0B1330 52%, #00338D 100%); border:1px solid rgba(0,229,160,0.35); padding:14px 16px 12px 16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:800; letter-spacing:0.08em; color:#00E5A0;"><span style="width:7px; height:7px; border-radius:4px; background:#00E5A0; box-shadow:0 0 8px #00E5A0;"></span>MY GAMES · NFL</div>
+      <div style="font-size:11px; font-weight:700; color:#B8C0CE;">Q4 · 3:12</div>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <div style="width:52px; height:52px; border-radius:26px; background:#E31837; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900;">KC</div>
+        <div style="font-size:12px; font-weight:700;">Chiefs</div>
+      </div>
+      <div class="d num" style="font-size:64px; font-weight:800; line-height:1;">24</div>
+      <div style="font-size:12px; color:#8B96A8; font-weight:700;">–</div>
+      <div class="d num" style="font-size:64px; font-weight:800; line-height:1; color:#8B96A8;">21</div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <div style="width:52px; height:52px; border-radius:26px; background:#00338D; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900;">BUF</div>
+        <div style="font-size:12px; font-weight:700;">Bills</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;">
+      <div style="font-size:12px; color:#B8C0CE;">CBS · ESPN+ · <span style="color:#F2F4F7; font-weight:600;">2 streams matched</span></div>
+      <div style="height:34px; padding:0 16px; border-radius:17px; background:#FFB800; color:#070910; font-size:13px; font-weight:800; letter-spacing:0.04em; display:flex; align-items:center; gap:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#070910"><polygon points="6 3 20 12 6 21"></polygon></svg>WATCH</div>
+    </div>
+  </div>
+  <!-- league sections -->
+  <div style="display:flex; flex-direction:column; margin-top:14px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 16px;">
+      <div class="d" style="font-size:20px; font-weight:700; letter-spacing:0.02em;">PREMIER LEAGUE</div>
+      <div style="font-size:11px; color:#8B96A8; font-weight:700;">2 LIVE</div>
+    </div>
+    <div style="display:flex; align-items:center; padding:12px 16px; border-top:0.5px solid #1C2330;">
+      <div style="display:flex; align-items:center; gap:8px; flex-grow:1;"><div style="width:40px; height:40px; border-radius:20px; background:#EF0107; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;">ARS</div><div class="d num" style="font-size:32px; font-weight:700;">1</div></div>
+      <div style="width:86px; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="font-size:11px; font-weight:800; color:#00E5A0;">67'</div><div style="height:22px; padding:0 10px; border-radius:11px; border:1px solid #FFB800; color:#FFB800; font-size:10px; font-weight:800; display:flex; align-items:center;">WATCH</div></div>
+      <div style="display:flex; align-items:center; gap:8px; flex-grow:1; justify-content:flex-end;"><div class="d num" style="font-size:32px; font-weight:700;">1</div><div style="width:40px; height:40px; border-radius:20px; background:#C8102E; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;">LIV</div></div>
+    </div>
+    <div style="display:flex; align-items:center; padding:12px 16px; border-top:0.5px solid #1C2330;">
+      <div style="display:flex; align-items:center; gap:8px; flex-grow:1;"><div style="width:40px; height:40px; border-radius:20px; background:#6CABDD; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;">MCI</div><div class="d num" style="font-size:32px; font-weight:700;">2</div></div>
+      <div style="width:86px; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="font-size:11px; font-weight:800; color:#00E5A0;">HT</div><div style="height:22px; padding:0 10px; border-radius:11px; border:1px solid #FFB800; color:#FFB800; font-size:10px; font-weight:800; display:flex; align-items:center;">WATCH</div></div>
+      <div style="display:flex; align-items:center; gap:8px; flex-grow:1; justify-content:flex-end;"><div class="d num" style="font-size:32px; font-weight:700; color:#8B96A8;">0</div><div style="width:40px; height:40px; border-radius:20px; background:#132257; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;">TOT</div></div>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px 6px 16px;">
+      <div class="d" style="font-size:20px; font-weight:700; letter-spacing:0.02em;">MLB</div>
+      <div style="font-size:11px; color:#8B96A8; font-weight:700;">1 LIVE</div>
+    </div>
+    <div style="display:flex; align-items:center; padding:12px 16px; border-top:0.5px solid #1C2330;">
+      <div style="display:flex; align-items:center; gap:8px; flex-grow:1;"><div style="width:40px; height:40px; border-radius:20px; background:#0C2340; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;">NYY</div><div class="d num" style="font-size:32px; font-weight:700;">3</div></div>
+      <div style="width:86px; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="font-size:11px; font-weight:800; color:#00E5A0;">TOP 7</div><div style="height:22px; padding:0 10px; border-radius:11px; border:1px solid #FFB800; color:#FFB800; font-size:10px; font-weight:800; display:flex; align-items:center;">WATCH</div></div>
+      <div style="display:flex; align-items:center; gap:8px; flex-grow:1; justify-content:flex-end;"><div class="d num" style="font-size:32px; font-weight:700; color:#8B96A8;">2</div><div style="width:40px; height:40px; border-radius:20px; background:#BD3039; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;">BOS</div></div>
+    </div>
+  </div>
+  <!-- tab bar -->
+  <div style="position:absolute; left:16px; right:16px; bottom:22px; height:60px; border-radius:30px; background:rgba(24,30,42,0.82); border:0.5px solid rgba(255,255,255,0.12); backdrop-filter:blur(20px); display:flex; align-items:center; justify-content:space-around;">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#FFB800;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg><div style="font-size:10px; font-weight:700;">Scores</div></div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#8B96A8;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1.5"></rect><rect x="3" y="13" width="18" height="7" rx="1.5"></rect></svg><div style="font-size:10px; font-weight:700;">Guide</div></div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#8B96A8;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg><div style="font-size:10px; font-weight:700;">Settings</div></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

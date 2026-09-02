@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#070910; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; color:#F2F4F7; -webkit-font-smoothing: antialiased; }
+    a { color:#FFB800; } a:hover { color:#FFD25A; }
+    .d { font-family:"Barlow Condensed", "Arial Narrow", Impact, sans-serif; }
+    .row { display:flex; height:78px; border-top:0.5px solid #1C2330; }
+    .ch { width:148px; flex-shrink:0; display:flex; align-items:center; gap:8px; padding:0 10px; background:#0B0E15; box-sizing:border-box; }
+    .logo { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900; flex-shrink:0; }
+    .tl { flex-grow:1; position:relative; overflow:hidden; }
+    .p { position:absolute; top:8px; height:62px; border-radius:10px; background:#111621; border:0.5px solid #1C2330; padding:8px 10px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; gap:3px; overflow:hidden; }
+    .p .t { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .p .s { font-size:10px; color:#8B96A8; font-weight:600; }
+    .now { background:#171D2B; border-color:rgba(0,229,160,0.45); }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#070910; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="padding:56px 16px 10px 16px; display:flex; align-items:center; justify-content:space-between;">
+    <div style="height:34px; padding:0 12px 0 10px; border-radius:17px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(42,51,64,0.9); display:flex; align-items:center; gap:6px; color:#FFB800; font-size:13px; font-weight:700;"><svg width="14" height="14" viewBox="0 0 24 24" fill="#FFB800"><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"></polygon></svg>Favorites<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+    <div class="d" style="font-size:26px; font-weight:800;">GUIDE</div>
+    <div style="width:34px; height:34px; border-radius:17px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(42,51,64,0.9); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#FFB800"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></div>
+  </div>
+  <div style="display:flex; height:36px; align-items:center; background:#0B0E15; border-top:0.5px solid #1C2330;">
+    <div style="width:148px; flex-shrink:0; padding-left:12px; font-size:11px; font-weight:800; color:#00E5A0; letter-spacing:0.06em; box-sizing:border-box;">NOW · 7:42 PM</div>
+    <div style="flex-grow:1; position:relative; height:100%; overflow:hidden;">
+      <div style="position:absolute; left:0; top:11px; font-size:11px; font-weight:700; color:#8B96A8;">7:00 PM</div>
+      <div style="position:absolute; left:140px; top:11px; font-size:11px; font-weight:700; color:#8B96A8;">8:00 PM</div>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:column; position:relative;">
+    <div class="row"><div class="ch"><div class="logo" style="background:#B3261E;">ESPN</div><div style="font-size:12px; font-weight:700; line-height:1.2;">ESPN</div></div><div class="tl"><div class="p now" style="left:-40px; width:210px;"><div class="t">NFL: Chiefs @ Bills</div><div class="s">LIVE · Q4</div></div><div class="p" style="left:174px; width:140px;"><div class="t">SportsCenter</div><div class="s">9:00 PM</div></div></div></div>
+    <div class="row"><div class="ch"><div class="logo" style="background:#005DAA;">SKY</div><div style="font-size:12px; font-weight:700; line-height:1.2;">Sky Sports<br>Main Event</div></div><div class="tl"><div class="p now" style="left:0; width:136px;"><div class="t">Arsenal v Liverpool</div><div class="s">LIVE · 67'</div></div><div class="p" style="left:140px; width:160px;"><div class="t">Match of the Day</div><div class="s">8:00 PM</div></div></div></div>
+    <div class="row"><div class="ch"><div class="logo" style="background:#1D428A;">NBA</div><div style="font-size:12px; font-weight:700; line-height:1.2;">NBA TV</div></div><div class="tl"><div class="p" style="left:-70px; width:160px;"><div class="t">Lakers @ Celtics</div><div class="s">FINAL 98–104</div></div><div class="p now" style="left:94px; width:170px;"><div class="t">GameTime</div><div class="s">7:40 PM</div></div></div></div>
+    <div class="row"><div class="ch"><div class="logo" style="background:#041E42;">MLB</div><div style="font-size:12px; font-weight:700; line-height:1.2;">MLB Network</div></div><div class="tl"><div class="p now" style="left:-100px; width:300px;"><div class="t">Yankees @ Red Sox</div><div class="s">LIVE · TOP 7</div></div></div></div>
+    <div class="row"><div class="ch"><div class="logo" style="background:#0A2240;">FS1</div><div style="font-size:12px; font-weight:700; line-height:1.2;">FS1</div></div><div class="tl"><div class="p now" style="left:0; width:136px;"><div class="t">MLS: LAFC v Galaxy</div><div class="s">7:00 PM</div></div><div class="p" style="left:140px; width:160px;"><div class="t">FOX Sports Live</div><div class="s">8:00 PM</div></div></div></div>
+    <div class="row"><div class="ch"><div class="logo" style="background:#6E2B8D;">beIN</div><div style="font-size:12px; font-weight:700; line-height:1.2;">beIN Sports 1</div></div><div class="tl"><div class="p now" style="left:-40px; width:200px;"><div class="t">Ligue 1: PSG v Lyon</div><div class="s">LIVE · 2ND HALF</div></div><div class="p" style="left:164px; width:150px;"><div class="t">La Liga Show</div><div class="s">8:30 PM</div></div></div></div>
+    <div class="row"><div class="ch"><div class="logo" style="background:#013369;">NFL</div><div style="font-size:12px; font-weight:700; line-height:1.2;">NFL Network</div></div><div class="tl"><div class="p now" style="left:-40px; width:250px;"><div class="t">NFL RedZone</div><div class="s">LIVE</div></div></div></div>
+    <div style="position:absolute; left:245px; top:-36px; bottom:0; width:2px; background:#00E5A0; box-shadow:0 0 6px #00E5A0;"></div>
+  </div>
+  <div style="position:absolute; left:16px; right:16px; bottom:22px; height:60px; border-radius:30px; background:rgba(24,30,42,0.82); border:0.5px solid rgba(255,255,255,0.12); backdrop-filter:blur(20px); display:flex; align-items:center; justify-content:space-around;">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#8B96A8;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg><div style="font-size:10px; font-weight:700;">Scores</div></div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#FFB800;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1.5"></rect><rect x="3" y="13" width="18" height="7" rx="1.5"></rect></svg><div style="font-size:10px; font-weight:700;">Guide</div></div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#8B96A8;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg><div style="font-size:10px; font-weight:700;">Settings</div></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

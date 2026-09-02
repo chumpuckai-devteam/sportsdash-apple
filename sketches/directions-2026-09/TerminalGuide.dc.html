@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@500;600;700&display=swap">
+  <style>
+    body { margin:0; background:#0B0F14; font-family:"IBM Plex Mono", "SF Mono", Menlo, monospace; color:#C9D1D9; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+    a { color:#22D3EE; } a:hover { color:#67E8F9; }
+    .sans { font-family:"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; }
+    .cy { color:#22D3EE; } .dim { color:#6B7785; } .fav { color:#F5C542; }
+    .hd { display:grid; grid-template-columns: 34px 86px 1fr 52px; font-size:9px; letter-spacing:0.1em; color:#6B7785; height:20px; align-items:center; padding:0 10px; border-bottom:1px solid #1B232D; }
+    .g { display:grid; grid-template-columns: 34px 86px 1fr 52px; align-items:center; height:38px; padding:0 10px; border-bottom:1px solid #131A22; font-size:11px; }
+    .g .n { color:#6B7785; font-size:10px; }
+    .g .c { color:#E6EDF3; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px; }
+    .g .p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .g .p small { color:#6B7785; font-size:10px; }
+    .g .e { text-align:right; font-size:10px; color:#6B7785; }
+    .pb { display:inline-block; width:32px; height:4px; background:#1B232D; vertical-align:middle; margin-right:6px; position:relative; }
+    .pb i { position:absolute; left:0; top:0; bottom:0; background:#22D3EE; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#0B0F14; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="padding:54px 10px 0 10px; display:flex; justify-content:space-between; align-items:center; height:78px; box-sizing:border-box;">
+    <div class="sans" style="font-size:16px; font-weight:700; color:#E6EDF3;">guide<span class="dim">/</span><span class="cy">favorites</span></div>
+    <div style="font-size:10px; color:#6B7785;">19:42 · epg 913/1284 · <span class="cy">now</span></div>
+  </div>
+  <div style="margin:6px 10px 0 10px; display:flex; gap:6px;">
+    <div style="flex-grow:1; height:28px; border:1px solid #1B232D; background:#0F151C; border-radius:4px; display:flex; align-items:center; padding:0 10px; gap:8px; font-size:11px;"><span class="cy">›</span><span class="dim">filter channels, programs…</span></div>
+    <div style="width:70px; height:28px; border:1px solid #1B232D; background:#0F151C; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#8B97A5;">★ FAV ▾</div>
+    <div style="width:52px; height:28px; border:1px solid #1B232D; background:#0F151C; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#8B97A5;">grid</div>
+  </div>
+  <div style="margin:8px 10px 0 10px; display:flex; gap:12px; font-size:10px; color:#6B7785;"><span class="cy">[now]</span><span>[20:00]</span><span>[21:00]</span><span>[22:00]</span><span style="flex-grow:1;"></span><span>movies: off</span></div>
+
+  <div class="hd" style="margin-top:8px;"><div>CH</div><div>CHANNEL</div><div>NOW · PROGRESS</div><div style="text-align:right;">ENDS</div></div>
+  <div class="g" style="background:#0E1A1F;"><div class="n">001</div><div class="c">ESPN</div><div class="p"><span class="pb"><i style="width:62%;"></i></span><span class="fav">★</span> Chiefs @ Bills <small>Q4</small></div><div class="e cy">20:15</div></div>
+  <div class="g"><div class="n">002</div><div class="c">ESPN2</div><div class="p"><span class="pb"><i style="width:30%;"></i></span>CFB: Ohio St @ Michigan</div><div class="e">22:30</div></div>
+  <div class="g"><div class="n">003</div><div class="c">ESPNU</div><div class="p"><span class="pb"><i style="width:44%;"></i></span>Volleyball: Nebraska v Texas</div><div class="e">21:00</div></div>
+  <div class="g" style="background:#0E1A1F;"><div class="n">014</div><div class="c">Sky Main Ev.</div><div class="p"><span class="pb"><i style="width:75%;"></i></span><span class="fav">★</span> Arsenal v Liverpool <small>67'</small></div><div class="e cy">20:00</div></div>
+  <div class="g"><div class="n">015</div><div class="c">Sky PL</div><div class="p"><span class="pb"><i style="width:75%;"></i></span>Man City v Tottenham <small>HT</small></div><div class="e">20:00</div></div>
+  <div class="g"><div class="n">021</div><div class="c">NBA TV</div><div class="p"><span class="pb"><i style="width:8%;"></i></span>GameTime</div><div class="e">20:30</div></div>
+  <div class="g"><div class="n">022</div><div class="c">MLB Network</div><div class="p"><span class="pb"><i style="width:55%;"></i></span>Yankees @ Red Sox <small>▲7</small></div><div class="e">~22:00</div></div>
+  <div class="g"><div class="n">031</div><div class="c">FS1</div><div class="p"><span class="pb"><i style="width:35%;"></i></span>MLS: LAFC v Galaxy</div><div class="e">21:00</div></div>
+  <div class="g"><div class="n">032</div><div class="c">FS2</div><div class="p"><span class="pb"><i style="width:20%;"></i></span>NASCAR Cup practice</div><div class="e">21:00</div></div>
+  <div class="g"><div class="n">044</div><div class="c">beIN 1</div><div class="p"><span class="pb"><i style="width:80%;"></i></span>PSG v Lyon <small>78'</small></div><div class="e">19:55</div></div>
+  <div class="g"><div class="n">045</div><div class="c">beIN 2</div><div class="p"><span class="pb"><i style="width:80%;"></i></span>Marseille v Nice</div><div class="e">19:55</div></div>
+  <div class="g"><div class="n">050</div><div class="c">NFL Network</div><div class="p"><span class="pb"><i style="width:40%;"></i></span>NFL RedZone</div><div class="e">23:00</div></div>
+  <div class="g"><div class="n">061</div><div class="c">TNT</div><div class="p"><span class="pb"><i style="width:90%;"></i></span>NHL pre-game <small>BOS @ NYR</small></div><div class="e">20:00</div></div>
+  <div class="g"><div class="n">062</div><div class="c">TBS</div><div class="p"><span class="pb"><i style="width:15%;"></i></span>MLB Tonight</div><div class="e">21:00</div></div>
+  <div class="g"><div class="n">070</div><div class="c">Golf Channel</div><div class="p"><span class="pb"><i style="width:50%;"></i></span>PGA Tour: Round 1</div><div class="e">22:00</div></div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:70px; background:#0F151C; border-top:1px solid #1B232D; display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items:start; padding-top:10px; font-size:11px; font-weight:600; letter-spacing:0.08em;">
+    <div style="text-align:center;" class="dim">[1] SCORES</div>
+    <div style="text-align:center;" class="cy">[2] GUIDE</div>
+    <div style="text-align:center;" class="dim">[3] SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

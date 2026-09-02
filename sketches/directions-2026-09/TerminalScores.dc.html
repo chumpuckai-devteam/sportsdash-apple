@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@500;600;700&display=swap">
+  <style>
+    body { margin:0; background:#0B0F14; font-family:"IBM Plex Mono", "SF Mono", Menlo, monospace; color:#C9D1D9; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+    a { color:#22D3EE; } a:hover { color:#67E8F9; }
+    .sans { font-family:"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; }
+    .cy { color:#22D3EE; }
+    .dim { color:#6B7785; }
+    .hd { display:grid; grid-template-columns: 30px 1fr 34px 34px 1fr 30px 56px; font-size:9px; letter-spacing:0.1em; color:#6B7785; height:20px; align-items:center; padding:0 10px; border-bottom:1px solid #1B232D; }
+    .g { display:grid; grid-template-columns: 30px 1fr 34px 34px 1fr 30px 56px; align-items:center; height:40px; padding:0 10px; border-bottom:1px solid #131A22; font-size:12px; }
+    .g .sc { font-size:15px; font-weight:700; text-align:center; }
+    .g .st { font-size:10px; text-align:right; }
+    .sq { width:22px; height:22px; border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; color:#fff; }
+    .sec { display:flex; justify-content:space-between; align-items:center; height:26px; padding:0 10px; background:#0F151C; font-size:10px; font-weight:600; letter-spacing:0.1em; color:#8B97A5; border-top:1px solid #1B232D; border-bottom:1px solid #1B232D; }
+    .win { color:#E6EDF3; } .lose { color:#6B7785; }
+    .fav { color:#F5C542; }
+    .live { color:#22D3EE; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#0B0F14; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="padding:54px 10px 0 10px; display:flex; justify-content:space-between; align-items:center; height:78px; box-sizing:border-box;">
+    <div class="sans" style="font-size:16px; font-weight:700; color:#E6EDF3;">scores<span class="dim">/</span><span class="cy">live</span></div>
+    <div style="font-size:10px; color:#6B7785;">19:42:07 · <span class="cy">●</span> 45s poll · 9 leagues</div>
+  </div>
+  <div style="display:flex; gap:1px; margin:6px 10px 0 10px; background:#1B232D; border:1px solid #1B232D; border-radius:4px; overflow:hidden;">
+    <div style="flex-grow:1; height:28px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; background:#22D3EE; color:#0B0F14;">LIVE 5</div>
+    <div style="flex-grow:1; height:28px; display:flex; align-items:center; justify-content:center; font-size:11px; background:#0F151C; color:#8B97A5;">UPCOMING 12</div>
+    <div style="flex-grow:1; height:28px; display:flex; align-items:center; justify-content:center; font-size:11px; background:#0F151C; color:#8B97A5;">FINAL 7</div>
+    <div style="width:64px; height:28px; display:flex; align-items:center; justify-content:center; font-size:11px; background:#0F151C; color:#F5C542;">★ 3</div>
+  </div>
+  <div style="margin:10px 10px 0 10px; padding:6px 8px; border:1px solid #1B232D; border-left:3px solid #F5C542; background:#0F151C; font-size:10px; display:flex; justify-content:space-between;"><span><span class="fav">★ my_games</span> · KC leads BUF 24-21 · Q4 3:12 · KC ball @ BUF 34</span><span class="cy">watch ›</span></div>
+
+  <div class="hd" style="margin-top:10px;"><div></div><div>AWAY</div><div style="text-align:center;">A</div><div style="text-align:center;">H</div><div style="text-align:right;">HOME</div><div></div><div style="text-align:right;">STATUS</div></div>
+
+  <div class="sec"><span>NFL</span><span class="live">1 LIVE</span></div>
+  <div class="g" style="background:#0E1A1F;"><div class="sq" style="background:#E31837;">KC</div><div class="win"><span class="fav">★</span> Chiefs</div><div class="sc win">24</div><div class="sc lose">21</div><div style="text-align:right;" class="lose">Bills</div><div class="sq" style="background:#00338D; justify-self:end;">BUF</div><div class="st live">Q4 3:12</div></div>
+
+  <div class="sec"><span>PREMIER LEAGUE</span><span class="live">2 LIVE</span></div>
+  <div class="g"><div class="sq" style="background:#EF0107;">ARS</div><div class="win"><span class="fav">★</span> Arsenal</div><div class="sc win">1</div><div class="sc win">1</div><div style="text-align:right;" class="win">Liverpool</div><div class="sq" style="background:#C8102E; justify-self:end;">LIV</div><div class="st live">67'</div></div>
+  <div class="g"><div class="sq" style="background:#6CABDD;">MCI</div><div class="win">Man City</div><div class="sc win">2</div><div class="sc lose">0</div><div style="text-align:right;" class="lose">Tottenham</div><div class="sq" style="background:#132257; justify-self:end;">TOT</div><div class="st live">HT</div></div>
+  <div class="g"><div class="sq" style="background:#DA291C;">MUN</div><div class="dim">Man United</div><div class="sc dim">–</div><div class="sc dim">–</div><div style="text-align:right;" class="dim">Chelsea</div><div class="sq" style="background:#034694; justify-self:end;">CHE</div><div class="st dim">20:00</div></div>
+
+  <div class="sec"><span>MLB</span><span class="live">1 LIVE</span></div>
+  <div class="g"><div class="sq" style="background:#0C2340;">NYY</div><div class="win">Yankees</div><div class="sc win">3</div><div class="sc lose">2</div><div style="text-align:right;" class="lose">Red Sox</div><div class="sq" style="background:#BD3039; justify-self:end;">BOS</div><div class="st live">▲7 2out</div></div>
+  <div class="g"><div class="sq" style="background:#005A9C;">LAD</div><div class="dim">Dodgers</div><div class="sc dim">–</div><div class="sc dim">–</div><div style="text-align:right;" class="dim">Giants</div><div class="sq" style="background:#FD5A1E; justify-self:end;">SF</div><div class="st dim">22:10</div></div>
+
+  <div class="sec"><span>NBA</span><span class="dim">1 FINAL</span></div>
+  <div class="g"><div class="sq" style="background:#552583;">LAL</div><div class="lose"><span class="fav">★</span> Lakers</div><div class="sc lose">98</div><div class="sc win">104</div><div style="text-align:right;" class="win">Celtics</div><div class="sq" style="background:#007A33; justify-self:end;">BOS</div><div class="st dim">FINAL</div></div>
+
+  <div class="sec"><span>LIGUE 1</span><span class="live">1 LIVE</span></div>
+  <div class="g"><div class="sq" style="background:#004170;">PSG</div><div class="win">PSG</div><div class="sc win">2</div><div class="sc lose">1</div><div style="text-align:right;" class="lose">Lyon</div><div class="sq" style="background:#DA291C; justify-self:end;">OL</div><div class="st live">78'</div></div>
+
+  <div class="sec"><span>NHL</span><span class="dim">UPCOMING</span></div>
+  <div class="g"><div class="sq" style="background:#FFB81C; color:#000;">BOS</div><div class="dim">Bruins</div><div class="sc dim">–</div><div class="sc dim">–</div><div style="text-align:right;" class="dim">Rangers</div><div class="sq" style="background:#0038A8; justify-self:end;">NYR</div><div class="st dim">20:00</div></div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:70px; background:#0F151C; border-top:1px solid #1B232D; display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items:start; padding-top:10px; font-size:11px; font-weight:600; letter-spacing:0.08em;">
+    <div style="text-align:center;" class="cy">[1] SCORES</div>
+    <div style="text-align:center;" class="dim">[2] GUIDE</div>
+    <div style="text-align:center;" class="dim">[3] SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

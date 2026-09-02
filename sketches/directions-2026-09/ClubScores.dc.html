@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#F6F5F2; font-family:"Outfit", "Avenir Next", "Helvetica Neue", Arial, sans-serif; color:#161616; -webkit-font-smoothing: antialiased; }
+    a { color:#E31837; } a:hover { color:#A80F27; }
+    .card { background:#FFFFFF; border-radius:22px; box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05); }
+    .pill { height:36px; padding:0 16px; border-radius:18px; display:flex; align-items:center; font-size:14px; font-weight:600; }
+    .mark { width:40px; height:40px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; flex-shrink:0; }
+    .row { display:flex; align-items:center; gap:10px; height:64px; padding:0 14px; }
+    .sc { font-size:26px; font-weight:800; font-variant-numeric: tabular-nums; width:34px; text-align:center; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#F6F5F2; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="background:#E31837; color:#fff; padding:56px 20px 20px 20px; border-radius:0 0 32px 32px; position:relative; overflow:hidden;">
+    <div style="position:absolute; right:-50px; top:-30px; width:220px; height:220px; border-radius:110px; background:rgba(255,255,255,0.10);"></div>
+    <div style="position:absolute; right:40px; bottom:-90px; width:180px; height:180px; border-radius:90px; background:rgba(255,184,28,0.35);"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; position:relative;">
+      <div style="font-size:14px; font-weight:600; opacity:0.85;">Good evening</div>
+      <div style="display:flex;">
+        <div style="width:30px; height:30px; border-radius:15px; background:#E31837; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800;">KC</div>
+        <div style="width:30px; height:30px; border-radius:15px; background:#552583; border:2px solid #fff; margin-left:-8px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800;">LAL</div>
+        <div style="width:30px; height:30px; border-radius:15px; background:#EF0107; border:2px solid #fff; margin-left:-8px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800;">ARS</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:16px; position:relative;"><span style="width:8px; height:8px; border-radius:4px; background:#fff;"></span><span style="font-size:12px; font-weight:700; letter-spacing:0.08em;">YOUR CHIEFS · LIVE · Q4 3:12</span></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px; position:relative;">
+      <div style="display:flex; flex-direction:column;"><div style="font-size:14px; font-weight:600; opacity:0.85;">Kansas City</div><div style="font-size:72px; font-weight:800; line-height:0.95; letter-spacing:-0.03em;">24</div></div>
+      <div style="font-size:18px; font-weight:600; opacity:0.6;">at</div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end;"><div style="font-size:14px; font-weight:600; opacity:0.85;">Buffalo</div><div style="font-size:72px; font-weight:800; line-height:0.95; letter-spacing:-0.03em; opacity:0.6;">21</div></div>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:16px; position:relative;">
+      <div style="font-size:13px; opacity:0.85;">CBS · ESPN+ · 2 streams</div>
+      <div style="height:44px; padding:0 20px; border-radius:22px; background:#fff; color:#E31837; font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="#E31837"><polygon points="6 3 20 12 6 21"></polygon></svg>Watch now</div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:8px; padding:16px 20px 0 20px;">
+    <div class="pill" style="background:#161616; color:#fff;">Live · 4</div>
+    <div class="pill" style="background:#fff; color:#6B6B6B;">Upcoming</div>
+    <div class="pill" style="background:#fff; color:#6B6B6B;">Final</div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:baseline; padding:18px 22px 8px 22px;"><div style="font-size:18px; font-weight:700;">Premier League</div><div style="font-size:13px; color:#6B6B6B; font-weight:600;">2 live</div></div>
+  <div class="card" style="margin:0 16px; display:flex; flex-direction:column;">
+    <div class="row"><div class="mark" style="background:#EF0107;">ARS</div><div style="flex-grow:1; font-size:15px; font-weight:700;">Arsenal <span style="color:#E31837;">★</span></div><div class="sc">1</div><div style="width:56px; display:flex; flex-direction:column; align-items:center;"><div style="font-size:11px; font-weight:800; color:#E31837;">67'</div><div style="font-size:10px; color:#6B6B6B;">2nd half</div></div><div class="sc">1</div><div style="flex-grow:1; font-size:15px; font-weight:700; text-align:right;">Liverpool</div><div class="mark" style="background:#C8102E;">LIV</div></div>
+    <div style="height:1px; background:#EFEDE8; margin:0 14px;"></div>
+    <div class="row"><div class="mark" style="background:#6CABDD;">MCI</div><div style="flex-grow:1; font-size:15px; font-weight:700;">Man City</div><div class="sc">2</div><div style="width:56px; display:flex; flex-direction:column; align-items:center;"><div style="font-size:11px; font-weight:800; color:#E31837;">HT</div></div><div class="sc" style="color:#9A9A9A;">0</div><div style="flex-grow:1; font-size:15px; font-weight:700; text-align:right;">Spurs</div><div class="mark" style="background:#132257;">TOT</div></div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:baseline; padding:18px 22px 8px 22px;"><div style="font-size:18px; font-weight:700;">MLB</div><div style="font-size:13px; color:#6B6B6B; font-weight:600;">1 live</div></div>
+  <div class="card" style="margin:0 16px; display:flex; flex-direction:column;">
+    <div class="row"><div class="mark" style="background:#0C2340;">NYY</div><div style="flex-grow:1; font-size:15px; font-weight:700;">Yankees</div><div class="sc">3</div><div style="width:56px; display:flex; flex-direction:column; align-items:center;"><div style="font-size:11px; font-weight:800; color:#E31837;">Top 7</div><div style="font-size:10px; color:#6B6B6B;">2 out</div></div><div class="sc" style="color:#9A9A9A;">2</div><div style="flex-grow:1; font-size:15px; font-weight:700; text-align:right;">Red Sox</div><div class="mark" style="background:#BD3039;">BOS</div></div>
+  </div>
+
+  <div style="position:absolute; left:20px; right:20px; bottom:24px; height:64px; border-radius:32px; background:#161616; display:flex; align-items:center; justify-content:space-around; padding:0 8px; box-shadow:0 12px 30px rgba(0,0,0,0.18);">
+    <div style="height:48px; padding:0 18px; border-radius:24px; background:#E31837; color:#fff; display:flex; align-items:center; gap:8px; font-size:14px; font-weight:700;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>Scores</div>
+    <div style="color:#9A9A9A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect></svg></div>
+    <div style="color:#9A9A9A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

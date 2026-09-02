@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap">
+  <style>
+    body { margin:0; background:#F4F1EA; font-family:"Source Sans 3", "Helvetica Neue", Arial, sans-serif; color:#14120F; -webkit-font-smoothing: antialiased; }
+    a { color:#B3261E; } a:hover { color:#7E1A14; }
+    .serif { font-family:"Playfair Display", Georgia, "Times New Roman", serif; }
+    .mono { font-family:"IBM Plex Mono", "Courier New", monospace; font-variant-numeric: tabular-nums; }
+    .rule { height:1px; background:#14120F; }
+    .hair { height:1px; background:#C9C3B6; }
+    .l { display:grid; grid-template-columns: 62px 1fr 56px; align-items:start; padding:9px 0; border-top:1px solid #C9C3B6; }
+    .l .t { font-size:15px; font-weight:600; line-height:1.25; }
+    .l .c { font-size:12px; color:#6F685C; margin-top:2px; }
+    .l .tm { font-size:12px; font-weight:600; color:#6F685C; padding-top:2px; }
+    .l .w { text-align:right; font-size:11px; font-weight:700; letter-spacing:0.08em; color:#B3261E; padding-top:3px; }
+    .live { color:#B3261E; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#F4F1EA; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:0 20px; box-sizing:border-box;">
+  <div style="padding-top:54px; display:flex; justify-content:space-between; align-items:baseline;">
+    <div class="mono" style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:#6F685C;">TONIGHT'S LISTINGS</div>
+    <div class="mono" style="font-size:11px; font-weight:600; color:#6F685C;">★ FAVORITES ▾</div>
+  </div>
+  <div class="serif" style="font-size:44px; font-weight:900; line-height:1; margin-top:6px; letter-spacing:-0.02em;">On the Air</div>
+  <div class="rule" style="margin-top:10px;"></div>
+  <div style="display:flex; gap:18px; margin-top:8px; font-size:13px; font-weight:700; letter-spacing:0.06em;">
+    <div style="padding-bottom:4px; border-bottom:2px solid #14120F;">NOW</div>
+    <div style="color:#6F685C;">8 PM</div>
+    <div style="color:#6F685C;">9 PM</div>
+    <div style="color:#6F685C;">10 PM</div>
+    <div style="flex-grow:1;"></div>
+    <div style="color:#6F685C; font-weight:400; letter-spacing:0; font-style:italic; font-family:'Playfair Display', Georgia, serif;">Movies only · off</div>
+  </div>
+  <div class="hair" style="margin-top:8px;"></div>
+
+  <div class="serif" style="font-size:20px; font-weight:700; margin-top:14px;">Now Showing <span class="mono" style="font-size:11px; font-weight:600; color:#6F685C; font-family:'IBM Plex Mono', monospace;">· 7:42 PM</span></div>
+  <div style="margin-top:8px; display:flex; flex-direction:column;">
+    <div class="l"><div class="tm live">ESPN</div><div><div class="t">NFL: Chiefs @ Bills ★</div><div class="c live">Live · Q4 · 3:12 · ends 8:15</div></div><div class="w">WATCH ▸</div></div>
+    <div class="l"><div class="tm live">SKY ME</div><div><div class="t">Premier League: Arsenal v Liverpool ★</div><div class="c live">Live · 67' · ends 8:00</div></div><div class="w">WATCH ▸</div></div>
+    <div class="l"><div class="tm live">MLB NET</div><div><div class="t">Yankees @ Red Sox</div><div class="c live">Live · Top 7th</div></div><div class="w">WATCH ▸</div></div>
+    <div class="l"><div class="tm live">beIN 1</div><div><div class="t">Ligue 1: PSG v Lyon</div><div class="c live">Live · 2nd half</div></div><div class="w">WATCH ▸</div></div>
+    <div class="l"><div class="tm live">NFL NET</div><div><div class="t">NFL RedZone</div><div class="c live">Live · until 11:00</div></div><div class="w">WATCH ▸</div></div>
+    <div class="l"><div class="tm">NBA TV</div><div><div class="t">GameTime</div><div class="c">7:40 – 8:30 · Lakers-Celtics postgame</div></div><div class="w">WATCH ▸</div></div>
+    <div class="l"><div class="tm">FS1</div><div><div class="t">MLS: LAFC v Galaxy</div><div class="c">7:00 – 9:00 · El Tráfico</div></div><div class="w">WATCH ▸</div></div>
+  </div>
+
+  <div class="rule" style="margin-top:12px;"></div>
+  <div class="serif" style="font-size:20px; font-weight:700; margin-top:10px;">Coming Up</div>
+  <div style="margin-top:8px; display:flex; flex-direction:column;">
+    <div class="l"><div class="tm">8:00 PM</div><div><div class="t">NHL: Bruins @ Rangers</div><div class="c">TNT · Season opener</div></div><div class="w" style="color:#6F685C;">REMIND</div></div>
+  </div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:78px; background:#F4F1EA; border-top:1px solid #14120F; display:flex; justify-content:space-around; align-items:flex-start; padding-top:12px;">
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; color:#6F685C;">SCORES</div>
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; border-bottom:2px solid #14120F; padding-bottom:3px;">GUIDE</div>
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; color:#6F685C;">SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

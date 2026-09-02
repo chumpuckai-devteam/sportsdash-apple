@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@700;900&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin:0; background:#070910; font-family:"Space Mono", "Courier New", monospace; color:#F2F4F7; -webkit-font-smoothing: antialiased; }
+    a { color:#FFB800; } a:hover { color:#FFD25A; }
+    .b { font-family:"Bebas Neue", "Arial Narrow", Impact, sans-serif; letter-spacing:0.04em; }
+    .led { font-family:"Orbitron", "Space Mono", monospace; font-weight:900; color:#FFB800; text-shadow:0 0 12px rgba(255,184,0,0.8), 0 0 2px #FFB800; font-variant-numeric: tabular-nums; }
+    .ledm { font-family:"Orbitron", "Space Mono", monospace; font-weight:900; color:#00E5A0; text-shadow:0 0 10px rgba(0,229,160,0.75); }
+    .ledr { font-family:"Orbitron", "Space Mono", monospace; font-weight:900; color:#FF3B5C; text-shadow:0 0 10px rgba(255,59,92,0.7); }
+    .panel { background:linear-gradient(180deg,#121826,#0B0E15); border:2px solid #1C2330; box-shadow: inset 0 0 0 1px #070910, 0 2px 0 #0B0E15; position:relative; overflow:hidden; }
+    .rivet { width:6px; height:6px; border-radius:3px; background:#2A3340; box-shadow: inset 0 1px 0 #4A5568; position:absolute; }
+    .grid { background-image: radial-gradient(#141B28 1px, transparent 1px); background-size: 6px 6px; }
+    .btn { height:36px; padding:0 14px; display:flex; align-items:center; gap:8px; font-family:"Bebas Neue", Impact, sans-serif; font-size:18px; letter-spacing:0.08em; }
+    .edge { position:absolute; top:0; bottom:0; width:5px; }
+    .row { display:flex; align-items:center; height:58px; padding:0 12px 0 16px; }
+    .tm { width:60px; font-size:22px; line-height:1; }
+    .sc { width:44px; font-size:26px; }
+  </style>
+</helmet>
+<div class="grid" style="width:390px; height:844px; background:#070910; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:0 12px; box-sizing:border-box;">
+  <div style="padding-top:56px; display:flex; justify-content:space-between; align-items:center;">
+    <div class="b" style="font-size:40px; line-height:1;">SCORE<span style="color:#FFB800;">BOARD</span></div>
+    <div style="display:flex; align-items:center; gap:10px;"><div class="ledm" style="font-size:10px;">● 5 LIVE</div><div class="led" style="font-size:16px;">19:42</div></div>
+  </div>
+  <div style="display:flex; gap:6px; margin-top:12px;">
+    <div class="panel b" style="flex-grow:1; height:38px; display:flex; align-items:center; justify-content:center; font-size:18px; background:#FFB800; color:#070910; border-color:#FFB800; box-shadow:0 0 14px rgba(255,184,0,0.45);">LIVE</div>
+    <div class="panel b" style="flex-grow:1; height:38px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#8B96A8;">UPCOMING</div>
+    <div class="panel b" style="flex-grow:1; height:38px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#8B96A8;">FINAL</div>
+    <div class="panel" style="width:66px; height:38px; display:flex; align-items:center; justify-content:center; gap:4px; box-sizing:border-box;"><div class="b" style="width:16px; height:16px; background:#E31837; border:1px solid #FFB800; font-size:8px; display:flex; align-items:center; justify-content:center;">KC</div><div class="b" style="width:16px; height:16px; background:#552583; font-size:8px; display:flex; align-items:center; justify-content:center;">LAL</div><div class="b" style="width:16px; height:16px; background:#EF0107; font-size:8px; display:flex; align-items:center; justify-content:center;">ARS</div></div>
+  </div>
+
+  <!-- big board: my game, team colors bleed in from both edges -->
+  <div class="panel" style="margin-top:12px; padding:10px 14px 12px 14px; border-color:rgba(0,229,160,0.45); background:linear-gradient(90deg, rgba(227,24,55,0.55) 0%, rgba(18,24,38,0.95) 34%, rgba(18,24,38,0.95) 66%, rgba(0,51,141,0.6) 100%), #0B0E15;">
+    <div class="rivet" style="left:6px; top:6px;"></div><div class="rivet" style="right:6px; top:6px;"></div><div class="rivet" style="left:6px; bottom:6px;"></div><div class="rivet" style="right:6px; bottom:6px;"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:0 6px;">
+      <div class="b" style="font-size:16px; color:#FFB800;">★ MY GAME · NFL</div>
+      <div class="ledm" style="font-size:11px;">● LIVE · Q4</div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 84px 1fr; align-items:center; margin-top:8px; padding:0 6px;">
+      <div style="display:flex; flex-direction:column; align-items:flex-start;"><div class="b" style="font-size:32px; line-height:1;">CHIEFS</div><div style="font-size:10px; color:#B8C0CE;">KC · 6-1</div></div>
+      <div style="display:flex; flex-direction:column; align-items:center;"><div class="b" style="font-size:13px; color:#8B96A8;">CLOCK</div><div class="ledm" style="font-size:22px;">3:12</div></div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end;"><div class="b" style="font-size:32px; line-height:1;">BILLS</div><div style="font-size:10px; color:#B8C0CE;">BUF · 5-2</div></div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 84px 1fr; align-items:center; margin-top:6px; padding:0 6px;">
+      <div style="background:#070910; border:1px solid #1C2330; padding:6px 10px; display:flex; justify-content:center;"><div class="led" style="font-size:58px; line-height:1;">24</div></div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:4px;"><div style="display:flex; gap:4px;"><div style="width:8px; height:8px; background:#FFB800; box-shadow:0 0 6px #FFB800;"></div><div style="width:8px; height:8px; background:#FFB800; box-shadow:0 0 6px #FFB800;"></div><div style="width:8px; height:8px; background:#1C2330;"></div><div style="width:8px; height:8px; background:#1C2330;"></div></div><div style="font-size:8px; color:#8B96A8; white-space:nowrap;">2ND &amp; 7</div></div>
+      <div style="background:#070910; border:1px solid #1C2330; padding:6px 10px; display:flex; justify-content:center;"><div class="led" style="font-size:58px; line-height:1; opacity:0.5;">21</div></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding:0 6px;">
+      <div style="font-size:10px; color:#B8C0CE;">CBS · ESPN+<br><span class="ledm" style="font-size:10px; font-weight:700;">2 STREAMS OK</span></div>
+      <div class="btn" style="background:#FFB800; color:#070910; box-shadow:0 0 16px rgba(255,184,0,0.5);"><svg width="12" height="12" viewBox="0 0 24 24" fill="#070910"><polygon points="6 3 20 12 6 21"></polygon></svg>WATCH</div>
+    </div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;"><div style="display:flex; align-items:center; gap:8px;"><div style="width:4px; height:16px; background:#3D195B;"></div><div class="b" style="font-size:20px; color:#B8C0CE;">PREMIER LEAGUE</div></div><div class="ledm" style="font-size:10px;">2 LIVE</div></div>
+  <div class="panel row" style="margin-top:4px;">
+    <div class="edge" style="left:0; background:#EF0107;"></div><div class="edge" style="right:0; background:#C8102E;"></div>
+    <div class="b tm">ARS <span style="color:#FFB800;">★</span></div><div class="led sc">1</div>
+    <div style="flex-grow:1; display:flex; flex-direction:column; align-items:center;"><div class="ledm" style="font-size:12px;">67'</div><div style="font-size:9px; color:#8B96A8;">2ND HALF</div></div>
+    <div class="led sc" style="text-align:right;">1</div><div class="b tm" style="text-align:right;">LIV</div>
+    <div class="btn" style="border:2px solid #FFB800; color:#FFB800; height:30px; font-size:15px; margin-left:8px; padding:0 8px;">WATCH</div>
+  </div>
+  <div class="panel row" style="margin-top:6px;">
+    <div class="edge" style="left:0; background:#6CABDD;"></div><div class="edge" style="right:0; background:#132257;"></div>
+    <div class="b tm">MCI</div><div class="led sc">2</div>
+    <div style="flex-grow:1; display:flex; flex-direction:column; align-items:center;"><div class="ledm" style="font-size:12px;">HT</div><div style="font-size:9px; color:#8B96A8;">45+2'</div></div>
+    <div class="led sc" style="text-align:right; opacity:0.5;">0</div><div class="b tm" style="text-align:right;">TOT</div>
+    <div class="btn" style="border:2px solid #FFB800; color:#FFB800; height:30px; font-size:15px; margin-left:8px; padding:0 8px;">WATCH</div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;"><div style="display:flex; align-items:center; gap:8px;"><div style="width:4px; height:16px; background:#D50032;"></div><div class="b" style="font-size:20px; color:#B8C0CE;">MLB</div></div><div class="ledm" style="font-size:10px;">1 LIVE</div></div>
+  <div class="panel row" style="margin-top:4px;">
+    <div class="edge" style="left:0; background:#0C2340;"></div><div class="edge" style="right:0; background:#BD3039;"></div>
+    <div class="b tm">NYY</div><div class="led sc">3</div>
+    <div style="flex-grow:1; display:flex; flex-direction:column; align-items:center;"><div class="ledm" style="font-size:12px;">▲ 7</div><div style="font-size:9px; color:#8B96A8;">2 OUT</div></div>
+    <div class="led sc" style="text-align:right; opacity:0.5;">2</div><div class="b tm" style="text-align:right;">BOS</div>
+    <div class="btn" style="border:2px solid #FFB800; color:#FFB800; height:30px; font-size:15px; margin-left:8px; padding:0 8px;">WATCH</div>
+  </div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:80px; background:#0B0E15; border-top:2px solid #1C2330; display:flex; justify-content:space-around; align-items:center; padding-bottom:14px;">
+    <div class="b" style="font-size:20px; color:#FFB800; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#FFB800; box-shadow:0 0 8px #FFB800;"></div>SCORES</div>
+    <div class="b" style="font-size:20px; color:#8B96A8; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#1C2330;"></div>GUIDE</div>
+    <div class="b" style="font-size:20px; color:#8B96A8; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#1C2330;"></div>SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

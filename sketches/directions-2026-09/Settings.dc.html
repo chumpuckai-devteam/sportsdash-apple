@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@700;900&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin:0; background:#070910; font-family:"Space Mono", "Courier New", monospace; color:#F2F4F7; -webkit-font-smoothing: antialiased; }
+    a { color:#FFB800; } a:hover { color:#FFD25A; }
+    .b { font-family:"Bebas Neue", "Arial Narrow", Impact, sans-serif; letter-spacing:0.04em; }
+    .led { font-family:"Orbitron", monospace; font-weight:900; color:#FFB800; text-shadow:0 0 10px rgba(255,184,0,0.75); }
+    .ledm { font-family:"Orbitron", monospace; font-weight:900; color:#00E5A0; text-shadow:0 0 10px rgba(0,229,160,0.7); }
+    .panel { background:linear-gradient(180deg,#121826,#0B0E15); border:2px solid #1C2330; box-shadow: inset 0 0 0 1px #070910; position:relative; overflow:hidden; }
+    .grid { background-image: radial-gradient(#141B28 1px, transparent 1px); background-size: 6px 6px; }
+    .lbl { display:flex; align-items:center; gap:8px; margin-top:12px; margin-bottom:4px; }
+    .lbl .t { font-family:"Bebas Neue", Impact, sans-serif; font-size:16px; color:#8B96A8; letter-spacing:0.12em; }
+    .lbl .s { width:4px; height:14px; }
+    .r { display:flex; align-items:center; height:50px; padding:0 12px; gap:10px; border-top:2px solid #141B28; }
+    .r:first-child { border-top:none; }
+    .t { font-family:"Bebas Neue", Impact, sans-serif; font-size:22px; flex-grow:1; }
+    .v { font-size:11px; color:#8B96A8; }
+    .tog { width:52px; height:26px; background:#070910; border:2px solid #FFB800; position:relative; box-shadow:0 0 10px rgba(255,184,0,0.35); }
+    .tog i { position:absolute; top:2px; right:2px; width:22px; height:18px; background:#FFB800; box-shadow:0 0 8px #FFB800; }
+    .togoff { width:52px; height:26px; background:#070910; border:2px solid #2A3340; position:relative; }
+    .togoff i { position:absolute; top:2px; left:2px; width:22px; height:18px; background:#2A3340; }
+    .lamp { width:10px; height:10px; border-radius:5px; }
+    .ic { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid #1C2330; }
+  </style>
+</helmet>
+<div class="grid" style="width:390px; height:844px; background:#070910; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:0 12px; box-sizing:border-box;">
+  <div style="padding-top:56px; display:flex; justify-content:space-between; align-items:center;">
+    <div class="b" style="font-size:40px; line-height:1;">CONTROL <span style="color:#FFB800;">ROOM</span></div>
+    <div class="led" style="font-size:16px;">19:42</div>
+  </div>
+
+  <div class="panel" style="margin-top:12px; padding:10px 12px; display:flex; align-items:center; gap:14px; border-color:rgba(255,184,0,0.45); background:linear-gradient(90deg, rgba(227,24,55,0.35) 0%, rgba(18,24,38,0.95) 40%), #0B0E15;">
+    <div style="display:flex; flex-direction:column; gap:6px;">
+      <div style="display:flex; align-items:center; gap:8px; font-size:11px;"><div class="lamp" style="background:#00E5A0; box-shadow:0 0 8px #00E5A0;"></div>PLAYLIST</div>
+      <div style="display:flex; align-items:center; gap:8px; font-size:11px;"><div class="lamp" style="background:#00E5A0; box-shadow:0 0 8px #00E5A0;"></div>EPG</div>
+      <div style="display:flex; align-items:center; gap:8px; font-size:11px;"><div class="lamp" style="background:#FFB800; box-shadow:0 0 8px #FFB800;"></div>FAVORITES</div>
+    </div>
+    <div style="flex-grow:1; display:flex; flex-direction:column; align-items:flex-end;">
+      <div class="b" style="font-size:22px;">SETUP <span class="led" style="font-size:20px;">2/3</span></div>
+      <div class="b" style="font-size:16px; color:#070910; background:#FFB800; padding:4px 10px; margin-top:4px; box-shadow:0 0 12px rgba(255,184,0,0.45);">PICK TEAMS ▸</div>
+    </div>
+  </div>
+
+  <div class="lbl"><div class="s" style="background:#00E5A0;"></div><div class="t">SOURCE</div></div>
+  <div class="panel">
+    <div class="r"><div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2"><rect x="3" y="4" width="18" height="16"></rect><path d="M7 9h10M7 13h6"></path></svg></div><div class="t">XTREAM · MYPROVIDER.TV</div><div class="v">1,284 CH ›</div></div>
+    <div class="r" style="height:40px;"><div class="v" style="flex-grow:1;">STATUS</div><div class="ledm" style="font-size:12px;">ACTIVE</div></div>
+    <div class="r" style="height:40px;"><div class="v" style="flex-grow:1;">EXPIRES</div><div class="led" style="font-size:12px;">2026-12-12</div></div>
+    <div class="r" style="height:40px;"><div class="v" style="flex-grow:1;">CONNECTIONS</div><div class="led" style="font-size:12px;">1 / 2</div></div>
+  </div>
+
+  <div class="lbl"><div class="s" style="background:#FF3B5C;"></div><div class="t">ALERTS</div></div>
+  <div class="panel">
+    <div class="r"><div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF3B5C" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"></path></svg></div><div class="t">GAME ALERTS</div><div class="v">STARTS + GOALS</div><div class="tog"><i></i></div></div>
+  </div>
+
+  <div class="lbl"><div class="s" style="background:#FFB800;"></div><div class="t">SYSTEM</div></div>
+  <div class="panel">
+    <div class="r"><div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B8C0CE" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg></div><div class="t">GENERAL</div><div class="v">›</div></div>
+    <div class="r"><div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B8C0CE" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></div><div class="t">USER INTERFACE</div><div class="v">CLEAN NAMES ›</div></div>
+    <div class="r"><div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="#00E5A0"><polygon points="6 3 20 12 6 21"></polygon></svg></div><div class="t">VIDEO PLAYER</div><div class="v">AUTO · VLC / AV ›</div></div>
+    <div class="r"><div class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path></svg></div><div class="t">LEAGUES ON SCORES</div><div class="v">9 SELECTED ›</div></div>
+  </div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:80px; background:#0B0E15; border-top:2px solid #1C2330; display:flex; justify-content:space-around; align-items:center; padding-bottom:14px;">
+    <div class="b" style="font-size:20px; color:#8B96A8; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#1C2330;"></div>SCORES</div>
+    <div class="b" style="font-size:20px; color:#8B96A8; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#1C2330;"></div>GUIDE</div>
+    <div class="b" style="font-size:20px; color:#FFB800; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#FFB800; box-shadow:0 0 8px #FFB800;"></div>SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

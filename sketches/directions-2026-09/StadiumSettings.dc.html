@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#070910; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; color:#F2F4F7; -webkit-font-smoothing: antialiased; }
+    a { color:#FFB800; } a:hover { color:#FFD25A; }
+    .d { font-family:"Barlow Condensed", "Arial Narrow", Impact, sans-serif; }
+    .hdr { font-size:11px; font-weight:800; letter-spacing:0.1em; color:#8B96A8; padding:16px 20px 6px 20px; }
+    .card { margin:0 16px; background:linear-gradient(135deg,#171C24,#0F1318); border:0.5px solid rgba(42,51,64,0.55); border-radius:16px; overflow:hidden; }
+    .r { display:flex; align-items:center; gap:12px; height:52px; padding:0 14px; border-top:0.5px solid #1C2330; }
+    .r:first-child { border-top:none; }
+    .ic { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .t { font-size:15px; font-weight:600; flex-grow:1; }
+    .sub { font-size:12px; color:#8B96A8; font-weight:500; }
+    .chev { color:#3A4556; }
+    .sw { width:46px; height:28px; border-radius:14px; background:#FFB800; position:relative; }
+    .sw i { position:absolute; top:2px; right:2px; width:24px; height:24px; border-radius:12px; background:#070910; }
+    .swoff { width:46px; height:28px; border-radius:14px; background:#2A3340; position:relative; }
+    .swoff i { position:absolute; top:2px; left:2px; width:24px; height:24px; border-radius:12px; background:#8B96A8; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#070910; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div class="d" style="padding:58px 16px 2px 16px; font-size:38px; font-weight:800; line-height:1;">SETTINGS</div>
+  <div class="hdr">SETUP</div>
+  <div class="card" style="border-color:rgba(255,184,0,0.35);">
+    <div style="padding:12px 14px 4px 14px; display:flex; justify-content:space-between; align-items:center;"><div class="d" style="font-size:18px; font-weight:700;">2 OF 3 DONE</div><div style="font-size:12px; color:#FFB800; font-weight:700;">Finish setup</div></div>
+    <div style="margin:0 14px; height:4px; border-radius:2px; background:#1C2330;"><div style="width:66%; height:4px; border-radius:2px; background:#FFB800;"></div></div>
+    <div class="r" style="height:44px;"><div style="width:18px; height:18px; border-radius:9px; border:2px solid #FFB800;"></div><div class="t" style="font-size:14px;">Pick favorite teams</div><span class="chev">›</span></div>
+  </div>
+  <div class="hdr">PLAYLISTS</div>
+  <div class="card">
+    <div class="r" style="height:60px;"><div class="ic" style="background:rgba(255,184,0,0.15);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 9h10M7 13h6"></path></svg></div><div style="flex-grow:1;"><div class="t">Xtream · myprovider.tv</div><div class="sub">1,284 channels · 42 groups</div></div><span class="chev">›</span></div>
+    <div class="r" style="height:44px;"><div class="sub" style="flex-grow:1;">Status</div><div style="font-size:14px; font-weight:700; color:#00E5A0;">Active</div></div>
+    <div class="r" style="height:40px;"><div class="sub">EPG ready · 913 channels with listings</div></div>
+  </div>
+  <div class="hdr">ALERTS</div>
+  <div class="card">
+    <div class="r" style="height:60px;"><div class="ic" style="background:rgba(255,184,0,0.15);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"></path></svg></div><div style="flex-grow:1;"><div class="t">Game alerts</div><div class="sub">Favorite teams · start + goals</div></div><div class="sw"><i></i></div></div>
+  </div>
+  <div class="hdr">APP</div>
+  <div class="card">
+    <div class="r"><div class="ic" style="background:rgba(139,150,168,0.15);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B8C0CE" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg></div><div class="t">General</div><span class="chev">›</span></div>
+    <div class="r"><div class="ic" style="background:rgba(255,184,0,0.12);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D9A21B" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"></path><circle cx="9" cy="6" r="2" fill="#070910"></circle><circle cx="15" cy="12" r="2" fill="#070910"></circle><circle cx="8" cy="18" r="2" fill="#070910"></circle></svg></div><div class="t">User interface</div><span class="chev">›</span></div>
+    <div class="r"><div class="ic" style="background:rgba(0,229,160,0.12);"><svg width="16" height="16" viewBox="0 0 24 24" fill="#00E5A0"><polygon points="6 3 20 12 6 21"></polygon></svg></div><div class="t">Video player</div><div class="sub">Auto · TS→VLC · HLS→AV</div><span class="chev">›</span></div>
+    <div class="r"><div class="ic" style="background:rgba(255,184,0,0.12);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB800" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path></svg></div><div class="t">Leagues on Scores</div><div class="sub">9 selected</div><span class="chev">›</span></div>
+  </div>
+  <div style="position:absolute; left:16px; right:16px; bottom:22px; height:60px; border-radius:30px; background:rgba(24,30,42,0.82); border:0.5px solid rgba(255,255,255,0.12); backdrop-filter:blur(20px); display:flex; align-items:center; justify-content:space-around;">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#8B96A8;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg><div style="font-size:10px; font-weight:700;">Scores</div></div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#8B96A8;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1.5"></rect><rect x="3" y="13" width="18" height="7" rx="1.5"></rect></svg><div style="font-size:10px; font-weight:700;">Guide</div></div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; color:#FFB800;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg><div style="font-size:10px; font-weight:700;">Settings</div></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

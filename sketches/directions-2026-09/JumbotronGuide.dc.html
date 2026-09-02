@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@700;900&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin:0; background:#000; font-family:"Space Mono", "Courier New", monospace; color:#EDEDED; -webkit-font-smoothing: antialiased; }
+    a { color:#FFB000; } a:hover { color:#FFD469; }
+    .b { font-family:"Bebas Neue", "Arial Narrow", Impact, sans-serif; letter-spacing:0.04em; }
+    .led { font-family:"Orbitron", monospace; font-weight:900; color:#FFB000; text-shadow:0 0 8px rgba(255,176,0,0.7); }
+    .ledr { font-family:"Orbitron", monospace; font-weight:900; color:#FF3B30; text-shadow:0 0 8px rgba(255,59,48,0.7); }
+    .panel { background:#0D0D0D; border:2px solid #262626; }
+    .grid { background-image: radial-gradient(#181818 1px, transparent 1px); background-size: 6px 6px; }
+    .row { display:flex; align-items:center; height:62px; padding:0 8px 0 10px; gap:10px; border-top:2px solid #1A1A1A; }
+    .num { width:44px; font-size:13px; }
+    .name { width:76px; font-size:18px; line-height:1; flex-shrink:0; }
+    .bar { flex-grow:1; height:36px; background:#000; border:1px solid #262626; position:relative; overflow:hidden; }
+    .fill { position:absolute; left:0; top:0; bottom:0; background:#2A1F00; border-right:2px solid #FFB000; }
+    .lab { position:absolute; left:8px; top:0; bottom:0; display:flex; flex-direction:column; justify-content:center; font-size:11px; font-weight:700; white-space:nowrap; }
+    .lab small { font-size:9px; color:#8A8A8A; font-weight:400; }
+  </style>
+</helmet>
+<div class="grid" style="width:390px; height:844px; background:#000; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:0 12px; box-sizing:border-box;">
+  <div style="padding-top:56px; display:flex; justify-content:space-between; align-items:center;">
+    <div class="b" style="font-size:40px; line-height:1;">CHANNEL <span style="color:#FFB000;">GUIDE</span></div>
+    <div class="led" style="font-size:16px;">19:42</div>
+  </div>
+  <div style="display:flex; gap:6px; margin-top:12px;">
+    <div class="panel b" style="flex-grow:1; height:38px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; font-size:18px; color:#FFB000;">★ FAVORITES <span style="color:#8A8A8A;">▾</span></div>
+    <div class="panel b" style="width:70px; height:38px; display:flex; align-items:center; justify-content:center; font-size:16px; color:#8A8A8A;">LIST</div>
+    <div class="panel b" style="width:70px; height:38px; display:flex; align-items:center; justify-content:center; font-size:16px; color:#8A8A8A;">MOVIES</div>
+  </div>
+  <div class="panel" style="margin-top:12px; display:flex; flex-direction:column;">
+    <div style="display:flex; align-items:center; height:30px; padding:0 10px; gap:10px; font-size:10px; color:#8A8A8A; letter-spacing:0.1em;"><div style="width:44px;">CH</div><div style="width:76px;">NAME</div><div style="flex-grow:1; display:flex; justify-content:space-between;"><span>NOW</span><span class="ledr" style="font-size:10px;">▼ 19:42</span><span>NEXT</span></div></div>
+    <div class="row"><div class="led num">001</div><div class="b name">ESPN</div><div class="bar"><div class="fill" style="width:62%;"></div><div class="lab">CHIEFS @ BILLS ★<small>LIVE · Q4 · ENDS 20:15</small></div></div></div>
+    <div class="row"><div class="led num">002</div><div class="b name">ESPN2</div><div class="bar"><div class="fill" style="width:30%;"></div><div class="lab">COLLEGE FOOTBALL<small>OHIO ST @ MICHIGAN</small></div></div></div>
+    <div class="row"><div class="led num">014</div><div class="b name">SKY ME</div><div class="bar"><div class="fill" style="width:75%;"></div><div class="lab">ARSENAL V LIVERPOOL ★<small>LIVE · 67'</small></div></div></div>
+    <div class="row"><div class="led num">021</div><div class="b name">NBA TV</div><div class="bar"><div class="fill" style="width:8%;"></div><div class="lab">GAMETIME<small>19:40 – 20:30</small></div></div></div>
+    <div class="row"><div class="led num">022</div><div class="b name">MLB NET</div><div class="bar"><div class="fill" style="width:55%;"></div><div class="lab">YANKEES @ RED SOX<small>LIVE · TOP 7</small></div></div></div>
+    <div class="row"><div class="led num">031</div><div class="b name">FS1</div><div class="bar"><div class="fill" style="width:35%;"></div><div class="lab">MLS: LAFC V GALAXY<small>19:00 – 21:00</small></div></div></div>
+    <div class="row"><div class="led num">044</div><div class="b name">BEIN 1</div><div class="bar"><div class="fill" style="width:80%;"></div><div class="lab">PSG V LYON<small>LIVE · 2ND HALF</small></div></div></div>
+    <div class="row"><div class="led num">050</div><div class="b name">NFL NET</div><div class="bar"><div class="fill" style="width:40%;"></div><div class="lab">NFL REDZONE<small>LIVE · UNTIL 23:00</small></div></div></div>
+  </div>
+  <div style="position:absolute; left:0; right:0; bottom:0; height:80px; background:#0D0D0D; border-top:2px solid #262626; display:flex; justify-content:space-around; align-items:center; padding-bottom:14px;">
+    <div class="b" style="font-size:20px; color:#8A8A8A; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#262626;"></div>SCORES</div>
+    <div class="b" style="font-size:20px; color:#FFB000; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#FFB000; box-shadow:0 0 8px #FFB000;"></div>GUIDE</div>
+    <div class="b" style="font-size:20px; color:#8A8A8A; display:flex; flex-direction:column; align-items:center; gap:2px;"><div style="width:28px; height:4px; background:#262626;"></div>SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

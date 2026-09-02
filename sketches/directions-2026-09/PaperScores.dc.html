@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap">
+  <style>
+    body { margin:0; background:#F4F1EA; font-family:"Source Sans 3", "Helvetica Neue", Arial, sans-serif; color:#14120F; -webkit-font-smoothing: antialiased; }
+    a { color:#B3261E; } a:hover { color:#7E1A14; }
+    .serif { font-family:"Playfair Display", Georgia, "Times New Roman", serif; }
+    .mono { font-family:"IBM Plex Mono", "Courier New", monospace; font-variant-numeric: tabular-nums; }
+    .rule { height:1px; background:#14120F; }
+    .hair { height:1px; background:#C9C3B6; }
+    .tr { display:grid; grid-template-columns: 1fr 44px 44px 44px 64px; align-items:center; height:40px; }
+    .tr .team { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; }
+    .tr .n { font-size:15px; text-align:right; }
+    .dot { width:10px; height:10px; border-radius:5px; flex-shrink:0; }
+    .th { display:grid; grid-template-columns: 1fr 44px 44px 44px 64px; font-size:10px; letter-spacing:0.12em; color:#6F685C; font-weight:700; height:22px; align-items:center; }
+    .th div { text-align:right; }
+    .th div:first-child { text-align:left; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#F4F1EA; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:0 20px; box-sizing:border-box;">
+  <div style="padding-top:54px; display:flex; justify-content:space-between; align-items:baseline;">
+    <div class="mono" style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:#6F685C;">WED · SEP 2 · 7:42 PM</div>
+    <div class="mono" style="font-size:11px; font-weight:600; color:#B3261E; display:flex; align-items:center; gap:5px;"><span style="width:6px; height:6px; border-radius:3px; background:#B3261E;"></span>4 LIVE</div>
+  </div>
+  <div class="serif" style="font-size:44px; font-weight:900; line-height:1; margin-top:6px; letter-spacing:-0.02em;">The Scores</div>
+  <div class="rule" style="margin-top:10px;"></div>
+  <div style="display:flex; gap:18px; margin-top:8px; font-size:13px; font-weight:700; letter-spacing:0.06em; align-items:baseline;">
+    <div style="padding-bottom:4px; border-bottom:2px solid #14120F;">LIVE</div>
+    <div style="color:#6F685C;">UPCOMING</div>
+    <div style="color:#6F685C;">FINAL</div>
+    <div style="flex-grow:1;"></div>
+    <div class="serif" style="color:#6F685C; font-style:italic; font-weight:700; letter-spacing:0; font-size:13px;">★ Chiefs · Lakers · Arsenal</div>
+  </div>
+  <div class="hair" style="margin-top:8px;"></div>
+
+  <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:baseline;">
+    <div class="mono" style="font-size:11px; font-weight:600; letter-spacing:0.1em; color:#B3261E;">MY GAMES — NFL</div>
+    <div class="mono" style="font-size:11px; font-weight:600; color:#6F685C;">Q4 · 3:12</div>
+  </div>
+  <div class="serif" style="font-size:27px; font-weight:700; line-height:1.15; margin-top:6px;">Chiefs 24, Bills 21 — Mahomes drive underway</div>
+  <div class="th" style="margin-top:8px;"><div>TEAM</div><div>1</div><div>2</div><div>3</div><div>T</div></div>
+  <div class="hair"></div>
+  <div class="tr"><div class="team"><span class="dot" style="background:#E31837;"></span>Kansas City ★</div><div class="n mono">7</div><div class="n mono">10</div><div class="n mono">7</div><div class="n mono" style="font-weight:600; font-size:20px;">24</div></div>
+  <div class="tr"><div class="team"><span class="dot" style="background:#00338D;"></span>Buffalo</div><div class="n mono">3</div><div class="n mono">7</div><div class="n mono">11</div><div class="n mono" style="font-size:20px; color:#6F685C;">21</div></div>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+    <div style="font-size:13px; color:#6F685C;">CBS · ESPN+ · 2 streams matched</div>
+    <div style="height:32px; padding:0 14px; background:#14120F; color:#F4F1EA; font-size:12px; font-weight:700; letter-spacing:0.1em; display:flex; align-items:center;">WATCH ▸</div>
+  </div>
+
+  <div class="rule" style="margin-top:16px;"></div>
+  <div class="serif" style="font-size:20px; font-weight:700; margin-top:10px;">Premier League</div>
+  <div class="hair" style="margin-top:6px;"></div>
+  <div class="tr" style="grid-template-columns: 1fr 44px 1fr 64px;"><div class="team"><span class="dot" style="background:#EF0107;"></span>Arsenal ★</div><div class="n mono" style="font-size:20px; font-weight:600;">1</div><div class="mono" style="font-size:11px; color:#B3261E; text-align:center; font-weight:600;">67'</div><div style="text-align:right; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#B3261E;">WATCH ▸</div></div>
+  <div class="tr" style="grid-template-columns: 1fr 44px 1fr 64px; height:30px;"><div class="team"><span class="dot" style="background:#C8102E;"></span>Liverpool</div><div class="n mono" style="font-size:20px; font-weight:600;">1</div><div></div><div></div></div>
+  <div class="hair"></div>
+  <div class="tr" style="grid-template-columns: 1fr 44px 1fr 64px;"><div class="team"><span class="dot" style="background:#6CABDD;"></span>Man City</div><div class="n mono" style="font-size:20px; font-weight:600;">2</div><div class="mono" style="font-size:11px; color:#B3261E; text-align:center; font-weight:600;">HT</div><div style="text-align:right; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#B3261E;">WATCH ▸</div></div>
+  <div class="tr" style="grid-template-columns: 1fr 44px 1fr 64px; height:30px;"><div class="team"><span class="dot" style="background:#132257;"></span>Tottenham</div><div class="n mono" style="font-size:20px; color:#6F685C;">0</div><div></div><div></div></div>
+
+  <div class="rule" style="margin-top:12px;"></div>
+  <div class="serif" style="font-size:20px; font-weight:700; margin-top:10px;">Major League Baseball</div>
+  <div class="hair" style="margin-top:6px;"></div>
+  <div class="tr" style="grid-template-columns: 1fr 44px 1fr 64px;"><div class="team"><span class="dot" style="background:#0C2340;"></span>Yankees</div><div class="n mono" style="font-size:20px; font-weight:600;">3</div><div class="mono" style="font-size:11px; color:#B3261E; text-align:center; font-weight:600;">▲ 7TH</div><div style="text-align:right; font-size:12px; font-weight:700; letter-spacing:0.08em; color:#B3261E;">WATCH ▸</div></div>
+  <div class="tr" style="grid-template-columns: 1fr 44px 1fr 64px; height:30px;"><div class="team"><span class="dot" style="background:#BD3039;"></span>Red Sox</div><div class="n mono" style="font-size:20px; color:#6F685C;">2</div><div></div><div></div></div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:78px; background:#F4F1EA; border-top:1px solid #14120F; display:flex; justify-content:space-around; align-items:flex-start; padding-top:12px;">
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; border-bottom:2px solid #14120F; padding-bottom:3px;">SCORES</div>
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; color:#6F685C;">GUIDE</div>
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; color:#6F685C;">SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

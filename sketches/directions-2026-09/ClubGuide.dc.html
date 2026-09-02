@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#F6F5F2; font-family:"Outfit", "Avenir Next", "Helvetica Neue", Arial, sans-serif; color:#161616; -webkit-font-smoothing: antialiased; }
+    a { color:#E31837; } a:hover { color:#A80F27; }
+    .card { background:#FFFFFF; border-radius:20px; box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05); padding:14px; display:flex; flex-direction:column; gap:10px; position:relative; overflow:hidden; }
+    .logo { width:36px; height:36px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:#fff; }
+    .t { font-size:15px; font-weight:700; line-height:1.2; }
+    .s { font-size:12px; color:#6B6B6B; font-weight:500; }
+    .bar { height:4px; border-radius:2px; background:#EFEDE8; }
+    .bar i { display:block; height:4px; border-radius:2px; background:#E31837; }
+    .chip { height:34px; padding:0 14px; border-radius:17px; background:#fff; font-size:13px; font-weight:600; color:#6B6B6B; display:flex; align-items:center; white-space:nowrap; flex-shrink:0; }
+    .live { position:absolute; top:12px; right:12px; font-size:10px; font-weight:800; letter-spacing:0.06em; color:#fff; background:#E31837; padding:3px 7px; border-radius:8px; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#F6F5F2; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="padding:58px 20px 0 20px; display:flex; justify-content:space-between; align-items:flex-end;">
+    <div><div style="font-size:13px; color:#6B6B6B; font-weight:600;">Now on · 7:42 PM</div><div style="font-size:34px; font-weight:800; letter-spacing:-0.02em; line-height:1.1;">Guide</div></div>
+    <div style="display:flex; gap:8px;">
+      <div style="width:40px; height:40px; border-radius:20px; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.06);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#161616" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"></rect><rect x="13" y="3" width="8" height="8" rx="2"></rect><rect x="3" y="13" width="8" height="8" rx="2"></rect><rect x="13" y="13" width="8" height="8" rx="2"></rect></svg></div>
+      <div style="width:40px; height:40px; border-radius:20px; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.06);"><svg width="18" height="18" viewBox="0 0 24 24" fill="#161616"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></div>
+    </div>
+  </div>
+  <div style="display:flex; gap:8px; padding:14px 20px 0 20px; overflow:hidden;">
+    <div class="chip" style="background:#161616; color:#fff;">★ Favorites</div>
+    <div class="chip">Sports US</div>
+    <div class="chip">Sports UK</div>
+    <div class="chip">Movies</div>
+    <div class="chip">News</div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:baseline; padding:20px 22px 8px 22px;"><div style="font-size:18px; font-weight:700;">Your teams are on</div><div style="font-size:13px; color:#E31837; font-weight:700;">2 live</div></div>
+  <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; padding:0 16px;">
+    <div class="card" style="background:#E31837; color:#fff;"><div class="live" style="background:#fff; color:#E31837;">LIVE</div><div class="logo" style="background:rgba(255,255,255,0.2);">ESPN</div><div><div class="t">Chiefs @ Bills</div><div class="s" style="color:rgba(255,255,255,0.8);">Q4 · 3:12 · ends 8:15</div></div><div class="bar" style="background:rgba(255,255,255,0.25);"><i style="width:62%; background:#fff;"></i></div></div>
+    <div class="card" style="background:#EF0107; color:#fff;"><div class="live" style="background:#fff; color:#EF0107;">LIVE</div><div class="logo" style="background:rgba(255,255,255,0.2);">SKY</div><div><div class="t">Arsenal v Liverpool</div><div class="s" style="color:rgba(255,255,255,0.8);">67' · Sky Main Event</div></div><div class="bar" style="background:rgba(255,255,255,0.25);"><i style="width:75%; background:#fff;"></i></div></div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:baseline; padding:20px 22px 8px 22px;"><div style="font-size:18px; font-weight:700;">Live now</div><div style="font-size:13px; color:#6B6B6B; font-weight:600;">See all 14</div></div>
+  <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; padding:0 16px;">
+    <div class="card"><div class="live">LIVE</div><div class="logo" style="background:#041E42;">MLB</div><div><div class="t">Yankees @ Red Sox</div><div class="s">Top 7 · MLB Network</div></div><div class="bar"><i style="width:55%;"></i></div></div>
+    <div class="card"><div class="live">LIVE</div><div class="logo" style="background:#6E2B8D;">beIN</div><div><div class="t">PSG v Lyon</div><div class="s">2nd half · beIN Sports 1</div></div><div class="bar"><i style="width:80%;"></i></div></div>
+    <div class="card"><div class="live">LIVE</div><div class="logo" style="background:#013369;">NFL</div><div><div class="t">NFL RedZone</div><div class="s">Until 11:00 · NFL Network</div></div><div class="bar"><i style="width:40%;"></i></div></div>
+    <div class="card"><div class="logo" style="background:#00629B;">TNT</div><div><div class="t">Bruins @ Rangers</div><div class="s">Starts 8:00 PM · TNT</div></div><div class="bar"><i style="width:0%;"></i></div></div>
+  </div>
+
+  <div style="position:absolute; left:20px; right:20px; bottom:24px; height:64px; border-radius:32px; background:#161616; display:flex; align-items:center; justify-content:space-around; padding:0 8px; box-shadow:0 12px 30px rgba(0,0,0,0.18);">
+    <div style="color:#9A9A9A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg></div>
+    <div style="height:48px; padding:0 18px; border-radius:24px; background:#E31837; color:#fff; display:flex; align-items:center; gap:8px; font-size:14px; font-weight:700;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect></svg>Guide</div>
+    <div style="color:#9A9A9A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

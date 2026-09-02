@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@500;600;700&display=swap">
+  <style>
+    body { margin:0; background:#0B0F14; font-family:"IBM Plex Mono", "SF Mono", Menlo, monospace; color:#C9D1D9; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+    a { color:#22D3EE; } a:hover { color:#67E8F9; }
+    .sans { font-family:"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; }
+    .cy { color:#22D3EE; } .dim { color:#6B7785; } .ok { color:#3DDC97; } .warn { color:#F5C542; }
+    .sec { display:flex; justify-content:space-between; align-items:center; height:26px; padding:0 10px; background:#0F151C; font-size:10px; font-weight:600; letter-spacing:0.1em; color:#8B97A5; border-top:1px solid #1B232D; border-bottom:1px solid #1B232D; margin-top:10px; }
+    .kv { display:grid; grid-template-columns: 150px 1fr 16px; align-items:center; height:36px; padding:0 10px; border-bottom:1px solid #131A22; font-size:12px; }
+    .kv .k { color:#8B97A5; }
+    .kv .v { color:#E6EDF3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kv .a { color:#3A4654; text-align:right; }
+    .tg { display:inline-flex; border:1px solid #1B232D; border-radius:3px; overflow:hidden; font-size:10px; }
+    .tg span { padding:3px 8px; }
+    .tg .on { background:#22D3EE; color:#0B0F14; font-weight:700; }
+    .tg .off { color:#6B7785; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#0B0F14; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="padding:54px 10px 0 10px; display:flex; justify-content:space-between; align-items:center; height:78px; box-sizing:border-box;">
+    <div class="sans" style="font-size:16px; font-weight:700; color:#E6EDF3;">settings</div>
+    <div style="font-size:10px; color:#6B7785;">sportsdash 1.6 (412) · ios 26.1</div>
+  </div>
+  <div style="margin:6px 10px 0 10px; height:28px; border:1px solid #1B232D; background:#0F151C; border-radius:4px; display:flex; align-items:center; padding:0 10px; gap:8px; font-size:11px;"><span class="cy">›</span><span class="dim">search settings…</span></div>
+
+  <div style="margin:10px 10px 0 10px; padding:8px 10px; border:1px solid #1B232D; border-left:3px solid #F5C542; background:#0F151C; font-size:11px; display:flex; flex-direction:column; gap:4px;">
+    <div style="display:flex; justify-content:space-between;"><span class="warn">setup 2/3</span><span class="cy">continue ›</span></div>
+    <div><span class="ok">✓</span> playlist &nbsp; <span class="ok">✓</span> epg &nbsp; <span class="warn">○</span> favorite_teams</div>
+  </div>
+
+  <div class="sec"><span>PLAYLIST</span><span class="ok">● ACTIVE</span></div>
+  <div class="kv"><div class="k">source</div><div class="v">xtream · myprovider.tv</div><div class="a">›</div></div>
+  <div class="kv"><div class="k">expires</div><div class="v">2026-12-12 <span class="dim">(101d)</span></div><div class="a"></div></div>
+  <div class="kv"><div class="k">connections</div><div class="v">1 / 2</div><div class="a"></div></div>
+  <div class="kv"><div class="k">epg</div><div class="v"><span class="ok">ready</span> · 913 ch with listings</div><div class="a">↻</div></div>
+
+  <div class="sec"><span>ALERTS</span><span class="cy">ON</span></div>
+  <div class="kv"><div class="k">game_alerts</div><div class="v"><span class="tg"><span class="on">on</span><span class="off">off</span></span></div><div class="a"></div></div>
+
+  <div class="sec"><span>PLAYER</span><span class="dim">AUTO</span></div>
+  <div class="kv"><div class="k">primary_engine</div><div class="v"><span class="tg"><span class="on">auto</span><span class="off">vlc</span><span class="off">av</span></span> <span class="dim">ts→vlc · hls→av</span></div><div class="a"></div></div>
+  <div class="kv"><div class="k">fallback</div><div class="v"><span class="tg"><span class="on">on</span><span class="off">off</span></span></div><div class="a"></div></div>
+
+  <div class="sec"><span>INTERFACE</span><span class="dim"></span></div>
+  <div class="kv"><div class="k">launch_tab</div><div class="v"><span class="tg"><span class="on">scores</span><span class="off">guide</span><span class="off">settings</span></span></div><div class="a"></div></div>
+  <div class="kv"><div class="k">clean_names</div><div class="v"><span class="tg"><span class="on">on</span><span class="off">off</span></span> <span class="dim">hides 4K/FHD/HEVC</span></div><div class="a"></div></div>
+  <div class="kv"><div class="k">guide_layout</div><div class="v"><span class="tg"><span class="on">list</span><span class="off">grid</span></span></div><div class="a"></div></div>
+  <div class="kv"><div class="k">leagues</div><div class="v">9 selected · nfl nba mlb nhl epl…</div><div class="a">›</div></div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:70px; background:#0F151C; border-top:1px solid #1B232D; display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items:start; padding-top:10px; font-size:11px; font-weight:600; letter-spacing:0.08em;">
+    <div style="text-align:center;" class="dim">[1] SCORES</div>
+    <div style="text-align:center;" class="dim">[2] GUIDE</div>
+    <div style="text-align:center;" class="cy">[3] SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

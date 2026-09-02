@@ -1,0 +1,36 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Final · Jumbotron" },
+    { "id": "page-2", "name": "Directions A–E" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",     "title": "Jumbotron — Scores",   "x": 0,   "y": 0, "w": 390, "h": 844, "page": "page-1" },
+    { "file": "Guide.dc.html",    "title": "Jumbotron — Guide",    "x": 470, "y": 0, "w": 390, "h": 844, "page": "page-1" },
+    { "file": "Settings.dc.html", "title": "Jumbotron — Settings", "x": 940, "y": 0, "w": 390, "h": 844, "page": "page-1" },
+
+    { "file": "StadiumScores.dc.html",     "title": "A · Stadium Night — Scores",   "x": 0,   "y": 0,    "w": 390, "h": 844, "page": "page-2" },
+    { "file": "StadiumGuide.dc.html",      "title": "A · Stadium Night — Guide",    "x": 470, "y": 0,    "w": 390, "h": 844, "page": "page-2" },
+    { "file": "StadiumSettings.dc.html",   "title": "A · Stadium Night — Settings", "x": 940, "y": 0,    "w": 390, "h": 844, "page": "page-2" },
+    { "file": "PaperScores.dc.html",       "title": "B · Sports Page — Scores",     "x": 0,   "y": 1020, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "PaperGuide.dc.html",        "title": "B · Sports Page — Guide",      "x": 470, "y": 1020, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "PaperSettings.dc.html",     "title": "B · Sports Page — Settings",   "x": 940, "y": 1020, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "JumbotronScores.dc.html",   "title": "C · Jumbotron — Scores",       "x": 0,   "y": 2040, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "JumbotronGuide.dc.html",    "title": "C · Jumbotron — Guide",        "x": 470, "y": 2040, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "JumbotronSettings.dc.html", "title": "C · Jumbotron — Settings",     "x": 940, "y": 2040, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "ClubScores.dc.html",        "title": "D · Club Colors — Scores",     "x": 0,   "y": 3060, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "ClubGuide.dc.html",         "title": "D · Club Colors — Guide",      "x": 470, "y": 3060, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "ClubSettings.dc.html",      "title": "D · Club Colors — Settings",   "x": 940, "y": 3060, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "TerminalScores.dc.html",    "title": "E · Command Center — Scores",  "x": 0,   "y": 4080, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "TerminalGuide.dc.html",     "title": "E · Command Center — Guide",   "x": 470, "y": 4080, "w": 390, "h": 844, "page": "page-2" },
+    { "file": "TerminalSettings.dc.html",  "title": "E · Command Center — Settings","x": 940, "y": 4080, "w": 390, "h": 844, "page": "page-2" }
+  ],
+  "annotations": [
+    { "id": "note-final", "x": -400, "y": 0, "w": 320, "page": "page-1", "text": "JUMBOTRON · FINAL\nScoreboard structure from C with Stadium Night's palette: void #070910, gold #FFB800 LED digits, live mint #00E5A0, alert red #FF3B5C.\n\nColor comes from the teams: the My Game board bleeds both team colors in from its edges, every score row has team-color edge bars, guide rows carry a channel-brand stripe, league headers get a league-color tick, and the setup panel tints toward your #1 team." },
+    { "id": "note-a", "x": -400, "y": 0,    "w": 320, "page": "page-2", "text": "A · STADIUM NIGHT\nCurrent brand pushed toward broadcast graphics. Palette carried into the final." },
+    { "id": "note-b", "x": -400, "y": 1020, "w": 320, "page": "page-2", "text": "B · SPORTS PAGE\nLight editorial newspaper." },
+    { "id": "note-c", "x": -400, "y": 2040, "w": 320, "page": "page-2", "text": "C · JUMBOTRON\nArena scoreboard. Chosen direction (see Final page)." },
+    { "id": "note-d", "x": -400, "y": 3060, "w": 320, "page": "page-2", "text": "D · CLUB COLORS\nLight, themed by favorite team." },
+    { "id": "note-e", "x": -400, "y": 4080, "w": 320, "page": "page-2", "text": "E · COMMAND CENTER\nDense monospaced data grid." }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

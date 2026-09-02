@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap">
+  <style>
+    body { margin:0; background:#F6F5F2; font-family:"Outfit", "Avenir Next", "Helvetica Neue", Arial, sans-serif; color:#161616; -webkit-font-smoothing: antialiased; }
+    a { color:#E31837; } a:hover { color:#A80F27; }
+    .card { background:#FFFFFF; border-radius:22px; box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.05); margin:0 16px; }
+    .r { display:flex; align-items:center; gap:12px; height:56px; padding:0 16px; }
+    .div { height:1px; background:#EFEDE8; margin:0 16px; }
+    .t { font-size:15px; font-weight:700; flex-grow:1; }
+    .s { font-size:12px; color:#6B6B6B; font-weight:500; }
+    .v { font-size:14px; color:#6B6B6B; font-weight:600; }
+    .sw { width:50px; height:30px; border-radius:15px; background:#E31837; position:relative; }
+    .sw i { position:absolute; top:3px; right:3px; width:24px; height:24px; border-radius:12px; background:#fff; }
+    .swoff { width:50px; height:30px; border-radius:15px; background:#E4E2DC; position:relative; }
+    .swoff i { position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:12px; background:#fff; }
+    .h { font-size:13px; font-weight:700; color:#6B6B6B; padding:12px 22px 6px 22px; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#F6F5F2; position:relative; overflow:hidden; display:flex; flex-direction:column;">
+  <div style="padding:58px 20px 0 20px; font-size:34px; font-weight:800; letter-spacing:-0.02em;">Settings</div>
+  <!-- profile / team card -->
+  <div class="card" style="margin-top:14px; background:linear-gradient(135deg,#E31837,#B5122C); color:#fff; padding:16px; display:flex; align-items:center; gap:14px; position:relative; overflow:hidden;">
+    <div style="position:absolute; right:-30px; top:-40px; width:150px; height:150px; border-radius:75px; background:rgba(255,184,28,0.3);"></div>
+    <div style="width:56px; height:56px; border-radius:20px; background:#fff; color:#E31837; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800;">KC</div>
+    <div style="flex-grow:1; position:relative;"><div style="font-size:16px; font-weight:700;">Chiefs · Lakers · Arsenal</div><div style="font-size:12px; opacity:0.85; margin-top:2px;">3 favorite teams · theme follows Chiefs</div></div>
+    <div style="font-size:13px; font-weight:700; background:rgba(255,255,255,0.2); padding:8px 12px; border-radius:14px; position:relative;">Edit</div>
+  </div>
+  <!-- setup -->
+  <div class="card" style="margin-top:12px; padding:14px 16px; display:flex; align-items:center; gap:14px;">
+    <div style="width:44px; height:44px; border-radius:22px; background:conic-gradient(#E31837 0 66%, #EFEDE8 66% 100%); display:flex; align-items:center; justify-content:center;"><div style="width:32px; height:32px; border-radius:16px; background:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;">2/3</div></div>
+    <div style="flex-grow:1;"><div style="font-size:15px; font-weight:700;">One step left</div><div class="s">Playlist ✓ · EPG ✓ · Favorite teams</div></div>
+    <div style="height:36px; padding:0 14px; border-radius:18px; background:#161616; color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center;">Finish</div>
+  </div>
+
+  <div class="h">Playlist</div>
+  <div class="card">
+    <div class="r"><div style="width:36px; height:36px; border-radius:12px; background:#FFF0F2; display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E31837" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M7 9h10M7 13h6"></path></svg></div><div><div class="t">Xtream · myprovider.tv</div><div class="s">1,284 channels · 42 groups</div></div><div style="flex-grow:1;"></div><div class="v">›</div></div>
+    <div class="div"></div>
+    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding:12px 16px 14px 16px; gap:8px;">
+      <div><div class="s">Status</div><div style="font-size:15px; font-weight:700; color:#0E9F6E;">Active</div></div>
+      <div><div class="s">Expires</div><div style="font-size:15px; font-weight:700;">Dec 12</div></div>
+      <div><div class="s">Connections</div><div style="font-size:15px; font-weight:700;">1 of 2</div></div>
+    </div>
+  </div>
+
+  <div class="h">Alerts</div>
+  <div class="card">
+    <div class="r"><div><div class="t">Game alerts</div><div class="s">Favorite teams · start + goals</div></div><div style="flex-grow:1;"></div><div class="sw"><i></i></div></div>
+  </div>
+
+  <div class="h">App</div>
+  <div class="card">
+    <div class="r" style="height:44px;"><div class="t">General</div><div class="v">›</div></div><div class="div"></div>
+    <div class="r" style="height:44px;"><div class="t">User interface</div><div class="v">Light · Team theme ›</div></div><div class="div"></div>
+    <div class="r" style="height:44px;"><div class="t">Video player</div><div class="v">Auto ›</div></div><div class="div"></div>
+    <div class="r" style="height:44px;"><div class="t">Leagues on Scores</div><div class="v">9 ›</div></div>
+  </div>
+
+  <div style="position:absolute; left:20px; right:20px; bottom:24px; height:64px; border-radius:32px; background:#161616; display:flex; align-items:center; justify-content:space-around; padding:0 8px; box-shadow:0 12px 30px rgba(0,0,0,0.18);">
+    <div style="color:#9A9A9A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg></div>
+    <div style="color:#9A9A9A;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"></rect><rect x="3" y="13" width="18" height="7" rx="2"></rect></svg></div>
+    <div style="height:48px; padding:0 18px; border-radius:24px; background:#E31837; color:#fff; display:flex; align-items:center; gap:8px; font-size:14px; font-weight:700;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>Settings</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap">
+  <style>
+    body { margin:0; background:#F4F1EA; font-family:"Source Sans 3", "Helvetica Neue", Arial, sans-serif; color:#14120F; -webkit-font-smoothing: antialiased; }
+    a { color:#B3261E; } a:hover { color:#7E1A14; }
+    .serif { font-family:"Playfair Display", Georgia, "Times New Roman", serif; }
+    .mono { font-family:"IBM Plex Mono", "Courier New", monospace; }
+    .rule { height:1px; background:#14120F; }
+    .k { display:flex; justify-content:space-between; align-items:center; height:44px; border-top:1px solid #C9C3B6; font-size:15px; }
+    .k .lab { font-weight:600; }
+    .k .val { color:#6F685C; display:flex; align-items:center; gap:8px; }
+    .sec { font-family:"Playfair Display", Georgia, serif; font-size:20px; font-weight:700; margin-top:18px; margin-bottom:6px; }
+    .sw { width:40px; height:22px; border:1.5px solid #14120F; border-radius:0; position:relative; }
+    .sw i { position:absolute; top:2px; right:2px; width:16px; height:16px; background:#14120F; }
+    .swoff i { left:2px; right:auto; background:#C9C3B6; }
+    .chk { width:16px; height:16px; border:1.5px solid #14120F; display:flex; align-items:center; justify-content:center; }
+  </style>
+</helmet>
+<div style="width:390px; height:844px; background:#F4F1EA; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:0 20px; box-sizing:border-box;">
+  <div style="padding-top:54px;" class="mono"><span style="font-size:11px; font-weight:600; letter-spacing:0.08em; color:#6F685C;">SPORTSDASH · v1.6 (412)</span></div>
+  <div class="serif" style="font-size:44px; font-weight:900; line-height:1; margin-top:6px; letter-spacing:-0.02em;">Settings</div>
+  <div class="rule" style="margin-top:10px;"></div>
+
+  <div style="margin-top:14px; border:1.5px solid #14120F; padding:12px 14px; display:flex; flex-direction:column; gap:8px;">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;"><div class="serif" style="font-size:18px; font-weight:700;">Almost set up</div><div class="mono" style="font-size:11px; color:#6F685C; font-weight:600;">2 / 3</div></div>
+    <div style="display:flex; align-items:center; gap:10px; font-size:14px; font-weight:600;"><div class="chk"></div><span>Pick favorite teams</span><span style="flex-grow:1;"></span><span style="font-size:11px; font-weight:700; letter-spacing:0.08em; color:#B3261E;">CHOOSE ▸</span></div>
+  </div>
+
+  <div class="sec">Playlist</div>
+  <div class="k" style="border-top:1px solid #14120F;"><div class="lab">Xtream · myprovider.tv</div><div class="val">1,284 ch ›</div></div>
+  <div class="k"><div class="lab" style="font-weight:400; color:#6F685C;">Status</div><div class="val" style="color:#14120F; font-weight:700;">Active</div></div>
+  <div class="k"><div class="lab" style="font-weight:400; color:#6F685C;">Expires</div><div class="val mono" style="font-size:13px;">2026-12-12</div></div>
+
+  <div class="sec">Alerts</div>
+  <div class="k" style="border-top:1px solid #14120F;"><div class="lab">Game alerts</div><div class="sw"><i></i></div></div>
+
+  <div class="sec">App</div>
+  <div class="k" style="border-top:1px solid #14120F;"><div class="lab">General</div><div class="val">›</div></div>
+  <div class="k"><div class="lab">User interface</div><div class="val">Dark · Clean names ›</div></div>
+  <div class="k"><div class="lab">Video player</div><div class="val">Auto ›</div></div>
+  <div class="k"><div class="lab">Leagues on Scores</div><div class="val">9 selected ›</div></div>
+
+  <div style="position:absolute; left:0; right:0; bottom:0; height:78px; background:#F4F1EA; border-top:1px solid #14120F; display:flex; justify-content:space-around; align-items:flex-start; padding-top:12px;">
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; color:#6F685C;">SCORES</div>
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; color:#6F685C;">GUIDE</div>
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.12em; border-bottom:2px solid #14120F; padding-bottom:3px;">SETTINGS</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
