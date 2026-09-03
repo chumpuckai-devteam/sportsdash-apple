@@ -3,6 +3,7 @@ import SwiftUI
 /// General settings — playlist refresh, storage, user agent, live stream format, movie ratings keys.
 struct GeneralSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var epg: EpgStore
     @State private var statusMessage: String?
     @State private var omdbKey: String = ""
     @State private var tmdbKey: String = ""
@@ -100,25 +101,25 @@ struct GeneralSettingsView: View {
                 Button {
                     Task {
                         await appModel.reloadEpg(force: true)
-                        statusMessage = "EPG reloaded · \(appModel.epgLoadedCount) channels."
+                        statusMessage = "EPG reloaded · \(epg.epgLoadedCount) channels."
                     }
                 } label: {
-                    if appModel.isLoadingEpg {
+                    if epg.isLoadingEpg {
                         HStack {
                             ProgressView()
-                            Text("Reloading EPG \(appModel.epgLoadedCount)/\(max(appModel.channels.count, 1))…")
+                            Text("Reloading EPG \(epg.epgLoadedCount)/\(max(appModel.channels.count, 1))…")
                         }
                     } else {
                         Label("Reload EPG", systemImage: "calendar.badge.clock")
                     }
                 }
-                .disabled(appModel.channels.isEmpty || appModel.isLoadingEpg)
+                .disabled(appModel.channels.isEmpty || epg.isLoadingEpg)
 
                 Button {
-                    appModel.epgByChannel = [:]
-                    appModel.epgLoadedCount = 0
-                    appModel.lastEpgReload = nil
-                    appModel.epgStatus = nil
+                    epg.epgByChannel = [:]
+                    epg.epgLoadedCount = 0
+                    epg.lastEpgReload = nil
+                    epg.epgStatus = nil
                     StorageService.shared.clearEpgCache()
                     statusMessage = "EPG cache cleared (memory + disk)."
                 } label: {

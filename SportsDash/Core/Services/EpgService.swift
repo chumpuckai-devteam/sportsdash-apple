@@ -1,22 +1,28 @@
 import Foundation
 
-/// Disk-first EPG loader (what keeps other IPTV apps responsive).
+/// Streaming EPG loader (what keeps other IPTV apps responsive).
 ///
 /// **Pipeline**
-/// 1. `URLSession.download` → temp file on disk (not held in RAM)
-/// 2. Background `XMLParser` over the file (SAX / streaming)
+/// 1. `URLSession` data task streams the XMLTV body chunk by chunk
+/// 2. `XmltvStreamScanner` parses each chunk as it lands (parse overlaps download;
+///    nothing is written to disk and only in-window programmes become Strings)
 /// 3. Keep only playlist channels + short time window + max programmes / channel
 /// 4. Hand a compact dictionary back to the UI **once** (or rare status ticks)
 ///
-/// Avoids: full-file `String`, regex over multi‑MB XML, byte-by-byte MainActor work.
+/// Avoids: full-file `String`, regex over multi‑MB XML, byte-by-byte MainActor work,
+/// and any "file too large" ceiling — memory is bounded by the window, not the file.
 actor EpgService {
     private let session: URLSession
 
     static let maxProgramsPerChannel = 12
     static let windowHoursAhead = 18
     static let windowHoursBehind = 1
-    /// Refuse downloads larger than this (protects device storage + parse time).
-    static let maxDownloadBytes = 120 * 1024 * 1024
+    /// Abort guard only — streaming keeps memory flat, so this is about runaway
+    /// endpoints, not device RAM. The old 120 MB ceiling rejected real guides
+    /// after downloading them, once per URL variant.
+    static let maxDownloadBytes: Int64 = 1024 * 1024 * 1024
+    /// XMLParser fallback still needs the file on disk; cap that path.
+    static let maxFallbackFileBytes: Int64 = 200 * 1024 * 1024
 
     init(session: URLSession? = nil) {
         if let session {
@@ -58,8 +64,45 @@ actor EpgService {
         onBatch: (@Sendable ([String: [EpgProgram]]) -> Void)? = nil,
         onStatus: (@Sendable (String) -> Void)? = nil
     ) async -> [String: [EpgProgram]] {
-        guard !channels.isEmpty else { return [:] }
+        await loadGuide(
+            channels: channels,
+            config: config,
+            limitPerChannel: limitPerChannel,
+            batchSize: batchSize,
+            preferBulk: preferBulk,
+            fillMissingWithShortEpg: fillMissingWithShortEpg,
+            ignoreNegativeCache: ignoreNegativeCache,
+            existing: [:],
+            onBatch: onBatch,
+            onStatus: onStatus
+        ).map
+    }
+
+    struct LoadResult: Sendable {
+        var map: [String: [EpgProgram]]
+        /// Bulk guide answered 304 Not Modified: `map` is `existing` (+ short-EPG
+        /// fills). The caller must keep the original build time — the map's
+        /// window keeps aging and must eventually be rebuilt from a fresh file.
+        var bulkUnchanged: Bool
+    }
+
+    /// `existing`: map the caller already holds, built from the same provider.
+    /// Enables a conditional GET; on 304 it is returned as the bulk result.
+    func loadGuide(
+        channels: [IptvChannel],
+        config: IptvConfig?,
+        limitPerChannel: Int = maxProgramsPerChannel,
+        batchSize: Int = 16,
+        preferBulk: Bool = true,
+        fillMissingWithShortEpg: Bool = true,
+        ignoreNegativeCache: Bool = false,
+        existing: [String: [EpgProgram]] = [:],
+        onBatch: (@Sendable ([String: [EpgProgram]]) -> Void)? = nil,
+        onStatus: (@Sendable (String) -> Void)? = nil
+    ) async -> LoadResult {
+        guard !channels.isEmpty else { return LoadResult(map: [:], bulkUnchanged: false) }
         defer { persistNegativeCacheIfNeeded() }
+        var bulkUnchanged = false
 
         // Full bulk like other IPTV clients: keep all programmes in the time window.
         // Window + max-per-channel already bound memory; interest-key filtering was
@@ -71,17 +114,32 @@ actor EpgService {
             let urls = await bulkURLs(config: config)
             for (index, urlString) in urls.enumerated() {
                 onStatus?("Downloading guide… (\(index + 1)/\(urls.count))")
-                if let byTvg = await downloadToDiskAndParse(
+                let outcome = await streamAndParse(
                     urlString: urlString,
                     interestKeys: interest,
                     limitPerChannel: limitPerChannel,
+                    allowConditional: !existing.isEmpty,
                     onStatus: onStatus
-                ), !byTvg.isEmpty {
+                )
+                switch outcome {
+                case .notModified:
+                    // Provider's file has not changed since the map we already
+                    // hold was built from it — skip the download and the mapping.
+                    result = existing
+                    bulkUnchanged = true
+                    Self.rememberBulkURL(urlString)
+                    onStatus?("Guide unchanged · \(result.count)/\(channels.count) channels")
+                case .parsed(let byTvg) where !byTvg.isEmpty:
                     result = mapXmltv(byTvg, to: channels, limit: limitPerChannel)
+                    Self.rememberBulkURL(urlString)
                     onStatus?("Guide mapped · \(result.count)/\(channels.count) channels")
                     onBatch?(result)
-                    break
+                case .parsed:
+                    continue
+                case .failed:
+                    continue
                 }
+                break
             }
             if result.isEmpty {
                 onStatus?("Bulk guide unavailable — loading per-channel EPG…")
@@ -93,7 +151,7 @@ actor EpgService {
               config.type == .xtream,
               config.isConfigured else {
             onStatus?("Guide ready · \(result.count) channels")
-            return result
+            return LoadResult(map: result, bulkUnchanged: bulkUnchanged)
         }
 
         // Progressive short-EPG until every missing channel has been attempted.
@@ -109,7 +167,7 @@ actor EpgService {
         }
         guard !missing.isEmpty else {
             onStatus?("Guide ready · \(result.count)/\(channels.count) channels")
-            return result
+            return LoadResult(map: result, bulkUnchanged: bulkUnchanged)
         }
 
         let waveSize = max(batchSize, 12)
@@ -145,60 +203,97 @@ actor EpgService {
         // Callers apply the returned map; re-sending the whole guide here made
         // MainActor merge a full copy it was about to replace anyway.
         onStatus?("Guide ready · \(result.count)/\(channels.count) channels")
-        return result
+        return LoadResult(map: result, bulkUnchanged: bulkUnchanged)
     }
 
-    // MARK: - Download to disk → byte scan (primary) / SAX parse (fallback)
+    // MARK: - Streaming download → chunk scan (primary) / disk + SAX parse (fallback)
 
-    private func downloadToDiskAndParse(
+    private enum BulkOutcome {
+        case parsed([String: [EpgProgram]])
+        case notModified
+        case failed
+    }
+
+    private func streamAndParse(
         urlString: String,
         interestKeys: Set<String>,
         limitPerChannel: Int,
+        allowConditional: Bool,
         onStatus: (@Sendable (String) -> Void)?
-    ) async -> [String: [EpgProgram]]? {
-        guard let url = URL(string: urlString) else { return nil }
+    ) async -> BulkOutcome {
+        guard let url = URL(string: urlString) else { return .failed }
 
-        let tempDir = FileManager.default.temporaryDirectory
-        let dest = tempDir.appendingPathComponent("sportsdash-epg-\(UUID().uuidString).xml")
+        var request = URLRequest(url: url)
+        if allowConditional, let validators = Self.storedValidators(for: urlString) {
+            if let etag = validators.etag { request.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+            if let lm = validators.lastModified { request.setValue(lm, forHTTPHeaderField: "If-Modified-Since") }
+        }
+
+        let scanner = XmltvStreamScanner(
+            interestKeys: interestKeys,
+            maxPerChannel: limitPerChannel,
+            hoursBehind: Self.windowHoursBehind,
+            hoursAhead: Self.windowHoursAhead
+        )
+        let delegate = StreamingXmltvDelegate(scanner: scanner, maxBytes: Self.maxDownloadBytes) { received, expected in
+            let mb = Double(received) / 1_048_576
+            if expected > 0 {
+                let pct = Int(Double(received) * 100 / Double(expected))
+                onStatus?(String(format: "Downloading guide… %.0f MB (%d%%)", mb, pct))
+            } else {
+                onStatus?(String(format: "Downloading guide… %.0f MB", mb))
+            }
+        }
+        // Delegate sessions retain their delegate until invalidated.
+        let streamSession = URLSession(configuration: session.configuration, delegate: delegate, delegateQueue: nil)
+        defer { streamSession.finishTasksAndInvalidate() }
 
         do {
-            // Streams response body straight to a temp file — OS handles buffering.
+            try await delegate.run(streamSession.dataTask(with: request))
+        } catch {
+            if delegate.tooLarge {
+                onStatus?("Guide file too large for this device")
+            }
+            return .failed
+        }
+
+        if delegate.statusCode == 304 { return .notModified }
+        guard (200...299).contains(delegate.statusCode), delegate.received > 0 else { return .failed }
+        Self.storeValidators(etag: delegate.etag, lastModified: delegate.lastModified, for: urlString)
+
+        let map = scanner.finish()
+        if !map.isEmpty { return .parsed(map) }
+
+        // Nothing recognised as lowercase XMLTV: let Foundation's XMLParser have a
+        // go (odd encodings, uppercase tags). Needs the file on disk, so bounded.
+        guard delegate.received <= Self.maxFallbackFileBytes else { return .failed }
+        onStatus?("Guide format unusual — re-parsing on disk…")
+        if let fallback = await downloadToDiskAndParseWithXMLParser(
+            url: url, interestKeys: interestKeys, limitPerChannel: limitPerChannel
+        ), !fallback.isEmpty {
+            return .parsed(fallback)
+        }
+        return .failed
+    }
+
+    private func downloadToDiskAndParseWithXMLParser(
+        url: URL,
+        interestKeys: Set<String>,
+        limitPerChannel: Int
+    ) async -> [String: [EpgProgram]]? {
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sportsdash-epg-\(UUID().uuidString).xml")
+        defer { try? FileManager.default.removeItem(at: dest) }
+        do {
             let (fileURL, response) = try await session.download(from: url)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 try? FileManager.default.removeItem(at: fileURL)
                 return nil
             }
-
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.moveItem(at: fileURL, to: dest)
-
-            let attrs = try FileManager.default.attributesOfItem(atPath: dest.path)
-            let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
-            if size <= 0 || size > Self.maxDownloadBytes {
-                try? FileManager.default.removeItem(at: dest)
-                onStatus?(size > Self.maxDownloadBytes
-                    ? "Guide file too large for this device"
-                    : "Empty guide file")
-                return nil
-            }
-
-            let mb = Double(size) / 1_048_576
-            onStatus?(String(format: "Downloaded %.1f MB — parsing on disk…", mb))
-
-            // Parse off the EpgService actor executor (true background).
-            // Byte scanner first; Foundation's XMLParser only if it finds nothing
-            // (odd encodings / non-XMLTV markup).
-            let map = await Task.detached(priority: .utility) {
-                let fast = XmltvByteScanner.parse(
-                    fileURL: dest,
-                    interestKeys: interestKeys,
-                    maxPerChannel: limitPerChannel,
-                    hoursBehind: EpgService.windowHoursBehind,
-                    hoursAhead: EpgService.windowHoursAhead
-                )
-                if !fast.isEmpty { return fast }
-                return DiskXMLTVParser.parse(
+            return await Task.detached(priority: .utility) {
+                DiskXMLTVParser.parse(
                     fileURL: dest,
                     interestKeys: interestKeys,
                     maxPerChannel: limitPerChannel,
@@ -206,12 +301,55 @@ actor EpgService {
                     hoursAhead: EpgService.windowHoursAhead
                 )
             }.value
-
-            try? FileManager.default.removeItem(at: dest)
-            return map.isEmpty ? nil : map
         } catch {
-            try? FileManager.default.removeItem(at: dest)
             return nil
+        }
+    }
+
+    // MARK: - Bulk URL memory + HTTP validators
+
+    /// Bulk URLs embed the Xtream password, so UserDefaults only ever sees a
+    /// digest of them (stable across launches, unlike `hashValue`).
+    private static let lastBulkURLKey = "epg_last_bulk_url_digest"
+
+    nonisolated static func stableDigest(_ text: String) -> String {
+        // FNV-1a 64-bit
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return String(hash, radix: 16)
+    }
+
+    nonisolated private static func rememberBulkURL(_ url: String) {
+        UserDefaults.standard.set(stableDigest(url), forKey: lastBulkURLKey)
+    }
+
+    private struct Validators: Codable {
+        var etag: String?
+        var lastModified: String?
+    }
+
+    nonisolated private static func validatorsKey(for url: String) -> String {
+        "epg_validators_" + stableDigest(url)
+    }
+
+    nonisolated private static func storedValidators(for url: String) -> Validators? {
+        guard let data = UserDefaults.standard.data(forKey: validatorsKey(for: url)),
+              let v = try? JSONDecoder().decode(Validators.self, from: data),
+              v.etag != nil || v.lastModified != nil else { return nil }
+        return v
+    }
+
+    nonisolated private static func storeValidators(etag: String?, lastModified: String?, for url: String) {
+        let key = validatorsKey(for: url)
+        guard etag != nil || lastModified != nil else {
+            UserDefaults.standard.removeObject(forKey: key)
+            return
+        }
+        if let data = try? JSONEncoder().encode(Validators(etag: etag, lastModified: lastModified)) {
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 
@@ -240,6 +378,13 @@ actor EpgService {
             urls.append(contentsOf: Self.xtreamXmltvURLs(hostField: rawHost, user: user, pass: pass))
         }
 
+        // Last URL that produced a guide goes first — no more re-downloading a
+        // 100+ MB file per variant before landing on the one that works.
+        if let lastDigest = UserDefaults.standard.string(forKey: Self.lastBulkURLKey),
+           let last = urls.first(where: { Self.stableDigest($0) == lastDigest }) {
+            urls.removeAll { $0 == last }
+            urls.insert(last, at: 0)
+        }
         // De-dupe preserving order
         var seen = Set<String>()
         return urls.filter { seen.insert($0).inserted }
@@ -251,13 +396,9 @@ actor EpgService {
         let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
         let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
         let query = "username=\(userQ)&password=\(passQ)"
-        // Prefer https (user example: Xtream panel) then plain path variants.
-        var out: [String] = []
-        for root in httpsPreferredRoots(base) {
-            out.append("\(root)/xmltv.php?\(query)")
-            out.append("\(root)/xmltv.php?\(query)&type=m3u_plus")
-        }
-        return out
+        // Prefer https (user example: Xtream panel) then http. (`type=m3u_plus`
+        // is ignored by xmltv.php; keeping it as a variant only doubled downloads.)
+        return httpsPreferredRoots(base).map { "\($0)/xmltv.php?\(query)" }
     }
 
     /// When M3U URL embeds user/pass (get.php?username=…), build xmltv.php siblings.
@@ -758,8 +899,10 @@ enum XmltvByteScanner {
         data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
             guard let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self), raw.count > 0 else { return }
             let buf = UnsafeBufferPointer(start: base, count: raw.count)
-            scan(
+            _ = scan(
                 buf,
+                from: 0,
+                to: buf.count,
                 interestKeys: interestKeys,
                 maxPerChannel: maxPerChannel,
                 windowStart: windowStart,
@@ -788,18 +931,24 @@ enum XmltvByteScanner {
     private static let maxTextBytes = 400
     private static let maxCategories = 8
 
-    private static func scan(
+    /// Parse every complete `<programme>…</programme>` in `buf[from..<end]`.
+    /// Returns the offset up to which bytes are fully consumed; anything after it
+    /// (an unterminated programme, or a tag split across a chunk boundary) must be
+    /// carried into the next call.
+    static func scan(
         _ buf: UnsafeBufferPointer<UInt8>,
+        from: Int,
+        to end: Int,
         interestKeys: Set<String>,
         maxPerChannel: Int,
         windowStart: TimeInterval,
         windowEnd: TimeInterval,
         into map: inout [String: [EpgProgram]]
-    ) {
-        let n = buf.count
-        var cursor = 0
+    ) -> Int {
+        let n = end
+        var cursor = from
         while let open = findTag(programmeOpen, in: buf, from: cursor, to: n) {
-            guard let tagEnd = indexOf(62, in: buf, from: open + programmeOpen.count, to: n) else { break } // '>'
+            guard let tagEnd = indexOf(62, in: buf, from: open + programmeOpen.count, to: n) else { return open } // '>'
             let attrsFrom = open + programmeOpen.count
             let selfClosing = buf[tagEnd - 1] == 47 // '/'
             let bodyStart = tagEnd + 1
@@ -807,7 +956,7 @@ enum XmltvByteScanner {
             if selfClosing {
                 cursor = bodyStart
             } else {
-                guard let close = find(programmeClose, in: buf, from: bodyStart, to: n) else { break }
+                guard let close = find(programmeClose, in: buf, from: bodyStart, to: n) else { return open }
                 bodyEnd = close
                 cursor = close + programmeClose.count
             }
@@ -851,6 +1000,9 @@ enum XmltvByteScanner {
                 )
             )
         }
+        // No further complete programme. Keep a tag's worth of tail in case
+        // "<programme" itself straddles the boundary.
+        return max(cursor, n - programmeOpen.count)
     }
 
     // MARK: Byte helpers
@@ -1008,6 +1160,171 @@ enum XmltvByteScanner {
             i = semi + 1
         }
         return String(decoding: out, as: UTF8.self)
+    }
+}
+
+// MARK: - Chunked scanner (download and parse overlap)
+
+/// Feeds network chunks through `XmltvByteScanner` as they arrive. Only the
+/// unconsumed tail (a partial programme, typically well under a page) is copied
+/// between chunks, so RAM stays flat however large the guide is.
+final class XmltvStreamScanner: @unchecked Sendable {
+    private let interestKeys: Set<String>
+    private let maxPerChannel: Int
+    private let windowStart: TimeInterval
+    private let windowEnd: TimeInterval
+    private var map: [String: [EpgProgram]] = [:]
+    private var carry: [UInt8] = []
+    private(set) var bytesScanned = 0
+
+    init(interestKeys: Set<String>, maxPerChannel: Int, hoursBehind: Int, hoursAhead: Int) {
+        self.interestKeys = interestKeys
+        self.maxPerChannel = maxPerChannel
+        let now = Date().timeIntervalSince1970
+        self.windowStart = now - TimeInterval(hoursBehind) * 3600
+        self.windowEnd = now + TimeInterval(hoursAhead) * 3600
+    }
+
+    func feed(_ data: Data) {
+        guard !data.isEmpty else { return }
+        bytesScanned += data.count
+        if carry.isEmpty {
+            // Common case: scan the chunk in place, copy only the tail.
+            data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+                guard let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
+                let buf = UnsafeBufferPointer(start: base, count: raw.count)
+                let consumed = scan(buf, from: 0, to: buf.count)
+                if consumed < buf.count {
+                    carry.append(contentsOf: buf[consumed..<buf.count])
+                }
+            }
+        } else {
+            carry.append(contentsOf: data)
+            let consumed = carry.withUnsafeBufferPointer { buf in
+                scan(buf, from: 0, to: buf.count)
+            }
+            if consumed >= carry.count {
+                carry.removeAll(keepingCapacity: true)
+            } else if consumed > 0 {
+                carry.removeFirst(consumed)
+            }
+        }
+    }
+
+    func finish() -> [String: [EpgProgram]] {
+        if !carry.isEmpty {
+            // A final self-closing programme can sit in the tail; give it one last pass.
+            _ = carry.withUnsafeBufferPointer { buf in
+                scan(buf, from: 0, to: buf.count)
+            }
+            carry.removeAll()
+        }
+        for key in map.keys {
+            map[key]?.sort { $0.start < $1.start }
+        }
+        return map
+    }
+
+    private func scan(_ buf: UnsafeBufferPointer<UInt8>, from: Int, to end: Int) -> Int {
+        XmltvByteScanner.scan(
+            buf,
+            from: from,
+            to: end,
+            interestKeys: interestKeys,
+            maxPerChannel: maxPerChannel,
+            windowStart: windowStart,
+            windowEnd: windowEnd,
+            into: &map
+        )
+    }
+}
+
+/// URLSession delegate that streams the response body straight into an
+/// `XmltvStreamScanner` on the session's delegate queue (never the main thread).
+final class StreamingXmltvDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let scanner: XmltvStreamScanner
+    private let maxBytes: Int64
+    private let onProgress: (@Sendable (Int64, Int64) -> Void)?
+    private let progressEvery: Int64 = 4 * 1024 * 1024
+    private var nextProgressAt: Int64
+
+    private(set) var statusCode = 0
+    private(set) var received: Int64 = 0
+    private(set) var expected: Int64 = -1
+    private(set) var etag: String?
+    private(set) var lastModified: String?
+    private(set) var tooLarge = false
+
+    private var continuation: CheckedContinuation<Void, Error>?
+    private weak var task: URLSessionTask?
+
+    init(
+        scanner: XmltvStreamScanner,
+        maxBytes: Int64,
+        onProgress: (@Sendable (Int64, Int64) -> Void)? = nil
+    ) {
+        self.scanner = scanner
+        self.maxBytes = maxBytes
+        self.onProgress = onProgress
+        self.nextProgressAt = progressEvery
+    }
+
+    /// Resume the task and wait for completion. Task cancellation cancels the download.
+    func run(_ dataTask: URLSessionDataTask) async throws {
+        task = dataTask
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                continuation = cont
+                dataTask.resume()
+            }
+        } onCancel: {
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        if let http = response as? HTTPURLResponse {
+            statusCode = http.statusCode
+            etag = http.value(forHTTPHeaderField: "ETag")
+            lastModified = http.value(forHTTPHeaderField: "Last-Modified")
+        }
+        expected = response.expectedContentLength
+        if expected > maxBytes {
+            tooLarge = true
+            completionHandler(.cancel)
+            return
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard (200...299).contains(statusCode) else { return }
+        received += Int64(data.count)
+        if received > maxBytes {
+            tooLarge = true
+            dataTask.cancel()
+            return
+        }
+        scanner.feed(data)
+        if received >= nextProgressAt {
+            nextProgressAt = received + progressEvery
+            onProgress?(received, expected)
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let cont = continuation
+        continuation = nil
+        if let error {
+            cont?.resume(throwing: error)
+        } else {
+            cont?.resume()
+        }
     }
 }
 

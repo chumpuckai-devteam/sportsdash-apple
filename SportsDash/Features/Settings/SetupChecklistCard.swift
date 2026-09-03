@@ -29,8 +29,8 @@ enum SetupChecklist {
     }
 
     static func epgLamp(_ appModel: AppModel) -> JumbotronLampKind {
-        if let err = appModel.epgError, !err.isEmpty { return .blocked }
-        if appModel.epgLoadedCount > 0 { return .done }
+        if let err = appModel.epg.epgError, !err.isEmpty { return .blocked }
+        if appModel.epg.epgLoadedCount > 0 { return .done }
         return .pending
     }
 
@@ -55,10 +55,12 @@ enum SetupChecklist {
 /// Deep-links into the right settings screens (not buried under Advanced).
 struct SetupChecklistCard: View {
     @EnvironmentObject private var appModel: AppModel
+    /// Observed so the EPG lamp updates; the helpers above read through `appModel.epg`.
+    @EnvironmentObject private var epgStore: EpgStore
     var forceTitle: String? = nil
 
     private var playlist: JumbotronLampKind { SetupChecklist.playlistLamp(appModel) }
-    private var epg: JumbotronLampKind { SetupChecklist.epgLamp(appModel) }
+    private var epgLamp: JumbotronLampKind { SetupChecklist.epgLamp(appModel) }
     private var favorites: JumbotronLampKind { SetupChecklist.favoritesLamp(appModel) }
     private var setupCount: Int { SetupChecklist.setupDoneCount(appModel) }
 
@@ -66,7 +68,7 @@ struct SetupChecklistCard: View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 lampRow("PLAYLIST", playlist)
-                lampRow("EPG", epg)
+                lampRow("EPG", epgLamp)
                 lampRow("FAVORITES", favorites)
             }
             Spacer(minLength: 8)

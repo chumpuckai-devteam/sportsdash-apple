@@ -51,6 +51,7 @@ struct RootTabView: View {
             if appModel.floatingPlayer != nil, !showSplash {
                 FloatingPlayerView(playback: appModel.floatingPlayback)
                     .environmentObject(appModel)
+                    .environmentObject(appModel.epg)
                     .zIndex(100)
             }
             #endif
@@ -68,6 +69,7 @@ struct RootTabView: View {
                 alternateMatches: route.alternates
             )
             .environmentObject(appModel)
+            .environmentObject(appModel.epg)
         }
         .task {
             if !didApplyLaunchTab {

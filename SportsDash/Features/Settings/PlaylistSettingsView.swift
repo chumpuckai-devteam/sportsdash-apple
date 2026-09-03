@@ -3,6 +3,7 @@ import SwiftUI
 /// Multi-playlist manager + Xtream account status.
 struct PlaylistSettingsView: View {
     @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var epg: EpgStore
     @State private var showEditor = false
     @State private var editingPlaylistId: String?
     @State private var statusMessage: String?
@@ -107,20 +108,20 @@ struct PlaylistSettingsView: View {
                 Button {
                     Task {
                         await appModel.reloadEpg(force: true)
-                        statusMessage = appModel.epgError
-                            ?? "EPG reloaded · \(appModel.epgLoadedCount) channels cached."
+                        statusMessage = epg.epgError
+                            ?? "EPG reloaded · \(epg.epgLoadedCount) channels cached."
                     }
                 } label: {
-                    if appModel.isLoadingEpg {
+                    if epg.isLoadingEpg {
                         HStack {
                             ProgressView()
-                            Text(appModel.epgStatus ?? "Reloading EPG…")
+                            Text(epg.epgStatus ?? "Reloading EPG…")
                         }
                     } else {
                         Label("Reload EPG", systemImage: "calendar")
                     }
                 }
-                .disabled(appModel.channels.isEmpty || appModel.isLoadingEpg)
+                .disabled(appModel.channels.isEmpty || epg.isLoadingEpg)
 
                 if let statusMessage {
                     Text(statusMessage)
@@ -143,6 +144,7 @@ struct PlaylistSettingsView: View {
                 }
             )
             .environmentObject(appModel)
+            .environmentObject(appModel.epg)
         }
         .task {
             if appModel.iptvConfig?.type == .xtream {

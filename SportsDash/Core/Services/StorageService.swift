@@ -312,7 +312,9 @@ final class StorageService {
     }
 
     /// Encode off the main actor — a full Xtream guide is multi-MB JSON.
-    nonisolated static func writeEpgCache(_ map: [String: [EpgProgram]]) {
+    /// `savedAt` is the map's *build* time: a 304-refreshed map keeps its original
+    /// stamp so the 12 h cache age still forces a real rebuild.
+    nonisolated static func writeEpgCache(_ map: [String: [EpgProgram]], savedAt: Date = Date()) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
         let compact = map.filter { !$0.value.isEmpty }
@@ -321,7 +323,7 @@ final class StorageService {
             ?? FileManager.default.temporaryDirectory
         let url = dir.appendingPathComponent("sportsdash_epg_cache.json")
         try? data.write(to: url, options: .atomic)
-        UserDefaults.standard.set(Date(), forKey: "epg_cache_saved_at")
+        UserDefaults.standard.set(savedAt, forKey: "epg_cache_saved_at")
     }
 
     func clearEpgCache() {
@@ -387,6 +389,10 @@ final class StorageService {
         let url = dir.appendingPathComponent("sportsdash_channels_cache.json")
         guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
         return try? JSONDecoder().decode([IptvChannel].self, from: data)
+    }
+
+    var channelsCacheSavedAt: Date? {
+        defaults.object(forKey: channelsCacheDateKey) as? Date
     }
 
     func clearChannelsCache() {

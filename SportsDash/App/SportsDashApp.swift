@@ -24,6 +24,7 @@ struct SportsDashApp: App {
         WindowGroup {
             RootTabView()
                 .environmentObject(appModel)
+                .environmentObject(appModel.epg)
                 .preferredColorScheme(colorScheme)
         }
     }

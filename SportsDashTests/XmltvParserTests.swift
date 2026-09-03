@@ -130,3 +130,76 @@ final class XmltvParserTests: XCTestCase {
         XCTAssertTrue(XmltvByteScanner.parse(fileURL: url, interestKeys: [], maxPerChannel: 12, hoursBehind: 1, hoursAhead: 18).isEmpty)
     }
 }
+
+// MARK: - Chunked / streaming scanner
+
+extension XmltvParserTests {
+
+    private static let streamStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyyMMddHHmmss"
+        return f
+    }()
+
+    private func streamXml(programmes: Int) -> Data {
+        let now = Date()
+        var body = "<?xml version=\"1.0\"?>\n<tv>\n<channel id=\"c\"><display-name>C &amp; Co</display-name></channel>\n"
+        for i in 0..<programmes {
+            let s = now.addingTimeInterval(TimeInterval(i - 1) * 600)
+            let e = s.addingTimeInterval(600)
+            let ch = "ch\(i % 7)"
+            body += "<programme start=\"\(Self.streamStamp.string(from: s)) +0000\" stop=\"\(Self.streamStamp.string(from: e)) +0000\" channel=\"\(ch)\">"
+            body += "<title lang=\"en\">Show &#35;\(i) &amp; friends</title>"
+            body += "<desc>\(String(repeating: "x", count: 300))</desc>"
+            if i % 3 == 0 { body += "<category>Sports</category>" }
+            body += "</programme>\n"
+        }
+        body += "<programme start=\"\(Self.streamStamp.string(from: now)) +0000\" stop=\"\(Self.streamStamp.string(from: now.addingTimeInterval(600))) +0000\" channel=\"tail\"/>"
+        body += "\n</tv>\n"
+        return body.data(using: .utf8)!
+    }
+
+    private func flatten(_ map: [String: [EpgProgram]]) -> [String] {
+        map.keys.sorted().flatMap { key in
+            (map[key] ?? []).map { "\(key)|\($0.title)|\(Int($0.start.timeIntervalSince1970))|\(Int($0.end.timeIntervalSince1970))|\($0.categories.joined(separator: ","))" }
+        }
+    }
+
+    func testStreamingScannerMatchesWholeFileForAnyChunkSize() throws {
+        let data = streamXml(programmes: 120)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("xmltv-stream-\(UUID().uuidString).xml")
+        try data.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let whole = XmltvByteScanner.parse(fileURL: url, interestKeys: [], maxPerChannel: 12, hoursBehind: 1, hoursAhead: 18)
+        XCTAssertEqual(whole["tail"]?.count, 1)
+        XCTAssertEqual(whole["ch0"]?.first?.title, "Show #0 & friends")
+        XCTAssertFalse(whole.isEmpty)
+
+        // Chunk sizes chosen to split tags, attribute values and entities in every way.
+        for chunk in [1, 7, 13, 64, 1000, 4096, data.count] {
+            let scanner = XmltvStreamScanner(interestKeys: [], maxPerChannel: 12, hoursBehind: 1, hoursAhead: 18)
+            var offset = 0
+            while offset < data.count {
+                let end = min(offset + chunk, data.count)
+                scanner.feed(data.subdata(in: offset..<end))
+                offset = end
+            }
+            let streamed = scanner.finish()
+            XCTAssertEqual(flatten(streamed), flatten(whole), "chunk size \(chunk)")
+            XCTAssertEqual(scanner.bytesScanned, data.count)
+        }
+    }
+
+    func testStreamingScannerCapsPerChannel() {
+        let data = streamXml(programmes: 120)
+        let scanner = XmltvStreamScanner(interestKeys: ["ch1"], maxPerChannel: 3, hoursBehind: 1, hoursAhead: 18)
+        scanner.feed(data)
+        let map = scanner.finish()
+        XCTAssertEqual(Array(map.keys), ["ch1"])
+        XCTAssertEqual(map["ch1"]?.count, 3)
+    }
+}

@@ -3,6 +3,7 @@ import SwiftUI
 /// Root settings hub — grouped list with modern section chrome.
 struct SettingsView: View {
     @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var epg: EpgStore
 
     var body: some View {
         NavigationStack {
@@ -63,21 +64,21 @@ struct SettingsView: View {
                         .listRowBackground(SportsColors.panel)
                     }
 
-                    if appModel.isLoadingEpg {
+                    if epg.isLoadingEpg {
                         HStack(spacing: 10) {
                             ProgressView().controlSize(.small).tint(SportsColors.gold)
-                            Text(appModel.epgStatus ?? "Downloading EPG…")
+                            Text(epg.epgStatus ?? "Downloading EPG…")
                                 .font(.caption)
                                 .foregroundStyle(SportsColors.muted)
                         }
                         .listRowBackground(SportsColors.panel)
-                    } else if let status = appModel.epgStatus {
+                    } else if let status = epg.epgStatus {
                         Text(status)
                             .font(.caption)
                             .foregroundStyle(SportsColors.muted)
                             .listRowBackground(SportsColors.panel)
-                    } else if appModel.epgLoadedCount > 0 {
-                        Text("EPG ready · \(appModel.epgLoadedCount) channels with listings")
+                    } else if epg.epgLoadedCount > 0 {
+                        Text("EPG ready · \(epg.epgLoadedCount) channels with listings")
                             .font(.caption)
                             .foregroundStyle(SportsColors.muted)
                             .listRowBackground(SportsColors.panel)
@@ -250,8 +251,8 @@ struct SettingsView: View {
                                    glow: account.isActive)
                         hubMetaRow("EXPIRES", account.expDateLabel.uppercased(), color: SportsColors.gold, glow: true)
                         hubMetaRow("CONNECTIONS", account.connectionsLabel, color: SportsColors.gold, glow: true)
-                    } else if appModel.isLoadingEpg {
-                        hubMetaRow("EPG", appModel.epgStatus?.uppercased() ?? "…", color: SportsColors.muted, glow: false)
+                    } else if epg.isLoadingEpg {
+                        hubMetaRow("EPG", epg.epgStatus?.uppercased() ?? "…", color: SportsColors.muted, glow: false)
                     }
                 }
                 .jumbotronPanel()

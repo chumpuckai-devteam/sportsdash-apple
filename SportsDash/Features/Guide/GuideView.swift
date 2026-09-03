@@ -21,6 +21,7 @@ private enum GuideMetrics {
 /// Traditional TV guide + optional card grid, with a small guide-only settings menu.
 struct GuideView: View {
     @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var epg: EpgStore
     @State private var selectedGroup: String = ""
     @State private var windowStart: Date = GuideView.snappedCurrentHour()
     @State private var playerRoute: PlayerRoute?
@@ -61,11 +62,11 @@ struct GuideView: View {
     private var guideRows: [GuideChannelRowData] {
         // Reference EPG map; LazyVStack/List only mount visible rows.
         // Dedupe playlist clones (same display name in group — common on Xtream).
-        let chans = Self.dedupeChannels(activeChannels, epg: appModel.epgByChannel)
+        let chans = Self.dedupeChannels(activeChannels, epg: epg.epgByChannel)
         var rows: [GuideChannelRowData] = []
         rows.reserveCapacity(chans.count)
         for ch in chans {
-            let programs = appModel.epgByChannel[ch.id] ?? []
+            let programs = epg.epgByChannel[ch.id] ?? []
             if moviesOnly {
                 let now = programs.first(where: \.isNow) ?? programs.first
                 let isMovie = now.map { prog in
@@ -236,7 +237,7 @@ struct GuideView: View {
                 // EPG fill + ratings run deferred.
                 scheduleGuideSideWork()
             }
-            .onChange(of: appModel.epgLoadedCount) { _, _ in
+            .onChange(of: epg.epgLoadedCount) { _, _ in
                 // Debounced ratings only (EPG already published)
                 scheduleRatingsOnly()
             }
@@ -271,6 +272,7 @@ struct GuideView: View {
                     alternateMatches: route.alternates
                 )
                 .environmentObject(appModel)
+                .environmentObject(appModel.epg)
             }
             .sheet(isPresented: $showGuideSettings) {
                 guideSettingsSheet
@@ -316,11 +318,11 @@ struct GuideView: View {
             Task { await appModel.reloadEpg(force: true) }
         } label: {
             Label(
-                appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                epg.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
                 systemImage: "arrow.clockwise"
             )
         }
-        .disabled(appModel.isLoadingEpg)
+        .disabled(epg.isLoadingEpg)
 
         Divider()
 
@@ -369,19 +371,19 @@ struct GuideView: View {
                             #if os(tvOS)
                             SportsTVListRowLabel {
                                 Label(
-                                    appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                                    epg.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
                                     systemImage: "arrow.clockwise"
                                 )
                                 .foregroundStyle($0 ? SportsColors.voidBlack : SportsColors.text)
                             }
                             #else
                             Label(
-                                appModel.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
+                                epg.isLoadingEpg ? "Refreshing EPG…" : "Reload EPG",
                                 systemImage: "arrow.clockwise"
                             )
                             #endif
                         }
-                        .disabled(appModel.isLoadingEpg)
+                        .disabled(epg.isLoadingEpg)
                         #if os(tvOS)
                         .sportsTVFocusClean()
                         .listRowBackground(Color.clear)
@@ -559,7 +561,7 @@ struct GuideView: View {
             }
             #endif
 
-            if appModel.isLoadingEpg || appModel.isAutoFillingEpg {
+            if epg.isLoadingEpg || epg.isAutoFillingEpg {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small).tint(SportsColors.gold)
                     Text(epgStatusText)
@@ -572,13 +574,13 @@ struct GuideView: View {
                 .padding(.vertical, 6)
                 .background(SportsColors.panel)
             } else if !activeChannels.isEmpty {
-                let withGuide = activeChannels.filter { !(appModel.epgByChannel[$0.id] ?? []).isEmpty }.count
+                let withGuide = activeChannels.filter { !(epg.epgByChannel[$0.id] ?? []).isEmpty }.count
                 HStack(spacing: 8) {
                     Text("Guide \(withGuide)/\(activeChannels.count) in this category")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(withGuide == 0 ? SportsColors.danger : SportsColors.muted)
                     Spacer(minLength: 8)
-                    if let s = appModel.epgStatus, s.localizedCaseInsensitiveContains("ready") {
+                    if let s = epg.epgStatus, s.localizedCaseInsensitiveContains("ready") {
                         Text(s)
                             .font(.caption2)
                             .foregroundStyle(SportsColors.muted)
@@ -602,8 +604,8 @@ struct GuideView: View {
                     now: nowTick,
                     cleanNames: cleanNames,
                     favoriteChannelIds: appModel.favoriteChannelIds,
-                    epgError: appModel.epgError,
-                    isLoadingEpg: appModel.isLoadingEpg,
+                    epgError: epg.epgError,
+                    isLoadingEpg: epg.isLoadingEpg,
                     onSelectGroup: { showCategoryPicker = true },
                     onGrid: {
                         var p = appModel.playerPrefs
@@ -642,9 +644,9 @@ struct GuideView: View {
     }
 
     private var epgStatusText: String {
-        if let s = appModel.epgStatus, !s.isEmpty { return s }
+        if let s = epg.epgStatus, !s.isEmpty { return s }
         let total = max(appModel.channels.count, 1)
-        let loaded = appModel.epgLoadedCount
+        let loaded = epg.epgLoadedCount
         if loaded == 0 {
             return "Downloading program guide…"
         }
@@ -686,7 +688,7 @@ struct GuideView: View {
     private func prefetchRatings() {
         MovieRatingsStore.shared.prefetch(
             channels: activeChannels,
-            epgByChannel: appModel.epgByChannel,
+            epgByChannel: epg.epgByChannel,
             categoryName: selectedGroup
         )
     }

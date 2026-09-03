@@ -60,11 +60,13 @@ struct ScoresView: View {
                 .sheet(item: $selectedGame) { game in
                     GameDetailSheet(game: game)
                         .environmentObject(appModel)
+                        .environmentObject(appModel.epg)
                         .sportsSheetChrome()
                 }
                 .sportsLargeCover(isPresented: $showFavoritePicker) {
                     FavoriteTeamPickerView()
                         .environmentObject(appModel)
+                        .environmentObject(appModel.epg)
                         .sportsSheetChrome()
                 }
                 #if os(iOS)

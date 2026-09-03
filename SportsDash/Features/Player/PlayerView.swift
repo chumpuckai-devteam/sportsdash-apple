@@ -3,6 +3,7 @@ import SwiftUI
 /// Fullscreen IPTV player with UHF-style chrome: channel/EPG info, pause, scores. (pop-out iOS-only; no captions/PiP/aspect stubs rendered)
 struct PlayerView: View {
     @EnvironmentObject private var appModel: AppModel
+    @EnvironmentObject private var epg: EpgStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var channel: IptvChannel
@@ -44,13 +45,13 @@ struct PlayerView: View {
     }
 
     private var currentProgram: EpgProgram? {
-        let programs = appModel.epgByChannel[channel.id] ?? []
+        let programs = epg.epgByChannel[channel.id] ?? []
         return programs.first(where: \.isNow) ?? programs.first
     }
 
     private var nextProgram: EpgProgram? {
         guard let now = currentProgram else { return nil }
-        let programs = appModel.epgByChannel[channel.id] ?? []
+        let programs = epg.epgByChannel[channel.id] ?? []
         return programs.first { $0.start >= now.end }
     }
 

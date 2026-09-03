@@ -63,6 +63,7 @@ struct GameDetailSheet: View {
                     alternateMatches: route.alternates
                 )
                 .environmentObject(appModel)
+                .environmentObject(appModel.epg)
             }
         }
     }
