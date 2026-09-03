@@ -54,10 +54,12 @@ actor EpgService {
         batchSize: Int = 16,
         preferBulk: Bool = true,
         fillMissingWithShortEpg: Bool = true,
+        ignoreNegativeCache: Bool = false,
         onBatch: (@Sendable ([String: [EpgProgram]]) -> Void)? = nil,
         onStatus: (@Sendable (String) -> Void)? = nil
     ) async -> [String: [EpgProgram]] {
         guard !channels.isEmpty else { return [:] }
+        defer { persistNegativeCacheIfNeeded() }
 
         // Full bulk like other IPTV clients: keep all programmes in the time window.
         // Window + max-per-channel already bound memory; interest-key filtering was
@@ -96,25 +98,35 @@ actor EpgService {
 
         // Progressive short-EPG until every missing channel has been attempted.
         // Cap total waves by channel count (never infinite).
-        var missing = channels.filter { result[$0.id] == nil }
+        // Background gap-fill skips channels the provider answered "no listings"
+        // for recently — re-asking thousands of them every launch was the request
+        // storm behind the guide ticks. A user-driven reload asks everything again.
+        let negativeHost = Self.shortEpgHost(config)
+        var missing = channels.filter { ch in
+            guard result[ch.id] == nil else { return false }
+            if ignoreNegativeCache { return true }
+            return !isRecentlyEmpty(Self.negativeKey(host: negativeHost, channelId: ch.id))
+        }
         guard !missing.isEmpty else {
             onStatus?("Guide ready · \(result.count)/\(channels.count) channels")
             return result
         }
 
         let waveSize = max(batchSize, 12)
-        var wave = 0
+        /// Waves that actually hit the network (a wave can be entirely in flight
+        /// for another caller, which says nothing about the provider).
+        var requestedWaves = 0
         let totalMissing = missing.count
         while !missing.isEmpty {
-            wave += 1
             let slice = Array(missing.prefix(waveSize * 4)) // 4 concurrent batches worth
             onStatus?("Auto-filling guide \(result.count)/\(channels.count) · \(totalMissing - missing.count + slice.count)/\(totalMissing) gaps…")
-            let short = await loadXtreamShortBatch(
+            let (short, requested) = await loadXtreamShortBatch(
                 channels: slice,
                 config: config,
                 limit: min(limitPerChannel, 8),
                 batchSize: waveSize
             )
+            if requested > 0 { requestedWaves += 1 }
             if !short.isEmpty {
                 for (k, v) in short where !v.isEmpty {
                     result[k] = v
@@ -125,17 +137,18 @@ actor EpgService {
             let attempted = Set(slice.map(\.id))
             missing = missing.filter { !attempted.contains($0.id) }
             // Bail if provider returns nothing for a full wave (dead EPG endpoint).
-            if short.isEmpty, wave >= 2 {
+            if requested > 0, short.isEmpty, requestedWaves >= 2 {
                 onStatus?("Guide partial · \(result.count)/\(channels.count) — provider has no listings for remaining channels")
                 break
             }
         }
+        // Callers apply the returned map; re-sending the whole guide here made
+        // MainActor merge a full copy it was about to replace anyway.
         onStatus?("Guide ready · \(result.count)/\(channels.count) channels")
-        onBatch?(result)
         return result
     }
 
-    // MARK: - Download to disk → SAX parse (primary path)
+    // MARK: - Download to disk → byte scan (primary) / SAX parse (fallback)
 
     private func downloadToDiskAndParse(
         urlString: String,
@@ -174,8 +187,18 @@ actor EpgService {
             onStatus?(String(format: "Downloaded %.1f MB — parsing on disk…", mb))
 
             // Parse off the EpgService actor executor (true background).
+            // Byte scanner first; Foundation's XMLParser only if it finds nothing
+            // (odd encodings / non-XMLTV markup).
             let map = await Task.detached(priority: .utility) {
-                DiskXMLTVParser.parse(
+                let fast = XmltvByteScanner.parse(
+                    fileURL: dest,
+                    interestKeys: interestKeys,
+                    maxPerChannel: limitPerChannel,
+                    hoursBehind: EpgService.windowHoursBehind,
+                    hoursAhead: EpgService.windowHoursAhead
+                )
+                if !fast.isEmpty { return fast }
+                return DiskXMLTVParser.parse(
                     fileURL: dest,
                     interestKeys: interestKeys,
                     maxPerChannel: limitPerChannel,
@@ -329,6 +352,13 @@ actor EpgService {
             }
         }
 
+        // Fuzzy fallback scans every slug per unmatched channel; build the
+        // candidate list once instead of re-walking the dictionary (and re-counting
+        // each key) per channel.
+        let fuzzyPairs: [(slug: String, real: String)] = slugIndex.compactMap { entry in
+            entry.key.count >= 4 ? (slug: entry.key, real: entry.value) : nil
+        }
+
         var result: [String: [EpgProgram]] = [:]
         result.reserveCapacity(min(channels.count, byTvg.count))
 
@@ -358,7 +388,7 @@ actor EpgService {
                     programs = list
                 } else if !nameSlug.isEmpty {
                     // Prefix match longest slug key contained in name (or vice versa)
-                    for (slug, real) in slugIndex where slug.count >= 4 {
+                    for (slug, real) in fuzzyPairs {
                         if nameSlug.contains(slug) || slug.contains(nameSlug) {
                             if let list = byTvg[real], !list.isEmpty {
                                 programs = list
@@ -415,29 +445,39 @@ actor EpgService {
 
     // MARK: - Short EPG fallback (bounded)
 
+    /// Returns the listings found plus how many channels were actually requested
+    /// (channels already in flight for another caller are skipped).
     private func loadXtreamShortBatch(
         channels: [IptvChannel],
         config: IptvConfig,
         limit: Int,
         batchSize: Int
-    ) async -> [String: [EpgProgram]] {
+    ) async -> (programs: [String: [EpgProgram]], requested: Int) {
         guard let rawHost = config.xtreamHost?.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
               let user = config.xtreamUsername,
-              let pass = config.xtreamPassword else { return [:] }
+              let pass = config.xtreamPassword else { return ([:], 0) }
         let host = rawHost.hasPrefix("http") ? rawHost : "http://\(rawHost)"
         let userQ = user.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? user
         let passQ = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
+        let negativeHost = Self.shortEpgHost(config)
+
+        // Category gap-fill and the launch auto-fill overlap; whoever asked first
+        // owns the request and merges it, so the other caller skips it.
+        let wanted = channels.filter { !shortEpgInFlight.contains($0.id) }
+        for ch in wanted { shortEpgInFlight.insert(ch.id) }
+        defer { for ch in wanted { shortEpgInFlight.remove(ch.id) } }
 
         var result: [String: [EpgProgram]] = [:]
         var i = 0
-        while i < channels.count {
-            let end = min(i + batchSize, channels.count)
-            let slice = Array(channels[i..<end])
-            await withTaskGroup(of: (String, [EpgProgram]).self) { group in
+        while i < wanted.count {
+            let end = min(i + batchSize, wanted.count)
+            let slice = Array(wanted[i..<end])
+            // nil = request failed (do not remember), [] = provider has no listings.
+            let batch = await withTaskGroup(of: (String, [EpgProgram]?).self, returning: [(String, [EpgProgram]?)].self) { group in
                 for ch in slice {
                     group.addTask {
                         guard let streamId = Self.xtreamStreamId(ch) else {
-                            return (ch.id, [])
+                            return (ch.id, nil)
                         }
                         do {
                             let programs = try await self.fetchShortEpg(
@@ -446,17 +486,82 @@ actor EpgService {
                             )
                             return (ch.id, programs)
                         } catch {
-                            return (ch.id, [])
+                            return (ch.id, nil)
                         }
                     }
                 }
-                for await (id, programs) in group where !programs.isEmpty {
+                var out: [(String, [EpgProgram]?)] = []
+                out.reserveCapacity(slice.count)
+                for await item in group { out.append(item) }
+                return out
+            }
+            for (id, programs) in batch {
+                guard let programs else { continue }
+                if programs.isEmpty {
+                    markEmpty(Self.negativeKey(host: negativeHost, channelId: id))
+                } else {
                     result[id] = programs
                 }
             }
             i = end
         }
-        return result
+        return (result, wanted.count)
+    }
+
+    // MARK: - Short-EPG negative cache (channels the provider has no listings for)
+
+    static let shortEpgNegativeTTL: TimeInterval = 6 * 3600
+
+    /// channel key → unix time the provider last answered with no listings.
+    private var shortEpgEmptyAt: [String: TimeInterval]?
+    private var shortEpgInFlight: Set<String> = []
+    private var negativeCacheDirty = false
+
+    nonisolated private static var negativeCacheURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return dir.appendingPathComponent("sportsdash_epg_short_empty.json")
+    }
+
+    nonisolated private static func shortEpgHost(_ config: IptvConfig?) -> String {
+        (config?.xtreamHost ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    nonisolated private static func negativeKey(host: String, channelId: String) -> String {
+        "\(host)|\(channelId)"
+    }
+
+    private func loadedNegativeCache() -> [String: TimeInterval] {
+        if let shortEpgEmptyAt { return shortEpgEmptyAt }
+        var map: [String: TimeInterval] = [:]
+        if let data = try? Data(contentsOf: Self.negativeCacheURL),
+           let decoded = try? JSONDecoder().decode([String: TimeInterval].self, from: data) {
+            let floor = Date().timeIntervalSince1970 - Self.shortEpgNegativeTTL
+            map = decoded.filter { $0.value > floor }
+        }
+        shortEpgEmptyAt = map
+        return map
+    }
+
+    private func isRecentlyEmpty(_ key: String) -> Bool {
+        guard let at = loadedNegativeCache()[key] else { return false }
+        return Date().timeIntervalSince1970 - at < Self.shortEpgNegativeTTL
+    }
+
+    private func markEmpty(_ key: String) {
+        if shortEpgEmptyAt == nil { _ = loadedNegativeCache() }
+        shortEpgEmptyAt?[key] = Date().timeIntervalSince1970
+        negativeCacheDirty = true
+    }
+
+    private func persistNegativeCacheIfNeeded() {
+        guard negativeCacheDirty, let map = shortEpgEmptyAt else { return }
+        negativeCacheDirty = false
+        let url = Self.negativeCacheURL
+        Task.detached(priority: .utility) {
+            guard let data = try? JSONEncoder().encode(map) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     private func fetchShortEpg(
@@ -550,9 +655,366 @@ actor EpgService {
     }
 }
 
-// MARK: - Disk SAX parser (low RAM)
+// MARK: - XMLTV timestamps ("20240102030405 +0100")
+
+enum XmltvTime {
+    /// Parse an XMLTV timestamp from UTF-8 bytes. Pure integer math — the previous
+    /// `Calendar.date(from:)` per programme was ~10 µs × 2 × every programme in a
+    /// multi-day guide, i.e. seconds of CPU before a single row could paint.
+    static func parse(_ buf: UnsafeBufferPointer<UInt8>, from start: Int, to end: Int) -> TimeInterval? {
+        var s = start
+        var e = end
+        while s < e, isSpace(buf[s]) { s += 1 }
+        while e > s, isSpace(buf[e - 1]) { e -= 1 }
+        guard e - s >= 14 else { return nil }
+
+        func digits(_ at: Int, _ count: Int) -> Int? {
+            var v = 0
+            for k in 0..<count {
+                let c = buf[at + k]
+                guard c >= 48, c <= 57 else { return nil }
+                v = v * 10 + Int(c - 48)
+            }
+            return v
+        }
+        guard let y = digits(s, 4),
+              let mo = digits(s + 4, 2),
+              let d = digits(s + 6, 2),
+              let h = digits(s + 8, 2),
+              let mi = digits(s + 10, 2),
+              let sec = digits(s + 12, 2),
+              (1...12).contains(mo), (1...31).contains(d) else { return nil }
+
+        // Optional " +HHMM" / "-HH:MM" suffix; anything else is treated as GMT.
+        var offset = 0
+        var i = s + 14
+        while i < e, isSpace(buf[i]) { i += 1 }
+        if i < e, buf[i] == 43 || buf[i] == 45 { // + or -
+            let sign = buf[i] == 43 ? 1 : -1
+            var tz: [Int] = []
+            var j = i + 1
+            while j < e, tz.count < 4 {
+                let c = buf[j]
+                if c >= 48, c <= 57 { tz.append(Int(c - 48)) }
+                j += 1
+            }
+            if tz.count == 4 {
+                offset = sign * ((tz[0] * 10 + tz[1]) * 3600 + (tz[2] * 10 + tz[3]) * 60)
+            }
+        }
+        let days = daysFromCivil(y, mo, d)
+        return TimeInterval(days * 86_400 + h * 3600 + mi * 60 + sec - offset)
+    }
+
+    static func parse(_ raw: String) -> Date? {
+        let bytes = Array(raw.utf8)
+        let interval: TimeInterval? = bytes.withUnsafeBufferPointer { buf in
+            parse(buf, from: 0, to: buf.count)
+        }
+        return interval.map { Date(timeIntervalSince1970: $0) }
+    }
+
+    /// Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's algorithm).
+    static func daysFromCivil(_ year: Int, _ month: Int, _ day: Int) -> Int {
+        let y = month <= 2 ? year - 1 : year
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yoe = y - era * 400
+        let mp = (month + 9) % 12
+        let doy = (153 * mp + 2) / 5 + day - 1
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        return era * 146_097 + doe - 719_468
+    }
+
+    @inline(__always)
+    static func isSpace(_ c: UInt8) -> Bool {
+        c == 32 || c == 9 || c == 10 || c == 13
+    }
+}
+
+// MARK: - Byte-level XMLTV scanner (primary)
+
+/// XMLTV is machine-generated and regular, so a byte scan over the memory-mapped
+/// file finds `<programme start stop channel>` blocks directly. Foundation's
+/// `XMLParser` bridges every element name, attribute dictionary and text run
+/// (including multi-KB `<desc>` bodies we throw away) into Swift Strings — that
+/// bridging was most of the parse time on a 30–100 MB guide. Here only in-window
+/// programmes for wanted channels ever become Strings.
+enum XmltvByteScanner {
+    static func parse(
+        fileURL: URL,
+        interestKeys: Set<String>,
+        maxPerChannel: Int,
+        hoursBehind: Int,
+        hoursAhead: Int
+    ) -> [String: [EpgProgram]] {
+        // Mapped, not read: the kernel pages the file in as the scan advances and
+        // can drop clean pages under pressure.
+        guard let data = try? Data(contentsOf: fileURL, options: [.mappedIfSafe]) else { return [:] }
+        let now = Date().timeIntervalSince1970
+        let windowStart = now - TimeInterval(hoursBehind) * 3600
+        let windowEnd = now + TimeInterval(hoursAhead) * 3600
+
+        var map: [String: [EpgProgram]] = [:]
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            guard let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self), raw.count > 0 else { return }
+            let buf = UnsafeBufferPointer(start: base, count: raw.count)
+            scan(
+                buf,
+                interestKeys: interestKeys,
+                maxPerChannel: maxPerChannel,
+                windowStart: windowStart,
+                windowEnd: windowEnd,
+                into: &map
+            )
+        }
+
+        for key in map.keys {
+            map[key]?.sort { $0.start < $1.start }
+        }
+        return map
+    }
+
+    private static let programmeOpen = Array("<programme".utf8)
+    private static let programmeClose = Array("</programme>".utf8)
+    private static let titleOpen = Array("<title".utf8)
+    private static let titleClose = Array("</title>".utf8)
+    private static let categoryOpen = Array("<category".utf8)
+    private static let categoryClose = Array("</category>".utf8)
+    private static let attrChannel = Array("channel=".utf8)
+    private static let attrStart = Array("start=".utf8)
+    private static let attrStop = Array("stop=".utf8)
+    private static let cdataOpen = Array("<![CDATA[".utf8)
+    private static let cdataClose = Array("]]>".utf8)
+    private static let maxTextBytes = 400
+    private static let maxCategories = 8
+
+    private static func scan(
+        _ buf: UnsafeBufferPointer<UInt8>,
+        interestKeys: Set<String>,
+        maxPerChannel: Int,
+        windowStart: TimeInterval,
+        windowEnd: TimeInterval,
+        into map: inout [String: [EpgProgram]]
+    ) {
+        let n = buf.count
+        var cursor = 0
+        while let open = findTag(programmeOpen, in: buf, from: cursor, to: n) {
+            guard let tagEnd = indexOf(62, in: buf, from: open + programmeOpen.count, to: n) else { break } // '>'
+            let attrsFrom = open + programmeOpen.count
+            let selfClosing = buf[tagEnd - 1] == 47 // '/'
+            let bodyStart = tagEnd + 1
+            var bodyEnd = bodyStart
+            if selfClosing {
+                cursor = bodyStart
+            } else {
+                guard let close = find(programmeClose, in: buf, from: bodyStart, to: n) else { break }
+                bodyEnd = close
+                cursor = close + programmeClose.count
+            }
+
+            // Cheap numeric gates first — most of a 7-day file is outside the window.
+            guard let startRange = attributeValue(attrStart, in: buf, from: attrsFrom, to: tagEnd),
+                  let stopRange = attributeValue(attrStop, in: buf, from: attrsFrom, to: tagEnd),
+                  let start = XmltvTime.parse(buf, from: startRange.0, to: startRange.1),
+                  let end = XmltvTime.parse(buf, from: stopRange.0, to: stopRange.1),
+                  end > windowStart, start < windowEnd else { continue }
+
+            guard let channelRange = attributeValue(attrChannel, in: buf, from: attrsFrom, to: tagEnd) else { continue }
+            let channel = decodeText(buf, channelRange.0, channelRange.1, trim: false)
+            guard !channel.isEmpty else { continue }
+            if let existing = map[channel], existing.count >= maxPerChannel { continue }
+            if !interestKeys.isEmpty,
+               !interestKeys.contains(channel),
+               !interestKeys.contains(channel.lowercased()) { continue }
+
+            var title = ""
+            if let t = elementText(titleOpen, titleClose, in: buf, from: bodyStart, to: bodyEnd) {
+                title = decodeText(buf, t.0, t.1, trim: true)
+            }
+            var categories: [String] = []
+            var catCursor = bodyStart
+            while categories.count < maxCategories,
+                  let c = elementText(categoryOpen, categoryClose, in: buf, from: catCursor, to: bodyEnd) {
+                let cat = decodeText(buf, c.0, c.1, trim: true)
+                if !cat.isEmpty { categories.append(cat) }
+                catCursor = c.2
+            }
+
+            map[channel, default: []].append(
+                EpgProgram(
+                    channelKey: channel,
+                    title: title.isEmpty ? "Program" : title,
+                    start: Date(timeIntervalSince1970: start),
+                    end: Date(timeIntervalSince1970: end),
+                    description: nil,
+                    categories: categories
+                )
+            )
+        }
+    }
+
+    // MARK: Byte helpers
+
+    @inline(__always)
+    private static func indexOf(_ byte: UInt8, in buf: UnsafeBufferPointer<UInt8>, from: Int, to end: Int) -> Int? {
+        guard from < end, let base = buf.baseAddress else { return nil }
+        guard let hit = memchr(base + from, Int32(byte), end - from) else { return nil }
+        return UnsafeRawPointer(hit) - UnsafeRawPointer(base)
+    }
+
+    /// First occurrence of `needle` in `buf[from..<end]`.
+    private static func find(_ needle: [UInt8], in buf: UnsafeBufferPointer<UInt8>, from: Int, to end: Int) -> Int? {
+        let m = needle.count
+        guard m > 0, end - from >= m else { return nil }
+        let first = needle[0]
+        var i = from
+        let last = end - m
+        while i <= last {
+            guard let hit = indexOf(first, in: buf, from: i, to: last + 1) else { return nil }
+            var j = 1
+            while j < m, buf[hit + j] == needle[j] { j += 1 }
+            if j == m { return hit }
+            i = hit + 1
+        }
+        return nil
+    }
+
+    /// Like `find`, but the byte after the tag name must end the name
+    /// (`<programme ` not `<programmes`).
+    private static func findTag(_ needle: [UInt8], in buf: UnsafeBufferPointer<UInt8>, from: Int, to end: Int) -> Int? {
+        var i = from
+        while let hit = find(needle, in: buf, from: i, to: end) {
+            let after = hit + needle.count
+            if after >= end { return nil }
+            let c = buf[after]
+            if XmltvTime.isSpace(c) || c == 62 || c == 47 { return hit } // '>' or '/'
+            i = hit + 1
+        }
+        return nil
+    }
+
+    /// Byte range of a quoted attribute value inside a start tag.
+    private static func attributeValue(
+        _ name: [UInt8],
+        in buf: UnsafeBufferPointer<UInt8>,
+        from: Int,
+        to end: Int
+    ) -> (Int, Int)? {
+        var i = from
+        while let hit = find(name, in: buf, from: i, to: end) {
+            let quotePos = hit + name.count
+            // Must be a whole attribute name (preceded by whitespace) and quoted.
+            if hit > 0, XmltvTime.isSpace(buf[hit - 1]), quotePos < end {
+                let quote = buf[quotePos]
+                if quote == 34 || quote == 39, // " or '
+                   let close = indexOf(quote, in: buf, from: quotePos + 1, to: end) {
+                    return (quotePos + 1, close)
+                }
+            }
+            i = hit + 1
+        }
+        return nil
+    }
+
+    /// Text range of the first `<open …>text</close>` in `buf[from..<end]`, plus the
+    /// index just past the closing tag so callers can continue scanning.
+    private static func elementText(
+        _ open: [UInt8],
+        _ close: [UInt8],
+        in buf: UnsafeBufferPointer<UInt8>,
+        from: Int,
+        to end: Int
+    ) -> (Int, Int, Int)? {
+        guard let tag = findTag(open, in: buf, from: from, to: end),
+              let gt = indexOf(62, in: buf, from: tag + open.count, to: end) else { return nil }
+        if buf[gt - 1] == 47 { // <title/>
+            return (gt, gt, gt + 1)
+        }
+        guard let closeAt = find(close, in: buf, from: gt + 1, to: end) else { return nil }
+        return (gt + 1, closeAt, closeAt + close.count)
+    }
+
+    /// Bytes → String with optional trim, CDATA unwrap, length cap and XML entity decoding.
+    private static func decodeText(_ buf: UnsafeBufferPointer<UInt8>, _ start: Int, _ end: Int, trim: Bool) -> String {
+        var s = start
+        var e = end
+        if trim {
+            while s < e, XmltvTime.isSpace(buf[s]) { s += 1 }
+            while e > s, XmltvTime.isSpace(buf[e - 1]) { e -= 1 }
+        }
+        if e - s >= cdataOpen.count + cdataClose.count,
+           matches(cdataOpen, in: buf, at: s),
+           matches(cdataClose, in: buf, at: e - cdataClose.count) {
+            s += cdataOpen.count
+            e -= cdataClose.count
+            if trim {
+                while s < e, XmltvTime.isSpace(buf[s]) { s += 1 }
+                while e > s, XmltvTime.isSpace(buf[e - 1]) { e -= 1 }
+            }
+        }
+        if e - s > maxTextBytes {
+            e = s + maxTextBytes
+            // Do not cut a multi-byte UTF-8 sequence in half.
+            while e > s, buf[e] & 0xC0 == 0x80 { e -= 1 }
+        }
+        guard e > s else { return "" }
+        if indexOf(38, in: buf, from: s, to: e) == nil { // '&'
+            return String(decoding: UnsafeBufferPointer(rebasing: buf[s..<e]), as: UTF8.self)
+        }
+        return unescape(buf, s, e)
+    }
+
+    @inline(__always)
+    private static func matches(_ needle: [UInt8], in buf: UnsafeBufferPointer<UInt8>, at: Int) -> Bool {
+        guard at >= 0, at + needle.count <= buf.count else { return false }
+        for k in 0..<needle.count where buf[at + k] != needle[k] { return false }
+        return true
+    }
+
+    private static func unescape(_ buf: UnsafeBufferPointer<UInt8>, _ start: Int, _ end: Int) -> String {
+        var out: [UInt8] = []
+        out.reserveCapacity(end - start)
+        var i = start
+        while i < end {
+            let c = buf[i]
+            guard c == 38, let semi = indexOf(59, in: buf, from: i + 1, to: min(end, i + 12)) else { // '&' … ';'
+                out.append(c)
+                i += 1
+                continue
+            }
+            let name = UnsafeBufferPointer(rebasing: buf[(i + 1)..<semi])
+            switch String(decoding: name, as: UTF8.self) {
+            case "amp": out.append(38)
+            case "lt": out.append(60)
+            case "gt": out.append(62)
+            case "quot": out.append(34)
+            case "apos": out.append(39)
+            case let ref where ref.hasPrefix("#"):
+                let digits = ref.dropFirst()
+                let value: UInt32?
+                if digits.hasPrefix("x") || digits.hasPrefix("X") {
+                    value = UInt32(digits.dropFirst(), radix: 16)
+                } else {
+                    value = UInt32(digits)
+                }
+                if let value, let scalar = Unicode.Scalar(value) {
+                    out.append(contentsOf: Array(String(Character(scalar)).utf8))
+                } else {
+                    out.append(contentsOf: buf[i...semi])
+                }
+            default:
+                out.append(contentsOf: buf[i...semi])
+            }
+            i = semi + 1
+        }
+        return String(decoding: out, as: UTF8.self)
+    }
+}
+
+// MARK: - Disk SAX parser (fallback, low RAM)
 
 /// Streams the XMLTV **file** with Foundation's `XMLParser` — never loads the full document as a String.
+/// Used only when `XmltvByteScanner` finds no programmes.
 final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private let interestKeys: Set<String>
     private let maxPerChannel: Int
@@ -567,8 +1029,14 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     private var currentTitle: String?
     private var currentCategories: [String] = []
     private var inProgramme = false
+    /// Programme is outside the window / not wanted: skip text capture entirely.
+    private var skipProgramme = false
     private var captureTitle = false
     private var captureCategory = false
+
+    private enum Element {
+        case programme, title, category
+    }
 
     private init(
         interestKeys: Set<String>,
@@ -606,14 +1074,24 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         parser.parse()
 
         for key in delegate.map.keys {
-            var list = delegate.map[key] ?? []
-            list.sort { $0.start < $1.start }
-            if list.count > maxPerChannel {
-                list = Array(list.prefix(maxPerChannel))
-            }
-            delegate.map[key] = list
+            delegate.map[key]?.sort { $0.start < $1.start }
         }
         return delegate.map
+    }
+
+    /// Element classification without lowercasing every name (`desc`, `icon`, … are the bulk).
+    private static func element(_ name: String) -> Element? {
+        guard let first = name.utf8.first else { return nil }
+        switch first {
+        case UInt8(ascii: "p"), UInt8(ascii: "P"):
+            return name == "programme" || name.lowercased() == "programme" ? .programme : nil
+        case UInt8(ascii: "t"), UInt8(ascii: "T"):
+            return name == "title" || name.lowercased() == "title" ? .title : nil
+        case UInt8(ascii: "c"), UInt8(ascii: "C"):
+            return name == "category" || name.lowercased() == "category" ? .category : nil
+        default:
+            return nil
+        }
     }
 
     func parser(
@@ -623,21 +1101,35 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         qualifiedName _: String?,
         attributes attributeDict: [String: String] = [:]
     ) {
-        let name = elementName.lowercased()
-        if name == "programme" {
+        guard let element = Self.element(elementName) else { return }
+        switch element {
+        case .programme:
             inProgramme = true
             currentTitle = nil
             currentCategories = []
             currentText = ""
             currentChannel = attributeDict["channel"]
-            currentStart = Self.parseXmltvTime(attributeDict["start"])
-            currentEnd = Self.parseXmltvTime(attributeDict["stop"])
-        } else if inProgramme, name == "title" {
-            captureTitle = true
-            currentText = ""
-        } else if inProgramme, name == "category" {
-            captureCategory = true
-            currentText = ""
+            currentStart = attributeDict["start"].flatMap { XmltvTime.parse($0) }
+            currentEnd = attributeDict["stop"].flatMap { XmltvTime.parse($0) }
+            // Decide now so out-of-window programmes never accumulate text.
+            skipProgramme = true
+            if let channel = currentChannel, let start = currentStart, let end = currentEnd,
+               end > windowStart, start < windowEnd,
+               (map[channel]?.count ?? 0) < maxPerChannel {
+                skipProgramme = !(interestKeys.isEmpty
+                    || interestKeys.contains(channel)
+                    || interestKeys.contains(channel.lowercased()))
+            }
+        case .title:
+            if inProgramme, !skipProgramme {
+                captureTitle = true
+                currentText = ""
+            }
+        case .category:
+            if inProgramme, !skipProgramme {
+                captureCategory = true
+                currentText = ""
+            }
         }
     }
 
@@ -656,41 +1148,36 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
         namespaceURI _: String?,
         qualifiedName _: String?
     ) {
-        let name = elementName.lowercased()
-        if name == "title", captureTitle {
+        guard let element = Self.element(elementName) else { return }
+        switch element {
+        case .title:
+            guard captureTitle else { return }
             currentTitle = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
             captureTitle = false
             currentText = ""
-        } else if name == "category", captureCategory {
+        case .category:
+            guard captureCategory else { return }
             let cat = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !cat.isEmpty, currentCategories.count < 8 {
                 currentCategories.append(cat)
             }
             captureCategory = false
             currentText = ""
-        } else if name == "programme" {
+        case .programme:
             defer {
                 inProgramme = false
+                skipProgramme = false
                 currentChannel = nil
                 currentStart = nil
                 currentEnd = nil
                 currentTitle = nil
                 currentCategories = []
             }
-            guard let channel = currentChannel,
+            guard !skipProgramme,
+                  let channel = currentChannel,
                   let start = currentStart,
-                  let end = currentEnd,
-                  end > windowStart,
-                  start < windowEnd else { return }
-
-            let interested = interestKeys.isEmpty
-                || interestKeys.contains(channel)
-                || interestKeys.contains(channel.lowercased())
-            guard interested else { return }
-
-            var list = map[channel] ?? []
-            guard list.count < maxPerChannel else { return }
-            list.append(
+                  let end = currentEnd else { return }
+            map[channel, default: []].append(
                 EpgProgram(
                     channelKey: channel,
                     title: (currentTitle?.isEmpty == false ? currentTitle! : "Program"),
@@ -700,38 +1187,6 @@ final class DiskXMLTVParser: NSObject, XMLParserDelegate, @unchecked Sendable {
                     categories: currentCategories
                 )
             )
-            map[channel] = list
         }
-    }
-
-    private static func parseXmltvTime(_ raw: String?) -> Date? {
-        guard let raw else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 14 else { return nil }
-        let y = Int(trimmed.prefix(4)) ?? 0
-        let mo = Int(trimmed.dropFirst(4).prefix(2)) ?? 0
-        let d = Int(trimmed.dropFirst(6).prefix(2)) ?? 0
-        let h = Int(trimmed.dropFirst(8).prefix(2)) ?? 0
-        let mi = Int(trimmed.dropFirst(10).prefix(2)) ?? 0
-        let s = Int(trimmed.dropFirst(12).prefix(2)) ?? 0
-
-        var secondsFromGMT = 0
-        if trimmed.count > 15 {
-            let tail = trimmed.dropFirst(14)
-            if let idx = tail.firstIndex(where: { $0 == "+" || $0 == "-" }) {
-                let sign: Int = tail[idx] == "+" ? 1 : -1
-                let digits = tail[idx...].filter(\.isNumber)
-                if digits.count >= 4 {
-                    let hh = Int(digits.prefix(2)) ?? 0
-                    let mm = Int(digits.dropFirst(2).prefix(2)) ?? 0
-                    secondsFromGMT = sign * (hh * 3600 + mm * 60)
-                }
-            }
-        }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: secondsFromGMT) ?? .gmt
-        return calendar.date(from: DateComponents(
-            year: y, month: mo, day: d, hour: h, minute: mi, second: s
-        ))
     }
 }

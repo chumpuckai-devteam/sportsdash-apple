@@ -93,6 +93,24 @@ final class AppModel: ObservableObject {
     private var pendingEpgDelta: [String: [EpgProgram]] = [:]
     private var epgFlushTask: Task<Void, Never>?
     private var lastEpgStatusAt = Date.distantPast
+    /// Debounced disk write — category taps and gap-fill waves used to each
+    /// re-encode the multi-MB guide JSON.
+    private var epgCacheWriteTask: Task<Void, Never>?
+    /// Full-screen players on screen. Not published: it only tunes how often EPG
+    /// work is allowed to invalidate SwiftUI while video is decoding.
+    private var activePlayerSessions = 0
+
+    private var isPlayerOnScreen: Bool {
+        activePlayerSessions > 0 || floatingPlayer != nil
+    }
+
+    func playerDidAppear() {
+        activePlayerSessions += 1
+    }
+
+    func playerDidDisappear() {
+        activePlayerSessions = max(0, activePlayerSessions - 1)
+    }
 
     init() {
         favoriteTeamIds = storage.favoriteTeamIds()
@@ -160,19 +178,30 @@ final class AppModel: ObservableObject {
             return Date().timeIntervalSince(saved) > 3 * 3600
         }()
 
-        await refreshScores()
+        // Scores and the Xtream account check do not feed the guide; running them
+        // ahead of the playlist → EPG chain only delayed the first EPG byte.
+        let scoresTask = Task { @MainActor in
+            await self.refreshScores()
+        }
 
-        guard let config = iptvConfig, config.isConfigured else { return }
+        guard let config = iptvConfig, config.isConfigured else {
+            await scoresTask.value
+            return
+        }
+        let accountTask = Task { @MainActor in
+            await self.refreshXtreamAccount()
+        }
         if hasChannelCache {
             await reloadChannels(showLoading: false)
             lastPlaylistReload = Date()
         }
-        await refreshXtreamAccount()
         if needsEpgNetwork || epgStale {
             await reloadEpg(force: true)
         } else {
             await autoFillAllMissingEpg()
         }
+        await scoresTask.value
+        await accountTask.value
     }
 
     private func scheduleEpgMerge(_ delta: [String: [EpgProgram]]) {
@@ -180,8 +209,12 @@ final class AppModel: ObservableObject {
             pendingEpgDelta[k] = v
         }
         guard epgFlushTask == nil else { return }
+        // Every publish re-evaluates every view observing AppModel, including the
+        // full-screen player. While video is up, a guide row may lag a couple of
+        // seconds; a dropped frame is worse.
+        let delay: UInt64 = isPlayerOnScreen ? 2_500_000_000 : 350_000_000
         epgFlushTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await Task.sleep(nanoseconds: delay)
             self.flushEpgMerge()
         }
     }
@@ -199,17 +232,40 @@ final class AppModel: ObservableObject {
 
     private func setEpgStatusThrottled(_ msg: String) {
         let now = Date()
-        guard now.timeIntervalSince(lastEpgStatusAt) > 0.45 else { return }
+        let minGap: TimeInterval = isPlayerOnScreen ? 3.0 : 0.45
+        guard now.timeIntervalSince(lastEpgStatusAt) > minGap else { return }
         lastEpgStatusAt = now
         epgStatus = msg
     }
 
+    /// Snapshot the guide and encode it off the main actor, coalescing bursts.
+    private func scheduleEpgCacheWrite(delay: TimeInterval = 2.0) {
+        epgCacheWriteTask?.cancel()
+        epgCacheWriteTask = Task { @MainActor [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.epgCacheWriteTask = nil
+            let snapshot = self.epgByChannel
+            Task.detached(priority: .utility) {
+                StorageService.writeEpgCache(snapshot)
+            }
+        }
+    }
+
     /// Rebuild category maps after channel list changes.
     private func applyChannels(_ list: [IptvChannel], persistCache: Bool) {
+        // The launch playlist refresh usually returns exactly the cached list;
+        // republishing it re-rendered every tab and re-encoded the cache for nothing.
+        guard list != channels else { return }
         channels = list
         rebuildChannelGroups(from: list)
         if persistCache {
-            storage.saveChannelsCache(list, playlistId: activePlaylistId)
+            let playlistId = activePlaylistId
+            Task.detached(priority: .utility) {
+                StorageService.writeChannelsCache(list, playlistId: playlistId)
+            }
         }
     }
 
@@ -599,20 +655,26 @@ final class AppModel: ObservableObject {
             return
         }
 
-        // Instant path: disk cache paint, then background refresh/gap-fill.
-        if !force, let cached = storage.loadEpgCache(), !cached.isEmpty {
-            epgByChannel = cached
-            epgLoadedCount = cached.count
-            lastEpgReload = storage.epgCacheSavedAt
-            epgStatus = "Guide from cache · \(cached.count) channels"
-            epgError = nil
-            let stale = storage.epgCacheSavedAt.map { Date().timeIntervalSince($0) > 3 * 3600 } ?? true
-            if stale {
-                Task { await self.reloadEpg(force: true) }
-            } else {
-                Task { await self.autoFillAllMissingEpg() }
+        // Instant path: disk cache paint (decoded off the main actor), then
+        // background refresh/gap-fill.
+        if !force {
+            let cached = await Task.detached(priority: .userInitiated) {
+                StorageService.loadEpgCacheData()
+            }.value
+            if let cached, !cached.map.isEmpty {
+                epgByChannel = cached.map
+                epgLoadedCount = cached.map.count
+                lastEpgReload = cached.savedAt
+                epgStatus = "Guide from cache · \(cached.map.count) channels"
+                epgError = nil
+                let stale = cached.savedAt.map { Date().timeIntervalSince($0) > 3 * 3600 } ?? true
+                if stale {
+                    Task { await self.reloadEpg(force: true) }
+                } else {
+                    Task { await self.autoFillAllMissingEpg() }
+                }
+                return
             }
-            return
         }
 
         epgLoadTask?.cancel()
@@ -634,6 +696,7 @@ final class AppModel: ObservableObject {
                 batchSize: 16,
                 preferBulk: true,
                 fillMissingWithShortEpg: true,
+                ignoreNegativeCache: true,
                 onBatch: { partial in
                     Task { @MainActor in
                         guard let model else { return }
@@ -647,9 +710,6 @@ final class AppModel: ObservableObject {
                     }
                 }
             )
-            if !map.isEmpty {
-                StorageService.writeEpgCache(map)
-            }
             return map
         }
         epgLoadTask = Task { @MainActor in
@@ -661,21 +721,21 @@ final class AppModel: ObservableObject {
             epgFlushTask?.cancel()
             epgFlushTask = nil
             pendingEpgDelta.removeAll(keepingCapacity: true)
-            let compact = map.filter { !$0.value.isEmpty }
-            if !compact.isEmpty {
+            // The service never returns empty lists, so no main-actor filter copy.
+            if !map.isEmpty {
                 // Prefer richest map (batch merges may already equal this).
-                if compact.count >= epgByChannel.count {
-                    epgByChannel = compact
+                if map.count >= epgByChannel.count {
+                    epgByChannel = map
                 } else {
                     var next = epgByChannel
-                    for (k, v) in compact where !v.isEmpty { next[k] = v }
+                    for (k, v) in map { next[k] = v }
                     epgByChannel = next
                 }
                 epgLoadedCount = epgByChannel.count
                 lastEpgReload = Date()
                 epgStatus = "Guide ready · \(epgByChannel.count)/\(channels.count) channels"
                 epgError = nil
-                storage.saveEpgCache(epgByChannel)
+                scheduleEpgCacheWrite(delay: 0)
             } else if epgByChannel.isEmpty {
                 epgError = "No EPG data returned. Provider may not expose XMLTV."
                 epgStatus = nil
@@ -728,7 +788,7 @@ final class AppModel: ObservableObject {
             for (k, v) in map where !v.isEmpty { next[k] = v }
             epgByChannel = next
             epgLoadedCount = next.count
-            storage.saveEpgCache(epgByChannel)
+            scheduleEpgCacheWrite()
         }
         epgStatus = "Guide ready · \(epgLoadedCount)/\(channels.count) channels"
     }
@@ -743,12 +803,10 @@ final class AppModel: ObservableObject {
         guard !missing.isEmpty else { return }
         if isLoadingEpg { return }
 
-        if epgByChannel.isEmpty, let cached = storage.loadEpgCache(), !cached.isEmpty {
-            epgByChannel = cached
-            epgLoadedCount = cached.count
-            let still = missing.filter { epgByChannel[$0.id]?.isEmpty != false }
-            if still.isEmpty { return }
-        }
+        // Guide can open before bootstrap has applied the disk cache. Decoding it
+        // here, synchronously on the main actor, was a launch freeze; bootstrap
+        // applies it off-main and then gap-fills.
+        if epgByChannel.isEmpty, storage.epgCacheSavedAt != nil { return }
 
         let service = epgService
         let config = iptvConfig
@@ -773,7 +831,7 @@ final class AppModel: ObservableObject {
         for (k, v) in map where !v.isEmpty { next[k] = v }
         epgByChannel = next
         epgLoadedCount = next.count
-        storage.saveEpgCache(next)
+        scheduleEpgCacheWrite()
     }
 
     func toggleFavorite(teamId: String) {

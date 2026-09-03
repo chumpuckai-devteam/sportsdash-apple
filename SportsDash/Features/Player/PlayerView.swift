@@ -87,6 +87,7 @@ struct PlayerView: View {
         .persistentSystemOverlays(.hidden)
         #endif
         .onAppear {
+            appModel.playerDidAppear()
             playback.configure(prefs: appModel.playerPrefs)
             playback.start(url: channel.url)
             if let id = game?.id { appModel.recordLastPlayed(gameId: id) }
@@ -96,6 +97,7 @@ struct PlayerView: View {
             scheduleChromeHide()
         }
         .onDisappear {
+            appModel.playerDidDisappear()
             chromeTask?.cancel()
             // Keep decoding only if we handed off to the floating pop-out player.
             // Do NOT stop if system PiP is active (background float over other apps).

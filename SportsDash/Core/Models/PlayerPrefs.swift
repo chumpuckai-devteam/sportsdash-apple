@@ -318,23 +318,50 @@ struct PlayerPrefs: Codable, Sendable, Equatable {
 // MARK: - Channel name cleanup
 
 enum ChannelNameCleanup {
+    /// Compiled once. Guide rows, dedupe and pickers call this for every channel
+    /// on every body pass; compiling four regexes per call was the single
+    /// largest cost of each EPG tick's re-render.
+    private static let patterns: [NSRegularExpression] = [
+        #"\s*\[.*?\]"#,
+        #"\s*\((?:4K|UHD|FHD|HD|SD|HEVC|H\.?265|H\.?264|60FPS|50FPS|1080p|720p|2160p)[^)]*\)"#,
+        #"\s+(?:4K|UHD|FHD|HD|SD|HEVC|H265|H264|1080P|720P|2160P)\b"#,
+        #"\s{2,}"#,
+    ].compactMap { try? NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+
+    /// Raw → cleaned memo (names repeat across bodies; bounded so it cannot grow unbounded).
+    private static let cache = NameCache()
+
     /// Strip common IPTV quality / codec noise when “Clean up names” is on.
     static func displayName(_ raw: String, enabled: Bool) -> String {
         guard enabled else { return raw }
+        if let hit = cache.get(raw) { return hit }
         var s = raw
-        let patterns = [
-            #"\s*\[.*?\]"#,
-            #"\s*\((?:4K|UHD|FHD|HD|SD|HEVC|H\.?265|H\.?264|60FPS|50FPS|1080p|720p|2160p)[^)]*\)"#,
-            #"\s+(?:4K|UHD|FHD|HD|SD|HEVC|H265|H264|1080P|720P|2160P)\b"#,
-            #"\s{2,}"#,
-        ]
-        for p in patterns {
-            if let re = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
-                let range = NSRange(s.startIndex..., in: s)
-                s = re.stringByReplacingMatches(in: s, range: range, withTemplate: " ")
-            }
+        for re in patterns {
+            let range = NSRange(s.startIndex..., in: s)
+            s = re.stringByReplacingMatches(in: s, range: range, withTemplate: " ")
         }
-        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleaned = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        cache.set(raw, cleaned)
+        return cleaned
+    }
+
+    private final class NameCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var store: [String: String] = [:]
+        private let limit = 8192
+
+        func get(_ key: String) -> String? {
+            lock.lock()
+            defer { lock.unlock() }
+            return store[key]
+        }
+
+        func set(_ key: String, _ value: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            if store.count >= limit { store.removeAll(keepingCapacity: true) }
+            store[key] = value
+        }
     }
 }
 

@@ -305,9 +305,9 @@ final class StorageService {
     }
 
     func saveEpgCache(_ map: [String: [EpgProgram]]) {
-        let compact = map.filter { !$0.value.isEmpty }
+        // Filtering happens inside writeEpgCache — off the main actor.
         Task.detached(priority: .utility) {
-            StorageService.writeEpgCache(compact)
+            StorageService.writeEpgCache(map)
         }
     }
 
@@ -345,12 +345,22 @@ final class StorageService {
     private let channelsCacheDateKey = "channels_cache_saved_at"
 
     func saveChannelsCache(_ channels: [IptvChannel], playlistId: String?) {
+        Task.detached(priority: .utility) {
+            StorageService.writeChannelsCache(channels, playlistId: playlistId)
+        }
+    }
+
+    /// Encode off the main actor — a big Xtream playlist is several MB of JSON.
+    nonisolated static func writeChannelsCache(_ channels: [IptvChannel], playlistId: String?) {
         guard !channels.isEmpty else { return }
-        let encoder = JSONEncoder()
-        guard let data = try? encoder.encode(channels) else { return }
-        try? data.write(to: channelsCacheURL, options: .atomic)
-        defaults.set(playlistId, forKey: channelsCachePlaylistKey)
-        defaults.set(Date(), forKey: channelsCacheDateKey)
+        guard let data = try? JSONEncoder().encode(channels) else { return }
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("sportsdash_channels_cache.json")
+        try? data.write(to: url, options: .atomic)
+        let defaults = UserDefaults.standard
+        defaults.set(playlistId, forKey: "channels_cache_playlist_id")
+        defaults.set(Date(), forKey: "channels_cache_saved_at")
     }
 
     func loadChannelsCache(forPlaylistId playlistId: String?, maxAge: TimeInterval = 7 * 24 * 3600) -> [IptvChannel]? {
