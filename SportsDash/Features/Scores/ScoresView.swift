@@ -899,9 +899,9 @@ struct ScoresView: View {
             title: f.label,
             count: count,
             selected: appModel.dashboardFilter == f,
+            action: { appModel.dashboardFilter = f },
             prefersDefault: f == .live,
-            focusNamespace: scoresFilterFocus,
-            action: { appModel.dashboardFilter = f }
+            focusNamespace: scoresFilterFocus
         )
     }
     #endif
