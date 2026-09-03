@@ -309,6 +309,23 @@ struct SportsTVListRowLabel<Content: View>: View {
 }
 #endif
 
+#if os(tvOS)
+/// tvOS `prefersDefaultFocus` requires a focus namespace (`in:`).
+private struct SportsDefaultFocusModifier: ViewModifier {
+    let enabled: Bool
+    let namespace: Namespace.ID?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled, let namespace {
+            content.prefersDefaultFocus(true, in: namespace)
+        } else {
+            content
+        }
+    }
+}
+#endif
+
 // MARK: - Reusable chrome
 
 struct SportsFilterChip: View {
@@ -331,7 +348,7 @@ struct SportsFilterChip: View {
         }
         #if os(tvOS)
         .sportsTVFocusClean()
-        .prefersDefaultFocus(prefersDefault)
+        .modifier(SportsDefaultFocusModifier(enabled: prefersDefault, namespace: focusNamespace))
         #else
         .buttonStyle(.plain)
         #endif
@@ -339,6 +356,7 @@ struct SportsFilterChip: View {
     }
 
     var prefersDefault: Bool = false
+    var focusNamespace: Namespace.ID? = nil
 
     @ViewBuilder
     private func chipLabel(focused: Bool) -> some View {
@@ -384,7 +402,13 @@ struct SportsFilterChip: View {
         }
         .padding(.horizontal, 26)
         .frame(minWidth: SportsTVMetrics.chipMinWidth, minHeight: SportsTVMetrics.chipHeight)
-        .background(goldFill ? SportsColors.gold : SportsColors.panelGradient)
+        .background {
+            if goldFill {
+                SportsColors.gold
+            } else {
+                SportsColors.panelGradient
+            }
+        }
         .overlay {
             Rectangle().stroke(
                 goldFill ? SportsColors.gold : SportsColors.border,

@@ -542,7 +542,13 @@ struct GuideView: View {
                         .padding(.horizontal, 24)
                         .padding(.vertical, 18)
                         .frame(maxWidth: .infinity, minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
-                        .background(focused ? SportsColors.gold : SportsColors.panelGradient)
+                        .background {
+                            if focused {
+                                SportsColors.gold
+                            } else {
+                                SportsColors.panelGradient
+                            }
+                        }
                         .overlay {
                             Rectangle().stroke(
                                 focused ? SportsColors.gold : SportsColors.gold.opacity(0.5),
@@ -1175,7 +1181,13 @@ private struct GuideTimelineRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
-        .background(focused ? SportsColors.gold : SportsColors.panelGradient)
+        .background {
+            if focused {
+                SportsColors.gold
+            } else {
+                SportsColors.panelGradient
+            }
+        }
         .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
         #if os(tvOS)
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
@@ -1316,7 +1328,13 @@ private struct GuideTimelineRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(width: max(24, width - 4), height: GuideMetrics.rowHeight - 16, alignment: .topLeading)
-        .background(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelGradient)
+        .background {
+            if airing {
+                SportsColors.gold.opacity(0.18)
+            } else {
+                SportsColors.panelGradient
+            }
+        }
         .overlay {
             Rectangle().stroke(
                 airing ? SportsColors.gold.opacity(0.6) : SportsColors.border,

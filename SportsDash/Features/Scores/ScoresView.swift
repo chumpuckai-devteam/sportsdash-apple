@@ -7,6 +7,7 @@ struct ScoresView: View {
     @State private var collapsedSports: Set<String> = []
     @State private var showLeaguesSettings = false
     @State private var showFavoritePicker = false
+    @Namespace private var scoresFilterFocus
 
     var body: some View {
         NavigationStack {
@@ -853,7 +854,8 @@ struct ScoresView: View {
                     title: f.label,
                     count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
                     selected: appModel.dashboardFilter == f,
-                    prefersDefault: f == .live
+                    prefersDefault: f == .live,
+                    focusNamespace: scoresFilterFocus
                 ) {
                     appModel.dashboardFilter = f
                 }
