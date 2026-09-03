@@ -25,11 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.samirpatel.sportsdash.ui.theme.BebasNeue
 import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.Muted
-import com.samirpatel.sportsdash.ui.theme.Panel
+import com.samirpatel.sportsdash.ui.theme.SpaceMono
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
-import com.samirpatel.sportsdash.ui.theme.VoidBlack
+import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
 
 /**
  * Honest full-guide wait UX: one download, then parse, then match.
@@ -51,8 +52,7 @@ fun EpgLoadingCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(Panel)
+                .jumbotronPanel()
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -66,8 +66,8 @@ fun EpgLoadingCard(
             Text(
                 text = title,
                 color = TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
+                fontFamily = BebasNeue,
+                fontSize = 22.sp,
             )
             Text(
                 text = "Download once → parse → match channels.\n" +

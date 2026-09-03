@@ -46,6 +46,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -134,6 +136,7 @@ private fun GuideBrowseBody(
     isTelevision: Boolean = false,
     onGoScores: () -> Unit,
 ) {
+    val epg by vm.epg.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
     var favoriteTarget by remember { mutableStateOf<IptvChannel?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -154,13 +157,13 @@ private fun GuideBrowseBody(
         val status = listOfNotNull(
             state.selectedGroup.takeIf { it.isNotBlank() },
             if (state.guideLayout == GuideLayout.LIST) "Hour" else "Grid",
-            state.epgStatus?.takeIf { !state.isLoadingEpg },
-            state.bulkEpgStatus?.takeIf { state.isLoadingEpg },
+            epg.epgStatus?.takeIf { !epg.isLoadingEpg },
+            epg.bulkEpgStatus?.takeIf { epg.isLoadingEpg },
         ).joinToString(" · ")
         if (status.isNotBlank() && (isTelevision || landscape)) {
             Text(
-                text = status + if (state.isLoadingEpg || state.isAutoFillingEpg) " …" else "",
-                color = if (state.isLoadingEpg || state.isAutoFillingEpg) Gold else Muted,
+                text = status + if (epg.isLoadingEpg || epg.isAutoFillingEpg) " …" else "",
+                color = if (epg.isLoadingEpg || epg.isAutoFillingEpg) Gold else Muted,
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -294,14 +297,14 @@ private fun GuideBrowseBody(
                 }
             }
 
-            val catCovered = channels.count { !state.epgByChannelId[it.id].isNullOrEmpty() }
-            if (state.isLoadingEpg && catCovered == 0 &&
+            val catCovered = channels.count { !epg.epgByChannelId[it.id].isNullOrEmpty() }
+            if (epg.isLoadingEpg && catCovered == 0 &&
                 state.selectedGroup != FAVORITES_GROUP &&
                 channels.isNotEmpty()
             ) {
                 EpgLoadingCard(
                     title = "Loading full TV guide",
-                    status = state.bulkEpgStatus ?: state.epgStatus,
+                    status = epg.bulkEpgStatus ?: epg.epgStatus,
                 )
             }
             if (state.selectedGroup == FAVORITES_GROUP && channels.isEmpty() &&

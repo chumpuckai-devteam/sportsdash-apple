@@ -161,5 +161,6 @@ struct RootTabView: View {
                 .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.systemImage) }
                 .tag(AppTab.settings)
         }
+        .tint(SportsColors.gold)
     }
 }

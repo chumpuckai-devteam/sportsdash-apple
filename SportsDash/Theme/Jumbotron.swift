@@ -45,11 +45,36 @@ extension View {
     }
 
     func jumbotronLedGlow() -> some View {
+        #if os(tvOS)
+        self.shadow(color: SportsColors.ledGlow, radius: SportsTVMetrics.ledGlowRadius)
+        #else
         self.shadow(color: SportsColors.ledGlow, radius: 6)
+        #endif
     }
 
     func jumbotronLiveGlow() -> some View {
+        #if os(tvOS)
+        self.shadow(color: SportsColors.liveGlow, radius: SportsTVMetrics.liveGlowRadius)
+        #else
         self.shadow(color: SportsColors.liveGlow, radius: 5)
+        #endif
+    }
+
+    /// 3pt gold ring + LED glow + 1.045 scale. Cards/rows never gold-fill on focus.
+    @ViewBuilder
+    func jumbotronTVFocusRing(focused: Bool, fillOnFocus: Bool = false) -> some View {
+        #if os(tvOS)
+        self
+            .overlay {
+                Rectangle()
+                    .stroke(focused ? SportsColors.gold : SportsColors.border, lineWidth: SportsTVMetrics.hairline)
+            }
+            .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
+            .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+            .animation(SportsTVFocusMotion.animation, value: focused)
+        #else
+        self
+        #endif
     }
 
     /// Radius-0 riveted panel. Glass stays off content.
@@ -60,7 +85,11 @@ extension View {
         self
             .background(SportsColors.panelGradient)
             .overlay {
+                #if os(tvOS)
+                Rectangle().stroke(border, lineWidth: SportsTVMetrics.hairline)
+                #else
                 Rectangle().stroke(border, lineWidth: 2)
+                #endif
             }
             .overlay {
                 Rectangle()
@@ -92,16 +121,22 @@ struct JumbotronGridDot: View {
     }
 
     #if canImport(UIKit)
-    /// One 6pt cell with a 1pt dot — GPU-tiled instead of thousands of Canvas fills.
+    /// Phone: 6pt cell / 1pt dot. tvOS: 12pt cell / 2pt dot (006 §1). Separate tiles so phone stays pixel-identical.
     private static let tile: UIImage = {
+        #if os(tvOS)
+        let step: CGFloat = SportsTVMetrics.gridStep
+        let dot: CGFloat = SportsTVMetrics.gridDotSize
+        #else
         let step: CGFloat = 6
+        let dot: CGFloat = 1
+        #endif
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = false
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: step, height: step), format: format)
         return renderer.image { ctx in
             UIColor(SportsColors.gridDot).setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: dot, height: dot))
         }
     }()
     #endif
@@ -112,6 +147,7 @@ struct JumbotronGridDot: View {
 struct JumbotronScreenTitle: View {
     let first: String
     let gold: String
+    var size: CGFloat = 40
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -120,8 +156,8 @@ struct JumbotronScreenTitle: View {
             Text(gold)
                 .foregroundStyle(SportsColors.gold)
         }
-        .font(JumbotronFonts.display(40))
-        .jumbotronDisplayTracking(40)
+        .font(JumbotronFonts.display(size))
+        .jumbotronDisplayTracking(size)
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .accessibilityElement(children: .combine)
@@ -141,13 +177,24 @@ struct JumbotronLED: View {
             .font(JumbotronFonts.digits(size))
             .monospacedDigit()
             .foregroundStyle(color.opacity(dimmed ? 0.5 : 1))
-            .shadow(color: glow && !dimmed ? glowColor : .clear, radius: glow ? 6 : 0)
+            .shadow(
+                color: glow && !dimmed ? glowColor : .clear,
+                radius: glow ? ledRadius : 0
+            )
             .lineLimit(1)
             .minimumScaleFactor(0.6)
     }
 
     private var glowColor: Color {
         color == SportsColors.live ? SportsColors.liveGlow : SportsColors.ledGlow
+    }
+
+    private var ledRadius: CGFloat {
+        #if os(tvOS)
+        color == SportsColors.live ? SportsTVMetrics.liveGlowRadius : SportsTVMetrics.ledGlowRadius
+        #else
+        6
+        #endif
     }
 }
 
@@ -193,19 +240,35 @@ struct JumbotronToggle: View {
                 Rectangle()
                     .fill(SportsColors.voidBlack)
                     .overlay {
+                        #if os(tvOS)
+                        Rectangle().stroke(isOn ? SportsColors.gold : SportsColors.border, lineWidth: SportsTVMetrics.hairline)
+                        #else
                         Rectangle().stroke(isOn ? SportsColors.gold : SportsColors.border, lineWidth: 2)
+                        #endif
                     }
                     .shadow(color: isOn ? SportsColors.ledGlow.opacity(0.55) : .clear, radius: 6)
                 Rectangle()
                     .fill(isOn ? SportsColors.gold : SportsColors.border)
+                    #if os(tvOS)
+                    .frame(width: 30, height: 26)
+                    #else
                     .frame(width: 22, height: 18)
+                    #endif
                     .padding(2)
                     .shadow(color: isOn ? SportsColors.gold.opacity(0.8) : .clear, radius: 4)
             }
+            #if os(tvOS)
+            .frame(width: SportsTVMetrics.toggleWidth, height: SportsTVMetrics.toggleHeight)
+            #else
             .frame(width: 52, height: 26)
+            #endif
         }
         .buttonStyle(.plain)
+        #if os(tvOS)
+        .frame(width: SportsTVMetrics.toggleWidth, height: SportsTVMetrics.minFocusSize)
+        #else
         .frame(width: 52, height: 44)
+        #endif
         .contentShape(Rectangle())
         .accessibilityAddTraits(.isButton)
         .accessibilityValue(isOn ? "On" : "Off")
@@ -216,7 +279,11 @@ struct JumbotronRivet: View {
     var body: some View {
         Circle()
             .fill(SportsColors.border)
+            #if os(tvOS)
+            .frame(width: SportsTVMetrics.rivet, height: SportsTVMetrics.rivet)
+            #else
             .frame(width: 6, height: 6)
+            #endif
             .overlay(alignment: .top) {
                 Capsule()
                     .fill(Color.white.opacity(0.28))
@@ -382,6 +449,9 @@ struct JumbotronMessagePanel: View {
                     .overlay { Rectangle().stroke(SportsColors.gold, lineWidth: 2) }
             }
             .buttonStyle(.plain)
+            #if os(tvOS)
+            .sportsTVFocusClean()
+            #endif
             .frame(minHeight: 44)
         }
         .padding(14)

@@ -83,11 +83,7 @@ struct ScoresView: View {
             #if os(iOS)
             jumbotronScoresChrome
             #else
-            VStack(spacing: 0) {
-                filterBar
-                scoresContextStrip
-            }
-            .background(SportsColors.voidBlack.opacity(0.92))
+            filterBar
             #endif
             scoresBody
         }
@@ -289,46 +285,105 @@ struct ScoresView: View {
     private func tvNetflixBrowse(pin: [Game], sections: [SportScoreSection]) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 36) {
+                HStack(alignment: .bottom) {
+                    JumbotronScreenTitle(first: "SCORE", gold: "BOARD", size: 64)
+                    Spacer()
+                    Circle()
+                        .fill(SportsColors.live)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: SportsColors.liveGlow, radius: 6)
+                        .opacity(appModel.isLoadingScores ? 0.25 : 1)
+                        .animation(
+                            appModel.isLoadingScores
+                                ? .easeInOut(duration: 0.5).repeatForever(autoreverses: true)
+                                : .default,
+                            value: appModel.isLoadingScores
+                        )
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, SportsTVMetrics.screenInset)
+
                 if let warning = appModel.scoresWarning {
-                    Label(warning, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(SportsColors.muted)
-                        .padding(.horizontal, 48)
-                        .accessibilityLabel("Scores warning: \(warning)")
+                    HStack(spacing: 8) {
+                        Rectangle().fill(SportsColors.danger).frame(width: 6, height: 16)
+                        Text(warning)
+                            .font(JumbotronFonts.body(14))
+                            .foregroundStyle(SportsColors.danger)
+                    }
+                    .padding(.horizontal, SportsTVMetrics.screenInset)
+                    .accessibilityLabel("Scores warning: \(warning)")
                 }
 
-                if SetupChecklist.isIncomplete(appModel) {
+                if SetupChecklist.needsPlaylist(appModel) {
                     SetupChecklistCard()
-                        .padding(.horizontal, 48)
-                        .padding(.top, 8)
+                        .padding(.horizontal, SportsTVMetrics.screenInset)
                 }
 
-                if pin.isEmpty && sections.isEmpty {
-                    ContentUnavailableView(
-                        emptyTitle,
-                        systemImage: "sportscourt",
-                        description: Text(emptySubtitle)
+                if appModel.isLoadingScores && appModel.games.isEmpty {
+                    HStack {
+                        Rectangle().fill(SportsColors.gold).frame(width: 6, height: 24)
+                        Text("LOADING…")
+                            .font(JumbotronFonts.display(30))
+                            .foregroundStyle(SportsColors.textSecondary)
+                    }
+                    .padding(.horizontal, SportsTVMetrics.screenInset)
+                    HStack(spacing: 24) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Rectangle()
+                                .fill(SportsColors.panelGradient)
+                                .frame(width: SportsTVMetrics.cardWidth, height: SportsTVMetrics.cardHeight)
+                                .overlay { Rectangle().stroke(SportsColors.border, lineWidth: SportsTVMetrics.hairline) }
+                        }
+                    }
+                    .padding(.horizontal, SportsTVMetrics.screenInset)
+                    .allowsHitTesting(false)
+                } else if let err = appModel.scoresError, appModel.games.isEmpty {
+                    JumbotronMessagePanel(
+                        tick: SportsColors.danger,
+                        title: "SCORES UNAVAILABLE",
+                        subtitle: err,
+                        cta: "RETRY",
+                        action: { Task { await appModel.refreshScores() } }
                     )
-                    .frame(maxWidth: .infinity, minHeight: 360)
-                    .padding(.horizontal, 48)
+                    .frame(maxWidth: SportsTVMetrics.scoreCardMaxWidth)
+                    .padding(.horizontal, SportsTVMetrics.screenInset)
+                    .focusSection()
+                } else if pin.isEmpty && sections.isEmpty {
+                    JumbotronMessagePanel(
+                        title: emptyTitle.uppercased(),
+                        subtitle: emptySubtitle,
+                        cta: emptyCTA,
+                        action: emptyCTAAction
+                    )
+                    .frame(maxWidth: SportsTVMetrics.scoreCardMaxWidth)
+                    .padding(.horizontal, SportsTVMetrics.screenInset)
+                    .focusSection()
                 } else {
                     if !pin.isEmpty {
                         ScoresTVRail(
-                            title: "My Games",
-                            emoji: "⭐",
+                            title: "★ MY GAMES",
+                            tick: SportsColors.gold,
                             games: pin,
                             favoriteTeamIds: appModel.favoriteTeamIds,
+                            heroFirst: true,
+                            hasMatch: { !appModel.matches(for: $0).isEmpty },
+                            liveCount: pin.filter(\.isLive).count,
+                            filter: appModel.dashboardFilter,
                             onSelect: { selectedGame = $0 }
                         )
                         .focusSection()
                     }
                     let rails = ScoreboardGrouping.tvScoreRails(sections: sections)
                     ForEach(rails, id: \.key) { rail in
+                        let league = SportLeague.allCases.first { $0.label == rail.title }
                         ScoresTVRail(
-                            title: rail.title,  // per-league (not sportTitle) for Upcoming empty rails
-                            emoji: rail.emoji,
+                            title: rail.title,
+                            tick: league?.jumbotronTick ?? SportsColors.gold,
                             games: rail.games,
                             favoriteTeamIds: appModel.favoriteTeamIds,
+                            hasMatch: { !appModel.matches(for: $0).isEmpty },
+                            liveCount: rail.games.filter(\.isLive).count,
+                            filter: appModel.dashboardFilter,
                             onSelect: { selectedGame = $0 }
                         )
                         .focusSection()
@@ -339,7 +394,7 @@ struct ScoresView: View {
             .padding(.bottom, 60)
         }
         .sportsHideScrollBackground()
-        .background(SportsColors.voidBlack)
+        .sportsScreenBackground()
     }
     #endif
 
@@ -797,14 +852,21 @@ struct ScoresView: View {
                 SportsFilterChip(
                     title: f.label,
                     count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
-                    selected: appModel.dashboardFilter == f
+                    selected: appModel.dashboardFilter == f,
+                    prefersDefault: f == .live
                 ) {
                     appModel.dashboardFilter = f
                 }
             }
             Spacer(minLength: 0)
+            SportsFilterChip(
+                title: appModel.favoriteTeamIds.isEmpty ? "★ PICK TEAMS" : "★ EDIT FAVORITES",
+                selected: false
+            ) {
+                showFavoritePicker = true
+            }
         }
-        .padding(.horizontal, 32)
+        .padding(.horizontal, SportsTVMetrics.screenInset)
         .padding(.vertical, 6)
         .focusSection()
         #else

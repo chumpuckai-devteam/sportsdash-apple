@@ -23,6 +23,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,7 +66,8 @@ import com.samirpatel.sportsdash.ui.theme.gridDotGround
 import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
 
 @Composable
-fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
+fun SettingsScreen(vm: AppViewModel, state: AppUiState, isTelevision: Boolean = false) {
+    val epg by vm.epg.collectAsState()
     val notifPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -120,8 +123,8 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
 
     val playlistLamp = if (state.playlist == null) LampKind.PENDING else if (state.channelError != null) LampKind.BLOCKED else LampKind.DONE
     val epgLamp = when {
-        state.epgStatus?.contains("fail", true) == true -> LampKind.BLOCKED
-        state.epgByChannelId.isNotEmpty() -> LampKind.DONE
+        epg.epgStatus?.contains("fail", true) == true -> LampKind.BLOCKED
+        epg.epgByChannelId.isNotEmpty() -> LampKind.DONE
         else -> LampKind.PENDING
     }
     val favLamp = if (state.favoriteTeamIds.isEmpty()) LampKind.PENDING else LampKind.DONE
@@ -135,7 +138,12 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            JumbotronScreenTitle(first = "CONTROL ", gold = "ROOM", modifier = Modifier.padding(top = 4.dp))
+            JumbotronScreenTitle(
+                first = "CONTROL ",
+                gold = "ROOM",
+                modifier = Modifier.padding(top = 4.dp),
+                size = if (isTelevision) 64 else 40,
+            )
         }
         item {
             JumbotronLampCard(
@@ -298,19 +306,19 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
             }
             state.channelStatus?.let { Text(text = it, color = Muted) }
             state.channelError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-            state.epgStatus?.let { Text(text = it, color = Muted) }
+            epg.epgStatus?.let { Text(text = it, color = Muted) }
         }
         item {
             Button(
                 onClick = { vm.reloadEpg(force = true) },
-                enabled = state.playlist != null && !state.isLoadingEpg,
+                enabled = state.playlist != null && !epg.isLoadingEpg,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Panel,
                     contentColor = Gold,
                 ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (state.isLoadingEpg) "Loading EPG…" else "Reload EPG guide")
+                Text(if (epg.isLoadingEpg) "Loading EPG…" else "Reload EPG guide")
             }
         }
         item {
@@ -389,6 +397,7 @@ fun SettingsScreen(vm: AppViewModel, state: AppUiState) {
                 )
                 JumbotronToggle(
                     isOn = state.notificationsEnabled,
+                    tv = isTelevision,
                     onToggle = {
                         val turningOn = !state.notificationsEnabled
                         if (turningOn) {

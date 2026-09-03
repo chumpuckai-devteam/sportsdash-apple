@@ -4,35 +4,34 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import com.samirpatel.sportsdash.ui.theme.Gold
+import com.samirpatel.sportsdash.ui.theme.LedGlow
+import com.samirpatel.sportsdash.ui.theme.TvFocusScale
 
 /**
- * Android TV / D-pad gold focus ring + slight scale.
+ * Android TV / D-pad gold focus ring + slight scale (006 §1).
  *
- * Does **not** call [focusable] by default — pair with `clickable` /
- * `combinedClickable` / Material buttons so there is a single focus target.
- * Use [makeFocusable]=true only for bare containers that must accept focus.
- *
- * Uses [FocusState.hasFocus] so a parent ring lights when a child is focused
- * (optional nesting) and [isFocused] for the node itself.
+ * 3dp gold border + a second 0.35-alpha ring (Modifier.shadow is not glow).
+ * Cards/rows default to [RectangleShape] and [TvFocusScale] 1.045.
  */
 fun Modifier.tvFocusRing(
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RectangleShape,
     makeFocusable: Boolean = false,
-    scaleFocused: Float = 1.04f,
+    scaleFocused: Float = TvFocusScale,
 ): Modifier = if (!enabled) {
     this
 } else {
@@ -42,9 +41,19 @@ fun Modifier.tvFocusRing(
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .then(if (makeFocusable) Modifier.focusable() else Modifier)
             .scale(if (focused) scaleFocused else 1f)
+            .drawBehind {
+                if (focused) {
+                    drawRect(LedGlow.copy(alpha = 0.35f))
+                }
+            }
             .border(
-                width = if (focused) 2.5.dp else 0.dp,
+                width = if (focused) 3.dp else 0.dp,
                 color = if (focused) Gold else Color.Transparent,
+                shape = shape,
+            )
+            .border(
+                width = if (focused) 6.dp else 0.dp,
+                color = if (focused) Gold.copy(alpha = 0.35f) else Color.Transparent,
                 shape = shape,
             )
     }

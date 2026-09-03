@@ -113,6 +113,8 @@ fun PlayerScreen(
     onToggleScoresTicker: () -> Unit,
     displayName: String = channel.name,
     favoriteTeamIds: Set<String> = emptySet(),
+    onPlayerAppear: () -> Unit = {},
+    onPlayerDisappear: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -127,6 +129,10 @@ fun PlayerScreen(
     var isMuted by remember { mutableStateOf(false) }
     val landscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    DisposableEffect(Unit) {
+        onPlayerAppear()
+        onDispose { onPlayerDisappear() }
+    }
     val tapInteraction = remember { MutableInteractionSource() }
 
     fun noteChromeInteraction() {

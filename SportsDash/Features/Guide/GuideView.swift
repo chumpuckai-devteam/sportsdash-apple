@@ -5,7 +5,11 @@ import SwiftUI
 private enum GuideMetrics {
     /// 12h window keeps horizontal content lighter on device memory.
     static let hours = 12
+    #if os(tvOS)
+    static let pxPerHour: CGFloat = 280
+    #else
     static let pxPerHour: CGFloat = 140
+    #endif
     #if os(tvOS)
     static let channelColWidth: CGFloat = 220
     static let rowHeight: CGFloat = SportsTVMetrics.channelRowHeight
@@ -66,6 +70,7 @@ struct GuideView: View {
         var rows: [GuideChannelRowData] = []
         rows.reserveCapacity(chans.count)
         for ch in chans {
+            if ch.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
             let programs = epg.epgByChannel[ch.id] ?? []
             if moviesOnly {
                 let now = programs.first(where: \.isNow) ?? programs.first
@@ -537,20 +542,15 @@ struct GuideView: View {
                         .padding(.horizontal, 24)
                         .padding(.vertical, 18)
                         .frame(maxWidth: .infinity, minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
-                        .background {
-                            RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous)
-                                .fill(focused ? SportsColors.gold : SportsColors.panelElevated)
-                        }
+                        .background(focused ? SportsColors.gold : SportsColors.panelGradient)
                         .overlay {
-                            RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous)
-                                .stroke(
-                                    focused ? SportsColors.goldDim : SportsColors.border.opacity(0.4),
-                                    lineWidth: focused ? 2 : 1
-                                )
+                            Rectangle().stroke(
+                                focused ? SportsColors.gold : SportsColors.gold.opacity(0.5),
+                                lineWidth: SportsTVMetrics.hairline
+                            )
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: SportsTVMetrics.focusCorner, style: .continuous))
-                        .shadow(color: focused ? SportsColors.gold.opacity(0.28) : .clear, radius: 12, y: 0)
-                        .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+                        .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
+                        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
                         .animation(SportsTVFocusMotion.animation, value: focused)
                     }
                 }
@@ -947,8 +947,8 @@ private struct GuideTimelineGrid: View {
                 .background(SportsColors.panel)
 
             Rectangle()
-                .fill(SportsColors.border.opacity(0.5))
-                .frame(height: 1)
+                .fill(SportsColors.border)
+                .frame(height: SportsTVMetrics.hairline)
 
             // Lazy rows: only visible channels mount program views.
             ScrollView(.vertical, showsIndicators: true) {
@@ -956,6 +956,7 @@ private struct GuideTimelineGrid: View {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                         GuideTimelineRow(
                             row: row,
+                            index: index + 1,
                             windowStart: windowStart,
                             windowEnd: windowEnd,
                             now: now,
@@ -992,9 +993,8 @@ private struct GuideTimelineGrid: View {
     private var timeHeader: some View {
         HStack(spacing: 0) {
             Text("CHANNEL")
-                .font(.system(size: 10, weight: .semibold))
+                .font(JumbotronFonts.display(16))
                 .foregroundStyle(SportsColors.muted)
-                .tracking(1.0)
                 .frame(width: GuideMetrics.channelColWidth, alignment: .leading)
                 .padding(.leading, 12)
 
@@ -1004,15 +1004,18 @@ private struct GuideTimelineGrid: View {
                 sync: scrollSync,
                 role: .header
             ) {
-                HStack(spacing: 0) {
-                    ForEach(0..<GuideMetrics.hours, id: \.self) { h in
-                        let t = Calendar.current.date(byAdding: .hour, value: h, to: windowStart) ?? windowStart
-                        Text(hourLabel(t))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(SportsColors.goldDim)
-                            .frame(width: GuideMetrics.pxPerHour, alignment: .leading)
-                            .padding(.leading, 8)
+                ZStack(alignment: .topLeading) {
+                    HStack(spacing: 0) {
+                        ForEach(0..<GuideMetrics.hours, id: \.self) { h in
+                            let t = Calendar.current.date(byAdding: .hour, value: h, to: windowStart) ?? windowStart
+                            Text(hourLabel(t))
+                                .font(JumbotronFonts.display(22))
+                                .foregroundStyle(SportsColors.goldDim)
+                                .frame(width: GuideMetrics.pxPerHour, alignment: .leading)
+                                .padding(.leading, 8)
+                        }
                     }
+                    nowMarker
                 }
                 .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.timeHeaderHeight)
             }
@@ -1024,11 +1027,34 @@ private struct GuideTimelineGrid: View {
         f.dateFormat = "h a"
         return f.string(from: date).lowercased()
     }
+
+    @ViewBuilder
+    private var nowMarker: some View {
+        let offset = CGFloat(now.timeIntervalSince(windowStart) / 3600) * GuideMetrics.pxPerHour
+        if offset >= 0 && offset <= GuideMetrics.timelineWidth {
+            VStack(spacing: 0) {
+                JumbotronLED(text: "▼ \(Self.hhmm.string(from: now))", size: 14, color: SportsColors.live, glow: true)
+                Rectangle()
+                    .fill(SportsColors.live)
+                    .frame(width: SportsTVMetrics.hairline)
+                    .shadow(color: SportsColors.liveGlow, radius: 6)
+            }
+            .offset(x: offset)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private static let hhmm: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 }
 
 /// One channel row: fixed label + horizontally synced program strip.
 private struct GuideTimelineRow: View {
     let row: GuideChannelRowData
+    var index: Int = 1
     let windowStart: Date
     let windowEnd: Date
     let now: Date
@@ -1055,16 +1081,14 @@ private struct GuideTimelineRow: View {
                 role: .body
             ) {
                 ZStack(alignment: .topLeading) {
-                    // Continuous track so empty airtime never looks like a broken grid.
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(SportsColors.panel.opacity(0.55))
-                        .frame(width: GuideMetrics.timelineWidth - 4, height: GuideMetrics.rowHeight - 12)
-                        .offset(x: 2, y: 6)
+                    Rectangle()
+                        .fill(SportsColors.panel.opacity(0.35))
+                        .frame(width: GuideMetrics.timelineWidth, height: GuideMetrics.rowHeight)
 
                     ForEach(0...GuideMetrics.hours, id: \.self) { h in
                         Rectangle()
-                            .fill(SportsColors.border.opacity(0.28))
-                            .frame(width: 1, height: GuideMetrics.rowHeight)
+                            .fill(SportsColors.border.opacity(0.45))
+                            .frame(width: SportsTVMetrics.hairline, height: GuideMetrics.rowHeight)
                             .offset(x: CGFloat(h) * GuideMetrics.pxPerHour)
                     }
 
@@ -1085,8 +1109,8 @@ private struct GuideTimelineRow: View {
         #endif
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(SportsColors.border.opacity(0.35))
-                .frame(height: 0.5)
+                .fill(SportsColors.gridDot)
+                .frame(height: SportsTVMetrics.hairline)
         }
     }
 
@@ -1127,36 +1151,32 @@ private struct GuideTimelineRow: View {
 
     @ViewBuilder
     private func channelLabel(focused: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: SportsTVMetrics.channelCorner, style: .continuous)
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(focused ? SportsColors.voidBlack.opacity(0.22) : SportsColors.voidBlack)
-                .frame(width: 40, height: 40)
-                .overlay {
-                    Image(systemName: "tv.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+        HStack(spacing: 14) {
+            Rectangle()
+                .fill(JumbotronBrand.stripe(for: row.channel.group))
+                .frame(width: SportsTVMetrics.stripe)
+            JumbotronLED(
+                text: String(format: "%03d", index),
+                size: 16,
+                color: focused ? SportsColors.voidBlack : SportsColors.gold,
+                glow: !focused
+            )
+            .frame(width: 52, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames).uppercased())
+                    .font(JumbotronFonts.display(26))
+                    .jumbotronDisplayTracking(26)
+                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                    .lineLimit(2)
+                if isFavorite {
+                    Text("★").font(JumbotronFonts.display(16)).foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
                 }
-
-            Text((isFavorite ? "★ " : "") + ChannelNameCleanup.displayName(row.channel.name, enabled: cleanUpNames))
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 14)
-        .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
-        .background {
-            shape.fill(focused ? SportsColors.gold : SportsColors.panelElevated)
-        }
-        .overlay {
-            if focused {
-                shape.stroke(SportsColors.goldDim, lineWidth: 2)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clipShape(shape)
-        .shadow(color: focused ? SportsColors.gold.opacity(0.32) : .clear, radius: 10, y: 0)
+        .frame(width: GuideMetrics.channelColWidth, height: GuideMetrics.rowHeight, alignment: .leading)
+        .background(focused ? SportsColors.gold : SportsColors.panelGradient)
+        .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
         #if os(tvOS)
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
         .animation(SportsTVFocusMotion.animation, value: focused)
@@ -1272,18 +1292,13 @@ private struct GuideTimelineRow: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
-        .frame(width: max(16, width - 4), height: GuideMetrics.rowHeight - 12, alignment: .center)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(SportsColors.panel.opacity(0.35))
-        )
+        .frame(width: max(16, width - 4), height: GuideMetrics.rowHeight - 16, alignment: .center)
+        .background(SportsColors.panel.opacity(0.35))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(SportsColors.border.opacity(0.25), lineWidth: 1)
+            Rectangle().stroke(SportsColors.border.opacity(0.5), lineWidth: SportsTVMetrics.hairline)
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onPlay(row.channel) }
-        .offset(x: left + 2, y: 6)
+        .allowsHitTesting(false)
+        .offset(x: left + 2, y: 8)
         .accessibilityLabel(label.isEmpty ? "No program information" : label)
     }
 
@@ -1291,54 +1306,31 @@ private struct GuideTimelineRow: View {
     private func programBlock(_ program: EpgProgram, left: CGFloat, width: CGFloat) -> some View {
         let airing = program.start <= now && now < program.end
 
-        VStack(alignment: .leading, spacing: 2) {
-            Text(program.title)
-                .font(.system(size: 12, weight: .bold))
+        VStack(alignment: .leading, spacing: 4) {
+            Text(program.title.isEmpty ? "Program" : program.title)
+                .font(JumbotronFonts.body(16, bold: true))
                 .foregroundStyle(SportsColors.text)
                 .lineLimit(1)
-            HStack(spacing: 4) {
-                Text(shortTimeRange(program))
-                    .font(.system(size: 10))
-                    .foregroundStyle(SportsColors.muted)
-                    .lineLimit(1)
-                if width > 96, let cat = program.categoryChipLabel {
-                    GuideCategoryChip(
-                        label: cat,
-                        emphasized: XmltvCategory.saysMovie(program.categories),
-                        compact: true
-                    )
-                }
-            }
-            if airing {
-                MovieRatingLoader(
-                    title: program.title,
-                    categories: program.categories,
-                    channelGroup: row.channel.group,
-                    channelName: row.channel.name,
-                    compact: true,
-                    forceMovie: XmltvCategory.saysMovie(program.categories)
-                        || (row.channel.group ?? "").localizedCaseInsensitiveContains("movie")
-                        || row.channel.name.localizedCaseInsensitiveContains("cinema")
-                )
-            }
+            JumbotronLED(text: shortTimeRange(program), size: 14, color: SportsColors.gold, glow: false)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(width: max(24, width - 4), height: GuideMetrics.rowHeight - 12, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelElevated)
-        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(width: max(24, width - 4), height: GuideMetrics.rowHeight - 16, alignment: .topLeading)
+        .background(airing ? SportsColors.gold.opacity(0.18) : SportsColors.panelGradient)
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(
-                    airing ? SportsColors.gold.opacity(0.55) : SportsColors.border,
-                    lineWidth: 1
-                )
+            Rectangle().stroke(
+                airing ? SportsColors.gold.opacity(0.6) : SportsColors.border,
+                lineWidth: SportsTVMetrics.hairline
+            )
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onPlay(row.channel) }
-        .offset(x: left + 2, y: 6)
+        .overlay(alignment: .topTrailing) {
+            if airing {
+                JumbotronLED(text: "LIVE", size: 12, color: SportsColors.live, glow: true)
+                    .padding(10)
+            }
+        }
+        .allowsHitTesting(false)
+        .offset(x: left + 2, y: 8)
     }
 
     private func shortTimeRange(_ p: EpgProgram) -> String {

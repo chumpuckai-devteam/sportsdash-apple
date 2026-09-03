@@ -10,6 +10,8 @@ struct SettingsView: View {
             #if os(iOS)
             jumbotronHub
             #else
+            jumbotronTvHub
+            #if false
             List {
                 if SetupChecklist.isIncomplete(appModel) {
                     Section {
@@ -221,8 +223,142 @@ struct SettingsView: View {
             .sportsNavTitleMode(large: true)
             .sportsInsetGroupedList()
             #endif
+            #endif
         }
     }
+
+    #if os(tvOS)
+    private var jumbotronTvHub: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                JumbotronScreenTitle(first: "CONTROL ", gold: "ROOM", size: 64)
+
+                SetupChecklistCard()
+
+                HStack(alignment: .top, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        tvSectionLabel("SOURCE", tick: SportsColors.live)
+                        VStack(spacing: 0) {
+                            NavigationLink { PlaylistSettingsView() } label: {
+                                tvSettingsRow(
+                                    icon: "list.bullet.rectangle",
+                                    title: {
+                                        if appModel.playlists.isEmpty { return "XTREAM · ADD SOURCE" }
+                                        return "XTREAM · \((appModel.activePlaylist?.name ?? "PLAYLIST").uppercased())"
+                                    }(),
+                                    value: "\(appModel.channels.count) CH ›"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .sportsTVFocusClean()
+                            if let account = appModel.xtreamAccount {
+                                tvMetaRow("STATUS", account.status?.uppercased() ?? "—",
+                                          color: account.isActive ? SportsColors.live : SportsColors.danger)
+                                tvMetaRow("EXPIRES", account.expDateLabel.uppercased(), color: SportsColors.gold)
+                                tvMetaRow("CONNECTIONS", account.connectionsLabel, color: SportsColors.gold)
+                            } else if epg.isLoadingEpg {
+                                tvMetaRow("EPG", epg.epgStatus?.uppercased() ?? "…", color: SportsColors.muted)
+                            }
+                        }
+                        .jumbotronPanel(border: SportsColors.border)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        tvSectionLabel("SYSTEM", tick: SportsColors.gold)
+                        VStack(spacing: 0) {
+                            NavigationLink { GeneralSettingsView() } label: {
+                                tvSettingsRow(icon: "gearshape", title: "GENERAL", value: "›")
+                            }
+                            .buttonStyle(.plain)
+                            .sportsTVFocusClean()
+                            NavigationLink { UISettingsView() } label: {
+                                tvSettingsRow(
+                                    icon: "line.3.horizontal",
+                                    title: "USER INTERFACE",
+                                    value: appModel.playerPrefs.cleanUpNames ? "CLEAN NAMES ›" : "›"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .sportsTVFocusClean()
+                            NavigationLink { PlayerSettingsView() } label: {
+                                tvSettingsRow(icon: "play.fill", title: "VIDEO PLAYER", value: "VLC ›")
+                            }
+                            .buttonStyle(.plain)
+                            .sportsTVFocusClean()
+                            NavigationLink { ScoresSettingsView() } label: {
+                                tvSettingsRow(
+                                    icon: "sportscourt",
+                                    title: "LEAGUES ON SCORES",
+                                    value: "\((appModel.selectedLeagues.isEmpty ? SportLeague.defaults.count : appModel.selectedLeagues.count)) SELECTED ›"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .sportsTVFocusClean()
+                        }
+                        .jumbotronPanel()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, SportsTVMetrics.screenInset)
+            .padding(.bottom, 40)
+        }
+        .sportsScreenBackground()
+        .navigationTitle("")
+        .focusSection()
+    }
+
+    private func tvSectionLabel(_ title: String, tick: Color) -> some View {
+        HStack(spacing: 12) {
+            Rectangle().fill(tick).frame(width: 6, height: 22)
+            Text(title)
+                .font(JumbotronFonts.display(24))
+                .foregroundStyle(SportsColors.muted)
+                .tracking(2)
+        }
+    }
+
+    private func tvSettingsRow(icon: String, title: String, value: String) -> some View {
+        SportsTVFocused { focused in
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.gold)
+                    .frame(width: 36, height: 36)
+                    .overlay { Rectangle().stroke(focused ? SportsColors.voidBlack : SportsColors.border, lineWidth: SportsTVMetrics.hairline) }
+                Text(title)
+                    .font(JumbotronFonts.display(30))
+                    .foregroundStyle(focused ? SportsColors.voidBlack : SportsColors.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(value)
+                    .font(JumbotronFonts.body(16))
+                    .foregroundStyle(focused ? SportsColors.voidBlack.opacity(0.7) : SportsColors.muted)
+            }
+            .padding(.horizontal, 20)
+            .frame(height: SportsTVMetrics.settingsRowHeight)
+            .background(focused ? SportsColors.gold : Color.clear)
+            .overlay(alignment: .top) { Rectangle().fill(SportsColors.gridDot).frame(height: SportsTVMetrics.hairline) }
+            .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
+            .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+            .animation(SportsTVFocusMotion.animation, value: focused)
+        }
+        .frame(minHeight: SportsTVMetrics.minFocusSize)
+    }
+
+    private func tvMetaRow(_ label: String, _ value: String, color: Color) -> some View {
+        HStack {
+            Text(label)
+                .font(JumbotronFonts.body(16))
+                .foregroundStyle(SportsColors.muted)
+            Spacer()
+            JumbotronLED(text: value, size: 16, color: color, glow: color == SportsColors.live || color == SportsColors.gold)
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 56)
+        .overlay(alignment: .top) { Rectangle().fill(SportsColors.gridDot).frame(height: SportsTVMetrics.hairline) }
+    }
+    #endif
 
     #if os(iOS)
     private var jumbotronHub: some View {

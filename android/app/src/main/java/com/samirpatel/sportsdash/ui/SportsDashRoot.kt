@@ -86,6 +86,8 @@ fun SportsDashRoot(
                 onToggleScoresTicker = { vm.toggleScoresTicker() },
                 displayName = vm.displayChannelName(playing.name),
                 favoriteTeamIds = state.favoriteTeamIds,
+                onPlayerAppear = { vm.playerDidAppear() },
+                onPlayerDisappear = { vm.playerDidDisappear() },
             )
             // Stream picker over fullscreen player (ticker game switch)
             val pickerGame = state.streamPickerGame
@@ -120,71 +122,14 @@ fun SportsDashRoot(
     Scaffold(
         containerColor = VoidBlack,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            if (!hideShellChrome && isTelevision) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            if (isTelevision) "SportsDash TV" else "SportsDash",
-                            fontWeight = FontWeight.Bold,
-                            color = Gold,
-                        )
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = {
-                                when (tab) {
-                                    0 -> vm.refreshScores()
-                                    1 -> {
-                                        vm.refreshChannels()
-                                        vm.reloadEpg(force = true)
-                                    }
-                                }
-                            },
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Gold)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = VoidBlack,
-                        titleContentColor = Gold,
-                    ),
-                    windowInsets = WindowInsets.safeDrawing,
-                )
-            }
-        },
+        topBar = {},
         bottomBar = {
             if (!hideShellChrome) {
-                if (isTelevision) {
-                    NavigationBar(
-                        containerColor = Panel,
-                        windowInsets = WindowInsets.safeDrawing,
-                    ) {
-                        NavigationBarItem(
-                            selected = tab == 0,
-                            onClick = { tab = 0 },
-                            icon = { Icon(Icons.Default.Sports, contentDescription = "Scores") },
-                            label = { Text("Scores") },
-                            colors = navColors,
-                        )
-                        NavigationBarItem(
-                            selected = tab == 1,
-                            onClick = { tab = 1 },
-                            icon = { Icon(Icons.Default.LiveTv, contentDescription = "Guide") },
-                            label = { Text("Guide") },
-                            colors = navColors,
-                        )
-                        NavigationBarItem(
-                            selected = tab == 2,
-                            onClick = { tab = 2 },
-                            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                            label = { Text("Settings") },
-                            colors = navColors,
-                        )
-                    }
-                } else {
-                    JumbotronTabBar(selected = tab, onSelect = { tab = it })
-                }
+                JumbotronTabBar(
+                    selected = tab,
+                    onSelect = { tab = it },
+                    tv = isTelevision,
+                )
             }
         },
     ) { padding ->
@@ -201,7 +146,16 @@ fun SportsDashRoot(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .then(if (isTelevision) Modifier.background(VoidBlack) else Modifier.gridDotGround()),
+                    .then(
+                        if (isTelevision) {
+                            Modifier.gridDotGround(
+                                step = com.samirpatel.sportsdash.ui.theme.TvGridStep,
+                                dot = com.samirpatel.sportsdash.ui.theme.TvGridDot,
+                            )
+                        } else {
+                            Modifier.gridDotGround()
+                        },
+                    ),
             ) {
                 when (tab) {
                     0 -> ScoresScreen(
@@ -219,7 +173,7 @@ fun SportsDashRoot(
                         onGoSettings = { tab = 2 },
                         onGoScores = { tab = 0 },
                     )
-                    else -> SettingsScreen(vm = vm, state = state)
+                    else -> SettingsScreen(vm = vm, state = state, isTelevision = isTelevision)
                 }
 
                 // Floating mini-player over tabs (iOS pop-out parity)

@@ -51,8 +51,9 @@ class EpgRepository(
         const val MAX_PER_CHANNEL = 16
         const val HOURS_BEHIND = 6
         const val HOURS_AHEAD = 36
-        const val MAX_DOWNLOAD_BYTES = 150L * 1024 * 1024
+        const val MAX_STREAM_BYTES = 1024L * 1024 * 1024
         private const val CACHE_VERSION = 3
+        private const val SHORT_EPG_NEGATIVE_TTL_MS = 6 * 3600_000L
     }
 
     data class LoadResult(
@@ -61,6 +62,9 @@ class EpgRepository(
     )
 
     private val bulkMutex = Mutex()
+    private val shortEpgEmptyAt = HashMap<String, Long>()
+    private val shortEpgInFlight = HashSet<String>()
+    private var lastGoodBulkUrl: String? = null
 
     /** Fast Now/Next for open category (Xtream short EPG only). */
     suspend fun loadShortEpgForChannels(
@@ -73,8 +77,16 @@ class EpgRepository(
         if (config.type != PlaylistType.XTREAM) {
             return@withContext LoadResult(emptyMap(), "Short EPG needs Xtream")
         }
-        // Cap so movie packs don't hang UX
-        val work = channels.take(80)
+        // Cap so movie packs don't hang UX. Skip recently-empty hosts and in-flight ids.
+        val host = config.host
+        val now = System.currentTimeMillis()
+        val work = channels.filter { ch ->
+            val key = "$host|${ch.id}"
+            val emptyAt = shortEpgEmptyAt[key]
+            val recentlyEmpty = emptyAt != null && now - emptyAt < SHORT_EPG_NEGATIVE_TTL_MS
+            !recentlyEmpty && ch.id !in shortEpgInFlight
+        }.take(80)
+        work.forEach { shortEpgInFlight.add(it.id) }
         onStatus("Now/Next · ${work.size} channels…")
         val result = linkedMapOf<String, List<EpgProgram>>()
         var missing = work
@@ -87,11 +99,17 @@ class EpgRepository(
                 for ((k, v) in short) if (v.isNotEmpty()) result[k] = v
                 onBatch(result.toMap())
             }
+            for (ch in slice) {
+                if (short[ch.id].isNullOrEmpty()) {
+                    shortEpgEmptyAt["$host|${ch.id}"] = System.currentTimeMillis()
+                }
+            }
             val attempted = slice.map { it.id }.toSet()
             missing = missing.filter { it.id !in attempted }
             if (short.isEmpty() && wave >= 2) break
             onStatus("Now/Next · ${result.size}/${work.size}")
         }
+        work.forEach { shortEpgInFlight.remove(it.id) }
         val status = "Now/Next · ${result.size}/${work.size}"
         onStatus(status)
         onBatch(result.toMap())
@@ -198,18 +216,30 @@ class EpgRepository(
 
         val urls = bulkXmltvUrls(config)
         for ((index, url) in urls.withIndex()) {
-            onStatus("Step 1/3 · Downloading full guide… (${index + 1}/${urls.size})")
-            val dest = xmlFile ?: File.createTempFile("sportsdash-epg-", ".xml")
-            val ok = runCatching { downloadXmltvToFile(url, dest, onStatus) }.getOrDefault(false)
-            if (!ok) continue
-            onStatus("Step 2/3 · Download done (${formatMb(dest.length())}) — parsing…")
-            val parsed = parseXmltvFile(dest)
-            if (parsed.isNotEmpty()) {
+            onStatus("Step 1/3 · Streaming full guide… (${index + 1}/${urls.size})")
+            val parsed = runCatching { streamParseXmltv(url, onStatus) }.getOrNull()
+            if (!parsed.isNullOrEmpty()) {
+                rememberGoodUrl(config, url)
                 onStatus("Parsed ${parsed.size} EPG channels")
                 return parsed
             }
         }
         return null
+    }
+
+    private fun streamParseXmltv(urlString: String, onStatus: (String) -> Unit): Map<String, List<EpgProgram>>? {
+        val req = Request.Builder()
+            .url(urlString)
+            .header("Accept", "application/xml, text/xml, */*")
+            .header("User-Agent", "SportsDash/1.0")
+            .get()
+            .build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            val body = resp.body ?: return null
+            onStatus("Step 2/3 · Parsing guide stream…")
+            return body.byteStream().use { parseXmltv(it) }
+        }
     }
 
     private fun formatMb(bytes: Long): String =
@@ -366,6 +396,7 @@ class EpgRepository(
 
     private fun bulkXmltvUrls(config: PlaylistConfig): List<String> {
         val out = ArrayList<String>()
+        lastGoodBulkUrl(config)?.let { out.add(it) }
         when (config.type) {
             PlaylistType.XTREAM ->
                 out.addAll(xtreamXmltvUrls(config.host, config.username, config.password))
@@ -373,6 +404,23 @@ class EpgRepository(
                 xtreamXmltvUrlsFromAnyUrl(config.m3uUrl)?.let { out.addAll(it) }
         }
         return out.distinct()
+    }
+
+    private fun lastGoodBulkUrl(config: PlaylistConfig): String? {
+        lastGoodBulkUrl?.let { return it }
+        val f = lastGoodUrlFile(config) ?: return null
+        return runCatching { f.readText().trim().takeIf { it.startsWith("http") } }.getOrNull()
+            ?.also { lastGoodBulkUrl = it }
+    }
+
+    private fun rememberGoodUrl(config: PlaylistConfig, url: String) {
+        lastGoodBulkUrl = url
+        lastGoodUrlFile(config)?.writeText(url)
+    }
+
+    private fun lastGoodUrlFile(config: PlaylistConfig): File? {
+        val dir = ensureCacheDir() ?: return null
+        return File(dir, "last-xmltv-${cacheKey(config)}.txt")
     }
 
     private fun defaultPort(scheme: String): Int =
@@ -384,7 +432,6 @@ class EpgRepository(
         val out = ArrayList<String>()
         for (root in httpsPreferredRoots(base)) {
             out.add("$root/xmltv.php?$query")
-            out.add("$root/xmltv.php?$query&type=m3u_plus")
         }
         return out
     }
@@ -431,14 +478,37 @@ class EpgRepository(
 
     // region Parse + map
 
-    private fun parseXmltvFile(file: File): Map<String, List<EpgProgram>> {
+    private fun parseXmltvFile(file: File): Map<String, List<EpgProgram>> =
+        FileInputStream(file).use { parseXmltv(it) }
+
+    /** Public for chunk-boundary tests. 1 GB abort while reading. */
+    fun parseXmltv(input: java.io.InputStream): Map<String, List<EpgProgram>> {
         val now = System.currentTimeMillis()
         val windowStart = now - HOURS_BEHIND * 3600_000L
         val windowEnd = now + HOURS_AHEAD * 3600_000L
         val map = LinkedHashMap<String, MutableList<EpgProgram>>()
         val displayNames = LinkedHashMap<String, MutableList<String>>()
+        val counting = object : java.io.FilterInputStream(input) {
+            var total = 0L
+            override fun read(): Int {
+                val n = super.read()
+                if (n >= 0) {
+                    total += 1
+                    if (total > MAX_STREAM_BYTES) error("guide stream exceeded 1 GB")
+                }
+                return n
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val n = super.read(b, off, len)
+                if (n > 0) {
+                    total += n
+                    if (total > MAX_STREAM_BYTES) error("guide stream exceeded 1 GB")
+                }
+                return n
+            }
+        }
 
-        FileInputStream(file).use { fis ->
+        counting.use { fis ->
             val parser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
             parser.setInput(fis, null)

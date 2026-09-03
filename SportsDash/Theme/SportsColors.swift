@@ -82,9 +82,30 @@ enum SportsTVMetrics {
     static let chipFocusScale: CGFloat = 1.06
     static let scoreCardMaxWidth: CGFloat = 960
     static let scoreHorizontalInset: CGFloat = 56
-    static let focusCorner: CGFloat = 18
-    static let channelCorner: CGFloat = 14
+    /// Jumbotron TV surfaces are square (006 §1). Player circular buttons use `circleControl`.
+    static let focusCorner: CGFloat = 0
+    static let channelCorner: CGFloat = 0
     static let rowVerticalGutter: CGFloat = 10
+    static let hairline: CGFloat = 3
+    static let edgeBar: CGFloat = 6
+    static let stripe: CGFloat = 6
+    static let rivet: CGFloat = 8
+    static let gridStep: CGFloat = 12
+    static let gridDotSize: CGFloat = 2
+    static let cardWidth: CGFloat = 420
+    static let cardHeight: CGFloat = 236
+    static let heroCardWidth: CGFloat = 560
+    static let chipHeight: CGFloat = 56
+    static let chipMinWidth: CGFloat = 160
+    static let screenInset: CGFloat = 48
+    static let titleSafe: CGFloat = 60
+    static let circleControl: CGFloat = 18
+    static let toggleWidth: CGFloat = 72
+    static let toggleHeight: CGFloat = 36
+    static let settingsRowHeight: CGFloat = 66
+    static let ledGlowRadius: CGFloat = 10
+    static let focusGlowRadius: CGFloat = 14
+    static let liveGlowRadius: CGFloat = 8
 }
 
 // MARK: - Glass / material helpers
@@ -310,14 +331,18 @@ struct SportsFilterChip: View {
         }
         #if os(tvOS)
         .sportsTVFocusClean()
+        .prefersDefaultFocus(prefersDefault)
         #else
         .buttonStyle(.plain)
         #endif
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    var prefersDefault: Bool = false
+
     @ViewBuilder
     private func chipLabel(focused: Bool) -> some View {
+        #if os(iOS)
         HStack(spacing: 6) {
             Text(title)
             if let count, count > 0 {
@@ -330,34 +355,47 @@ struct SportsFilterChip: View {
         .foregroundStyle(selected ? SportsColors.voidBlack : SportsColors.text)
         .padding(.horizontal, compact ? 10 : 14)
         .padding(.vertical, compact ? 5 : 8)
-        #if os(iOS)
         .background {
             Capsule(style: .continuous)
                 .fill(selected ? SportsColors.gold : SportsColors.panel)
         }
         #else
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(minHeight: SportsTVMetrics.minFocusSize)
-        .background {
-            Capsule(style: .continuous)
-                .fill(selected ? SportsColors.gold : SportsColors.panelElevated)
-        }
-        .overlay {
-            Capsule(style: .continuous)
-                .stroke(
-                    focused
-                        ? (selected ? SportsColors.voidBlack.opacity(0.55) : SportsColors.gold)
-                        : Color.clear,
-                    lineWidth: focused ? 3 : 0
-                )
-        }
-        .clipShape(Capsule(style: .continuous))
-        .shadow(color: focused ? SportsColors.gold.opacity(0.35) : .clear, radius: 10, y: 0)
-        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
-        .animation(SportsTVFocusMotion.animation, value: focused)
+        jumbotronTVChip(focused: focused)
         #endif
     }
+
+    #if os(tvOS)
+    @ViewBuilder
+    private func jumbotronTVChip(focused: Bool) -> some View {
+        let goldFill = selected || focused
+        HStack(spacing: 14) {
+            Text(title.uppercased())
+                .font(JumbotronFonts.display(26))
+                .jumbotronDisplayTracking(26)
+                .foregroundStyle(goldFill ? SportsColors.voidBlack : SportsColors.muted)
+            if let count, count > 0 {
+                JumbotronLED(
+                    text: "\(count)",
+                    size: 16,
+                    color: goldFill ? SportsColors.voidBlack : SportsColors.muted,
+                    glow: false
+                )
+            }
+        }
+        .padding(.horizontal, 26)
+        .frame(minWidth: SportsTVMetrics.chipMinWidth, minHeight: SportsTVMetrics.chipHeight)
+        .background(goldFill ? SportsColors.gold : SportsColors.panelGradient)
+        .overlay {
+            Rectangle().stroke(
+                goldFill ? SportsColors.gold : SportsColors.border,
+                lineWidth: SportsTVMetrics.hairline
+            )
+        }
+        .shadow(color: goldFill ? SportsColors.ledGlow.opacity(0.55) : .clear, radius: 11)
+        .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
+        .animation(SportsTVFocusMotion.animation, value: focused)
+    }
+    #endif
 }
 
 struct SportsLiveBadge: View {

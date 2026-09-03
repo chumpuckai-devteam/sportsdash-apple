@@ -49,6 +49,26 @@ val SettingsRowHeight = 50.dp
 val TabBarHeight = 80.dp
 val TeamEdgeWidth = 5.dp
 
+/** Jumbotron TV (006 §1). Phone values above stay the 005 lock. */
+val TvHairline = 3.dp
+val TvEdgeBar = 6.dp
+val TvStripe = 6.dp
+val TvGridStep = 12.dp
+val TvGridDot = 2.dp
+val TvChipHeight = 56.dp
+val TvRowMin = 56.dp
+val TvCardWidth = 380.dp
+val TvCardHeight = 210.dp
+val TvHeroWidth = 500.dp
+val TvScreenInset = 48.dp
+val TvTitleSafe = 60.dp
+val TvFocusScale = 1.045f
+val TvChipFocusScale = 1.06f
+val TvToggleWidth = 72.dp
+val TvToggleHeight = 36.dp
+val TvSettingsRow = 66.dp
+val TvTabBarHeight = 96.dp
+
 private val DarkColors = darkColorScheme(
     primary = Gold,
     onPrimary = VoidBlack,

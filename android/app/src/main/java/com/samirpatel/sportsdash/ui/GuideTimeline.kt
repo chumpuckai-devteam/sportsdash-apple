@@ -192,8 +192,10 @@ fun GuideTimeline(
                     items = channels,
                     key = { ch -> ch.id },
                 ) { channel ->
+                    val idx = channels.indexOfFirst { it.id == channel.id } + 1
                     TimelineRow(
                         channel = channel,
+                        index = idx,
                         programs = programsFor(channel.id),
                         windowStartMs = windowStartMs,
                         windowEndMs = windowEndMs,
@@ -220,6 +222,7 @@ fun GuideTimeline(
 @Composable
 private fun TimelineRow(
     channel: IptvChannel,
+    index: Int = 1,
     programs: List<EpgProgram>,
     windowStartMs: Long,
     windowEndMs: Long,
@@ -262,32 +265,32 @@ private fun TimelineRow(
     ) {
         Row(
             modifier = Modifier
-                .width(ChannelColWidth)
+                .width(220.dp)
                 .fillMaxHeight()
                 .background(Panel)
-                .tvFocusRing(enabled = tvFocus, shape = RoundedCornerShape(10.dp))
-                .combinedClickable(onClick = onPlay, onLongClick = onLongPress)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .tvFocusRing(enabled = tvFocus)
+                .combinedClickable(onClick = onPlay, onLongClick = onLongPress),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val logo = channel.logo
-            if (!logo.isNullOrBlank()) {
-                AsyncImage(
-                    model = logo,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    contentScale = ContentScale.Fit,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
+            Box(
+                Modifier
+                    .width(com.samirpatel.sportsdash.ui.theme.TvStripe)
+                    .fillMaxHeight()
+                    .background(com.samirpatel.sportsdash.ui.theme.brandStripe(channel.group)),
+            )
+            Text(
+                text = "%03d".format(index),
+                color = Gold,
+                fontFamily = com.samirpatel.sportsdash.ui.theme.OrbitronBlack,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(start = 8.dp).width(52.dp),
+            )
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
-                    text = if (isFavorite) "★ $label" else label,
+                    text = label.uppercase() + if (isFavorite) " ★" else "",
                     color = TextPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = com.samirpatel.sportsdash.ui.theme.BebasNeue,
+                    fontSize = 22.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

@@ -41,29 +41,29 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.samirpatel.sportsdash.core.sports.TeamInfo
 
-fun Modifier.gridDotGround(): Modifier = this
+fun Modifier.gridDotGround(step: Dp = 6.dp, dot: Dp = 1.dp): Modifier = this
     .background(VoidBlack)
     .drawBehind {
-        val step = 6.dp.toPx()
-        val r = 0.5.dp.toPx()
+        val s = step.toPx()
+        val r = (dot.toPx() / 2f).coerceAtLeast(0.5f)
         var y = 0f
         while (y < size.height) {
             var x = 0f
             while (x < size.width) {
                 drawCircle(GridDot, r, Offset(x, y))
-                x += step
+                x += s
             }
-            y += step
+            y += s
         }
     }
 
-fun Modifier.jumbotronPanel(border: Color = Border): Modifier = this
+fun Modifier.jumbotronPanel(border: Color = Border, width: Dp = 2.dp): Modifier = this
     .background(PanelGradient, RectangleShape)
-    .border(2.dp, border, RectangleShape)
+    .border(width, border, RectangleShape)
 
-fun Modifier.teamEdges(away: Color, home: Color): Modifier = this.drawWithContent {
+fun Modifier.teamEdges(away: Color, home: Color, width: Dp = TeamEdgeWidth): Modifier = this.drawWithContent {
     drawContent()
-    val w = TeamEdgeWidth.toPx()
+    val w = width.toPx()
     drawRect(away, size = androidx.compose.ui.geometry.Size(w, size.height))
     drawRect(
         home,
@@ -90,13 +90,13 @@ fun brandStripe(group: String?): Color {
 }
 
 @Composable
-fun JumbotronScreenTitle(first: String, gold: String, modifier: Modifier = Modifier) {
+fun JumbotronScreenTitle(first: String, gold: String, modifier: Modifier = Modifier, size: Int = 40) {
     Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
         Text(
             first,
             color = TextPrimary,
             fontFamily = BebasNeue,
-            fontSize = 40.sp,
+            fontSize = size.sp,
             letterSpacing = 0.04.em,
             maxLines = 1,
         )
@@ -104,7 +104,7 @@ fun JumbotronScreenTitle(first: String, gold: String, modifier: Modifier = Modif
             gold,
             color = Gold,
             fontFamily = BebasNeue,
-            fontSize = 40.sp,
+            fontSize = size.sp,
             letterSpacing = 0.04.em,
             maxLines = 1,
         )
@@ -166,43 +166,64 @@ fun JumbotronWatchButton(
 private fun Modifier.defaultMinSize44(): Modifier = this.height(44.dp)
 
 @Composable
-fun JumbotronToggle(isOn: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun JumbotronToggle(
+    isOn: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    tv: Boolean = false,
+) {
+    val boxW = if (tv) TvToggleWidth else 52.dp
+    val boxH = if (tv) TvToggleHeight else 26.dp
+    val knobW = if (tv) 30.dp else 22.dp
+    val knobH = if (tv) 26.dp else 18.dp
+    val hit = if (tv) TvRowMin else 44.dp
+    val hair = if (tv) TvHairline else 2.dp
     Box(
         modifier = modifier
-            .width(52.dp)
-            .height(44.dp)
+            .width(boxW)
+            .height(hit)
             .clickable(onClick = onToggle)
-            .padding(vertical = 9.dp),
+            .padding(vertical = ((hit - boxH) / 2)),
         contentAlignment = if (isOn) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         Box(
             modifier = Modifier
-                .width(52.dp)
-                .height(26.dp)
+                .width(boxW)
+                .height(boxH)
                 .background(VoidBlack)
-                .border(2.dp, if (isOn) Gold else Border)
+                .border(hair, if (isOn) Gold else Border)
                 .shadow(if (isOn) 6.dp else 0.dp, RectangleShape, ambientColor = LedGlow, spotColor = LedGlow),
         )
         Box(
             modifier = Modifier
                 .padding(2.dp)
-                .size(width = 22.dp, height = 18.dp)
+                .size(width = knobW, height = knobH)
                 .background(if (isOn) Gold else Border),
         )
     }
 }
 
 @Composable
-fun JumbotronTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun JumbotronTabBar(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    tv: Boolean = false,
+) {
+    val barH = if (tv) TvTabBarHeight else TabBarHeight
+    val labelSize = if (tv) 28.sp else 20.sp
+    val lampW = if (tv) 36.dp else 28.dp
+    val lampH = if (tv) 5.dp else 4.dp
+    val hair = if (tv) TvHairline else 2.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(TabBarHeight)
+            .height(barH)
             .background(PanelGradient)
             .drawBehind {
-                drawRect(Border, size = androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))
+                drawRect(Border, size = androidx.compose.ui.geometry.Size(size.width, hair.toPx()))
             }
-            .padding(bottom = 14.dp, top = 8.dp),
+            .padding(bottom = if (tv) 18.dp else 14.dp, top = 8.dp),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -212,14 +233,14 @@ fun JumbotronTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier =
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .height(if (tv) TvRowMin else 44.dp)
                     .clickable { onSelect(idx) }
                     .semantics { this.selected = on },
             ) {
                 Box(
                     modifier = Modifier
-                        .width(28.dp)
-                        .height(4.dp)
+                        .width(lampW)
+                        .height(lampH)
                         .background(if (on) Gold else Border)
                         .shadow(if (on) 4.dp else 0.dp, ambientColor = LedGlow, spotColor = LedGlow),
                 )
@@ -227,7 +248,7 @@ fun JumbotronTabBar(selected: Int, onSelect: (Int) -> Unit, modifier: Modifier =
                     label,
                     color = if (on) Gold else Muted,
                     fontFamily = BebasNeue,
-                    fontSize = 20.sp,
+                    fontSize = labelSize,
                     letterSpacing = 0.04.em,
                     modifier = Modifier.padding(top = 4.dp),
                 )

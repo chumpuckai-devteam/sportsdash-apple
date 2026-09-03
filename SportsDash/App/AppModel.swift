@@ -26,6 +26,22 @@ struct VisibleLoadingTracker {
     var isVisibleLoading: Bool { !activeTokens.isEmpty }
 }
 
+/// 30-min TV/session EPG poll: skip while a load is in flight; reload when the map is > 3 h old.
+enum GuideRefreshPolicy {
+    static let pollInterval: TimeInterval = 30 * 60
+    static let staleAfter: TimeInterval = 3 * 3600
+
+    static func shouldReloadEpg(
+        isLoading: Bool,
+        lastReload: Date?,
+        now: Date = Date()
+    ) -> Bool {
+        if isLoading { return false }
+        guard let lastReload else { return true }
+        return now.timeIntervalSince(lastReload) > staleAfter
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var games: [Game] = []
@@ -79,6 +95,7 @@ final class AppModel: ObservableObject {
     private let storage = StorageService.shared
 
     private var scoresTimer: Timer?
+    private var guidePollTimer: Timer?
     private var playlistTimer: Timer?
     private var lastPlaylistReload: Date?
     private var epgLoadTask: Task<Void, Never>?
@@ -141,6 +158,7 @@ final class AppModel: ObservableObject {
 
         startScoresPolling()
         startPlaylistPolling()
+        startGuideRefreshPolling()
 
         Task { @MainActor in
             await self.bootstrapBackground(hasChannelCache: hasChannelCache)
@@ -309,6 +327,25 @@ final class AppModel: ObservableObject {
         }
         // Ensure timer fires even during scrolling / tracking modes
         if let t = scoresTimer {
+            RunLoop.main.add(t, forMode: .common)
+        }
+    }
+
+    /// Long-lived TV sessions: refresh the guide when the cached map is older than 3 h.
+    func startGuideRefreshPolling() {
+        guidePollTimer?.invalidate()
+        guidePollTimer = Timer.scheduledTimer(withTimeInterval: GuideRefreshPolicy.pollInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if GuideRefreshPolicy.shouldReloadEpg(
+                    isLoading: self.epg.isLoadingEpg,
+                    lastReload: self.epg.lastEpgReload
+                ) {
+                    await self.reloadEpg(force: true)
+                }
+            }
+        }
+        if let t = guidePollTimer {
             RunLoop.main.add(t, forMode: .common)
         }
     }

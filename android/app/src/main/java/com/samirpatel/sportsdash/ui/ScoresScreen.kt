@@ -100,6 +100,12 @@ import com.samirpatel.sportsdash.ui.theme.ScreenInset
 import com.samirpatel.sportsdash.ui.theme.SpaceMono
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
 import com.samirpatel.sportsdash.ui.theme.TextSecondary
+import com.samirpatel.sportsdash.ui.theme.TvCardHeight
+import com.samirpatel.sportsdash.ui.theme.TvCardWidth
+import com.samirpatel.sportsdash.ui.theme.TvEdgeBar
+import com.samirpatel.sportsdash.ui.theme.TvHairline
+import com.samirpatel.sportsdash.ui.theme.TvHeroWidth
+import com.samirpatel.sportsdash.ui.theme.TvScreenInset
 import com.samirpatel.sportsdash.ui.theme.VoidBlack
 import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
 import com.samirpatel.sportsdash.ui.theme.teamAccent
@@ -317,6 +323,8 @@ fun ScoresScreen(
                             favoritePin = favoritePin,
                             sections = sections,
                             isFavorite = { g -> vm.gameHasFavoriteTeam(g) },
+                            hasMatch = { g -> vm.hasStreamMatch(g) },
+                            filter = state.scoresFilter,
                             onGameClick = { g -> vm.openStreamPicker(g) },
                             onGameLongClick = { g -> teamFavGame = g },
                         )
@@ -1301,8 +1309,7 @@ private fun TeamLogo(
 private fun ScoresLampCard(state: AppUiState, onGoSettings: () -> Unit) {
     val playlist = if (state.playlist == null) LampKind.PENDING else if (state.channelError != null) LampKind.BLOCKED else LampKind.DONE
     val epg = when {
-        state.epgStatus?.contains("fail", true) == true -> LampKind.BLOCKED
-        state.epgByChannelId.isNotEmpty() -> LampKind.DONE
+        state.epgReady -> LampKind.DONE
         else -> LampKind.PENDING
     }
     val fav = if (state.favoriteTeamIds.isEmpty()) LampKind.PENDING else LampKind.DONE
@@ -1561,6 +1568,8 @@ private fun ScoresTVBrowse(
     favoritePin: List<Game>,
     sections: List<SportScoreSection>,
     isFavorite: (Game) -> Boolean,
+    hasMatch: (Game) -> Boolean = { false },
+    filter: ScoresFilter = ScoresFilter.LIVE,
     onGameClick: (Game) -> Unit,
     onGameLongClick: (Game) -> Unit,
 ) {
@@ -1572,10 +1581,13 @@ private fun ScoresTVBrowse(
         if (favoritePin.isNotEmpty()) {
             item(key = "rail-my-games") {
                 ScoresTVRail(
-                    title = "My Games",
-                    emoji = "⭐",
+                    title = "★ MY GAMES",
+                    tick = Gold,
                     games = favoritePin,
                     isFavorite = isFavorite,
+                    heroFirst = true,
+                    hasMatch = hasMatch,
+                    filter = filter,
                     onGameClick = onGameClick,
                     onGameLongClick = onGameLongClick,
                 )
@@ -1589,9 +1601,10 @@ private fun ScoresTVBrowse(
             item(key = rail.key) {
                 ScoresTVRail(
                     title = rail.title,
-                    emoji = rail.emoji,
                     games = rail.games,
                     isFavorite = isFavorite,
+                    hasMatch = hasMatch,
+                    filter = filter,
                     onGameClick = onGameClick,
                     onGameLongClick = onGameLongClick,
                 )
@@ -1603,61 +1616,61 @@ private fun ScoresTVBrowse(
 @Composable
 private fun ScoresTVRail(
     title: String,
-    emoji: String,
+    emoji: String = "",
+    tick: Color = Gold,
     games: List<Game>,
     isFavorite: (Game) -> Boolean,
+    heroFirst: Boolean = false,
+    hasMatch: (Game) -> Boolean = { false },
+    filter: ScoresFilter = ScoresFilter.LIVE,
     onGameClick: (Game) -> Unit,
     onGameLongClick: (Game) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(horizontal = 40.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = TvScreenInset, vertical = 4.dp),
         ) {
-            if (emoji.isNotEmpty()) {
-                Text(text = emoji, fontSize = 22.sp)
-            }
+            Box(Modifier.width(6.dp).height(24.dp).background(tick))
+            Spacer(Modifier.width(12.dp))
             Text(
-                text = title,
-                color = TextPrimary,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                text = title.uppercase(),
+                color = TextSecondary,
+                fontFamily = BebasNeue,
+                fontSize = 30.sp,
+                letterSpacing = 0.04.em,
+                modifier = Modifier.weight(1f),
             )
-            if (games.any { it.isLive }) {
-                Text(
-                    text = "LIVE",
-                    color = LiveMint,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Black,
-                )
+            val live = games.count { it.isLive }
+            if (filter == ScoresFilter.LIVE && live > 0) {
+                JumbotronLed("$live LIVE", size = 16, color = LiveMint, glow = true)
+            } else if (games.isNotEmpty()) {
+                JumbotronLed("${games.size}", size = 16, color = Muted, glow = false)
             }
-            Text(
-                text = "${games.size}",
-                color = Muted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
         }
         if (games.isEmpty()) {
             Text(
                 text = "None scheduled",
                 color = Muted,
+                fontFamily = SpaceMono,
                 fontSize = 16.sp,
-                modifier = Modifier.padding(horizontal = 40.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = TvScreenInset, vertical = 8.dp),
             )
         } else {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 40.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(horizontal = TvScreenInset, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .tvFocusGroup(),
             ) {
                 items(items = games, key = { it.id }) { game ->
+                    val idx = games.indexOfFirst { it.id == game.id }
                     ScoresTVGameCard(
                         game = game,
                         isFavoriteMatch = isFavorite(game),
+                        hasMatch = hasMatch(game),
+                        isHero = heroFirst && idx == 0,
                         onClick = { onGameClick(game) },
                         onLongClick = { onGameLongClick(game) },
                     )
@@ -1672,92 +1685,115 @@ private fun ScoresTVRail(
 private fun ScoresTVGameCard(
     game: Game,
     isFavoriteMatch: Boolean,
+    hasMatch: Boolean = false,
+    isHero: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val showScore = game.isLive || game.isFinal
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = Panel,
-        border = BorderStroke(
-            width = if (isFavoriteMatch) 1.5.dp else 1.dp,
-            color = if (isFavoriteMatch) Gold.copy(alpha = 0.45f) else Muted.copy(alpha = 0.25f),
-        ),
+    val digits = game.jumbotronDigits()
+    val w = if (isHero) TvHeroWidth else TvCardWidth
+    val away = teamAccent(game.away)
+    val home = teamAccent(game.home)
+    Box(
         modifier = Modifier
-            .width(380.dp)
-            .height(210.dp)
-            .tvFocusRing(shape = RoundedCornerShape(16.dp))
+            .width(w)
+            .height(TvCardHeight)
+            .then(
+                if (isHero) {
+                    Modifier.background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            0f to away.copy(alpha = 0.55f),
+                            0.34f to Panel.copy(alpha = 0.95f),
+                            0.66f to Panel.copy(alpha = 0.95f),
+                            1f to home.copy(alpha = 0.60f),
+                        ),
+                    )
+                } else {
+                    Modifier.jumbotronPanel(width = TvHairline)
+                },
+            )
+            .then(if (isHero) Modifier.border(TvHairline, LiveMint.copy(alpha = 0.45f)) else Modifier)
+            .teamEdges(away, home, TvEdgeBar)
+            .tvFocusRing()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics {
                 contentDescription =
-                    "${game.away.rowLabel} ${game.away.displayScore} at ${game.home.rowLabel} ${game.home.displayScore}. ${game.statusLine}"
-            },
+                    "${game.away.rowLabel}, ${digits.first}, ${game.jumbotronLed()}, ${game.home.rowLabel}, ${digits.second}${if (hasMatch) ", Watch" else ""}"
+            }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
     ) {
-        Box(modifier = Modifier.fillMaxSize().padding(14.dp)) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ScoresTVTeamBlock(
-                        team = game.away,
-                        score = if (showScore) game.away.displayScore else null,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 6.dp),
-                    ) {
-                        Text(
-                            text = game.statusLine,
-                            color = if (game.isLive) LiveMint else Muted,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "WATCH",
-                            color = VoidBlack,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Black,
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(Gold)
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
-                    }
-                    ScoresTVTeamBlock(
-                        team = game.home,
-                        score = if (showScore) game.home.displayScore else null,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = game.matchupLabel,
-                    color = Muted,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    (if (isHero) game.away.rowLabel else game.away.abbreviation).uppercase() +
+                        if (isFavoriteMatch) " ★" else "",
+                    color = TextPrimary,
+                    fontFamily = BebasNeue,
+                    fontSize = if (isHero) 44.sp else 34.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
+                )
+                JumbotronLed(
+                    game.jumbotronLed(),
+                    size = 18,
+                    color = if (game.isLive) LiveMint else Muted,
+                    glow = game.isLive,
+                )
+                Text(
+                    (if (isHero) game.home.rowLabel else game.home.abbreviation).uppercase(),
+                    color = TextPrimary,
+                    fontFamily = BebasNeue,
+                    fontSize = if (isHero) 44.sp else 34.sp,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )
             }
-            if (isFavoriteMatch) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = Gold,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(18.dp),
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.weight(1f).height(if (isHero) 96.dp else 66.dp)
+                        .background(VoidBlack).border(TvHairline, Border),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    JumbotronLed(
+                        digits.first,
+                        size = if (isHero) 64 else 44,
+                        color = if (game.isUpcoming) Muted else Gold,
+                        glow = !game.isUpcoming,
+                        dimmed = game.jumbotronLosing(game.away),
+                    )
+                }
+                Spacer(Modifier.width(24.dp))
+                Box(
+                    Modifier.weight(1f).height(if (isHero) 96.dp else 66.dp)
+                        .background(VoidBlack).border(TvHairline, Border),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    JumbotronLed(
+                        digits.second,
+                        size = if (isHero) 64 else 44,
+                        color = if (game.isUpcoming) Muted else Gold,
+                        glow = !game.isUpcoming,
+                        dimmed = game.jumbotronLosing(game.home),
+                    )
+                }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (hasMatch) game.broadcasts.take(2).joinToString(" · ").ifBlank { game.matchupLabel }
+                    else "NO STREAM MATCHED",
+                    color = if (hasMatch) TextSecondary else Muted,
+                    fontFamily = SpaceMono,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
                 )
+                if (hasMatch) {
+                    JumbotronWatchButton(filled = true, onClick = onClick)
+                }
             }
         }
     }

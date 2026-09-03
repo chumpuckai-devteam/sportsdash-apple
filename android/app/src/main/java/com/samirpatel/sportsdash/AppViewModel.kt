@@ -117,13 +117,8 @@ data class AppUiState(
     val channelStatus: String? = null,
     val channelError: String? = null,
 
-    val epgByChannelId: Map<String, List<EpgProgram>> = emptyMap(),
-    val isLoadingEpg: Boolean = false,
-    val isAutoFillingEpg: Boolean = false,
-    /** Open-category short EPG status. */
-    val epgStatus: String? = null,
-    /** Background bulk xmltv download/parse status (always visible while working). */
-    val bulkEpgStatus: String? = null,
+    /** Coarse lamp bit — flipped rarely, never on per-batch EPG merges. */
+    val epgReady: Boolean = false,
 
     /** Timeline window start (epoch ms), snapped to local hour. */
     val guideWindowStartMs: Long = snappedCurrentHourMs(),
@@ -174,18 +169,34 @@ data class AppUiState(
     val tmdbKeyPresent: Boolean = false,
 )
 
+data class EpgUiState(
+    val epgByChannelId: Map<String, List<EpgProgram>> = emptyMap(),
+    val isLoadingEpg: Boolean = false,
+    val isAutoFillingEpg: Boolean = false,
+    val epgStatus: String? = null,
+    val bulkEpgStatus: String? = null,
+    val lastEpgReloadMs: Long? = null,
+)
+
 class AppViewModel(
     private val prefs: PrefsStore,
     private val appContext: android.content.Context,
     private val iptv: IptvRepository = IptvRepository(),
     private val sports: SportsRepository = SportsRepository(),
     private val matching: MatchingService = MatchingService(),
-    private val epg: EpgRepository,
+    private val epgRepo: EpgRepository,
     private val ratingsRepo: MovieRatingsRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AppUiState())
     private val notifHelper = GameNotificationHelper(appContext.applicationContext)
     val state: StateFlow<AppUiState> = _state.asStateFlow()
+
+    private val _epg = MutableStateFlow(EpgUiState())
+    val epg: StateFlow<EpgUiState> = _epg.asStateFlow()
+    private var pendingEpgBatch = emptyMap<String, List<EpgProgram>>()
+    private var epgFlushJob: Job? = null
+    private var isPlayerOnScreen = false
+    private var lastEpgStatusAt = 0L
 
     private var omdbKey: String? = null
     private var tmdbKey: String? = null
@@ -218,6 +229,7 @@ class AppViewModel(
             refreshScores()  // exactly one initial
             startLeagueSelectionCoordinator()
             startNotificationScoresTickerIfNeeded()
+            startGuideRefreshPolling()
         }
 
         // Cold-start: restore playlist ASAP so Settings/Guide don't look "logged out"
@@ -351,9 +363,10 @@ class AppViewModel(
                     channelError = null,
                     channels = emptyList(),
                     groups = emptyList(),
-                    epgByChannelId = emptyMap(),
                 )
             }
+            _epg.value = EpgUiState()
+            _state.update { it.copy(epgReady = false) }
             refreshChannels()
         }
     }
@@ -374,9 +387,10 @@ class AppViewModel(
                     channelError = null,
                     channels = emptyList(),
                     groups = emptyList(),
-                    epgByChannelId = emptyMap(),
                 )
             }
+            _epg.value = EpgUiState()
+            _state.update { it.copy(epgReady = false) }
             refreshChannels()
         }
     }
@@ -778,7 +792,7 @@ class AppViewModel(
                 isMovieLike(now?.title, now?.category, ch)
             }
         }
-        val epg = _state.value.epgByChannelId
+        val map = _epg.value.epgByChannelId
         val best = LinkedHashMap<String, IptvChannel>()
         for (ch in channels) {
             val key = ch.name.lowercase().trim().ifBlank { ch.id }
@@ -786,8 +800,8 @@ class AppViewModel(
             if (existing == null) {
                 best[key] = ch
             } else {
-                val ec = epg[existing.id]?.size ?: 0
-                val nc = epg[ch.id]?.size ?: 0
+                val ec = map[existing.id]?.size ?: 0
+                val nc = map[ch.id]?.size ?: 0
                 if (nc > ec || (nc == ec && ch.id < existing.id)) {
                     best[key] = ch
                 }
@@ -797,7 +811,7 @@ class AppViewModel(
     }
 
     fun programsFor(channelId: String): List<EpgProgram> =
-        _state.value.epgByChannelId[channelId].orEmpty()
+        _epg.value.epgByChannelId[channelId].orEmpty()
 
     fun nowTitle(channelId: String): String? =
         programsFor(channelId).nowOrNearest()?.title
@@ -824,53 +838,32 @@ class AppViewModel(
         val missing = if (force) {
             channels
         } else {
-            channels.filter { s.epgByChannelId[it.id].isNullOrEmpty() }
+            channels.filter { _epg.value.epgByChannelId[it.id].isNullOrEmpty() }
         }
         if (missing.isEmpty()) return
 
         categoryEpgJob?.cancel()
         categoryEpgJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    isAutoFillingEpg = true,
-                    epgStatus = "Now/Next · ${missing.size} channels in ${s.selectedGroup.ifBlank { "category" }}…",
-                )
-            }
-            val result = epg.loadShortEpgForChannels(
+            publishEpgStatus("Now/Next · ${missing.size} channels in ${s.selectedGroup.ifBlank { "category" }}…", autoFill = true)
+            val result = epgRepo.loadShortEpgForChannels(
                 channels = missing,
                 config = cfg,
-                onStatus = { status ->
-                    _state.update { st -> st.copy(epgStatus = status, isAutoFillingEpg = true) }
-                },
-                onBatch = { batch ->
-                    _state.update { st ->
-                        st.copy(epgByChannelId = st.epgByChannelId + batch)
-                    }
-                },
+                onStatus = { status -> publishEpgStatus(status, autoFill = true) },
+                onBatch = { batch -> scheduleEpgMerge(batch) },
             )
+            flushEpgMerge()
+            val merged = _epg.value.epgByChannelId + result.programsByChannelId
+            applyEpgMap(merged)
             val catTotal = filteredChannels().size.coerceAtLeast(1)
-            _state.update { st ->
-                val merged = st.epgByChannelId + result.programsByChannelId
-                val catCovered = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
-                val note = if (catCovered == 0) {
-                    "Now/Next empty for this category (common for movies) — waiting on full guide…"
-                } else {
-                    "Now/Next · $catCovered/$catTotal in category"
-                }
-                st.copy(
-                    epgByChannelId = merged,
-                    isAutoFillingEpg = false,
-                    epgStatus = note,
-                )
+            val catCovered = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
+            val note = if (catCovered == 0) {
+                "Now/Next empty for this category (common for movies) — waiting on full guide…"
+            } else {
+                "Now/Next · $catCovered/$catTotal in category"
             }
-            // Ensure bulk is running so timeline can fill from xmltv
-            if (_state.value.epgByChannelId.let { map ->
-                    filteredChannels().count { !map[it.id].isNullOrEmpty() }
-                } < catTotal / 2
-            ) {
-                if (!_state.value.isLoadingEpg) {
-                    reloadEpgBulkBackground()
-                }
+            _epg.update { it.copy(isAutoFillingEpg = false, epgStatus = note) }
+            if (catCovered < catTotal / 2 && !_epg.value.isLoadingEpg) {
+                reloadEpgBulkBackground()
             }
         }
     }
@@ -882,49 +875,27 @@ class AppViewModel(
         if (channels.isEmpty() || cfg == null) return
         if (epgJob?.isActive == true) return
         epgJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    isLoadingEpg = true,
-                    bulkEpgStatus = "Full guide: starting…",
-                )
-            }
-            val result = epg.loadBulkThenFill(
+            _epg.update { it.copy(isLoadingEpg = true, bulkEpgStatus = "Full guide: starting…") }
+            val result = epgRepo.loadBulkThenFill(
                 channels = channels,
                 config = cfg,
                 onStatus = { status ->
-                    _state.update { st -> st.copy(bulkEpgStatus = status, isLoadingEpg = true) }
+                    _epg.update { it.copy(bulkEpgStatus = status, isLoadingEpg = true) }
                 },
-                onBatch = { batch ->
-                    _state.update { st ->
-                        val merged = st.epgByChannelId + batch
-                        val cat = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
-                        val catTotal = filteredChannels().size
-                        st.copy(
-                            epgByChannelId = merged,
-                            // Refresh category line when bulk maps open group
-                            epgStatus = if (catTotal > 0 && cat > 0) {
-                                "Category listings · $cat/$catTotal"
-                            } else {
-                                st.epgStatus
-                            },
-                        )
-                    }
-                },
+                onBatch = { batch -> scheduleEpgMerge(batch) },
             )
-            _state.update { st ->
-                val merged = st.epgByChannelId + result.programsByChannelId
-                val covered = st.channels.count { !merged[it.id].isNullOrEmpty() }
-                val cat = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
-                val catTotal = filteredChannels().size
-                st.copy(
-                    epgByChannelId = merged,
+            flushEpgMerge()
+            val merged = _epg.value.epgByChannelId + result.programsByChannelId
+            applyEpgMap(merged)
+            val covered = _state.value.channels.count { !merged[it.id].isNullOrEmpty() }
+            val cat = filteredChannels().count { !merged[it.id].isNullOrEmpty() }
+            val catTotal = filteredChannels().size
+            _epg.update {
+                it.copy(
                     isLoadingEpg = false,
-                    bulkEpgStatus = "Full guide ready · $covered/${st.channels.size} channels",
-                    epgStatus = if (catTotal > 0) {
-                        "Category listings · $cat/$catTotal"
-                    } else {
-                        st.epgStatus
-                    },
+                    lastEpgReloadMs = System.currentTimeMillis(),
+                    bulkEpgStatus = "Full guide ready · $covered/${_state.value.channels.size} channels",
+                    epgStatus = if (catTotal > 0) "Category listings · $cat/$catTotal" else it.epgStatus,
                 )
             }
         }
@@ -932,18 +903,66 @@ class AppViewModel(
 
     fun reloadEpg(force: Boolean = false) {
         if (force) {
-            _state.update {
-                it.copy(
-                    epgByChannelId = emptyMap(),
-                    epgStatus = null,
-                    bulkEpgStatus = null,
-                )
-            }
+            _epg.value = EpgUiState()
+            _state.update { it.copy(epgReady = false) }
             epgJob?.cancel()
             categoryEpgJob?.cancel()
+            epgFlushJob?.cancel()
+            pendingEpgBatch = emptyMap()
         }
         loadEpgForOpenCategory(force = true)
         reloadEpgBulkBackground()
+    }
+
+    fun playerDidAppear() { isPlayerOnScreen = true }
+    fun playerDidDisappear() { isPlayerOnScreen = false }
+
+    private fun scheduleEpgMerge(batch: Map<String, List<EpgProgram>>) {
+        if (batch.isEmpty()) return
+        pendingEpgBatch = pendingEpgBatch + batch
+        if (epgFlushJob?.isActive == true) return
+        val delayMs = if (isPlayerOnScreen) 2_500L else 350L
+        epgFlushJob = viewModelScope.launch {
+            delay(delayMs)
+            flushEpgMerge()
+        }
+    }
+
+    private fun flushEpgMerge() {
+        val batch = pendingEpgBatch
+        pendingEpgBatch = emptyMap()
+        epgFlushJob = null
+        if (batch.isEmpty()) return
+        applyEpgMap(_epg.value.epgByChannelId + batch)
+    }
+
+    private fun applyEpgMap(merged: Map<String, List<EpgProgram>>) {
+        _epg.update { it.copy(epgByChannelId = merged) }
+        val ready = merged.isNotEmpty()
+        if (_state.value.epgReady != ready) {
+            _state.update { it.copy(epgReady = ready) }
+        }
+    }
+
+    private fun publishEpgStatus(status: String, autoFill: Boolean) {
+        val now = System.currentTimeMillis()
+        val minGap = if (isPlayerOnScreen) 3_000L else 450L
+        if (now - lastEpgStatusAt < minGap) return
+        lastEpgStatusAt = now
+        _epg.update { it.copy(epgStatus = status, isAutoFillingEpg = autoFill) }
+    }
+
+    private fun startGuideRefreshPolling() {
+        viewModelScope.launch {
+            while (isActive) {
+                delay(30 * 60_000L)
+                val e = _epg.value
+                val stale = e.lastEpgReloadMs?.let { System.currentTimeMillis() - it > 3 * 3600_000L } ?: true
+                if (!e.isLoadingEpg && stale) {
+                    reloadEpg(force = true)
+                }
+            }
+        }
     }
 
     fun play(channel: IptvChannel, gameId: String? = null) {
@@ -1439,7 +1458,7 @@ class AppViewModel(
                     return AppViewModel(
                         prefs = PrefsStore(app),
                         appContext = app,
-                        epg = EpgRepository(cacheDir = epgCache),
+                        epgRepo = EpgRepository(cacheDir = epgCache),
                         ratingsRepo = MovieRatingsRepository(cacheDir = ratingsCache),
                     ) as T
                 }
