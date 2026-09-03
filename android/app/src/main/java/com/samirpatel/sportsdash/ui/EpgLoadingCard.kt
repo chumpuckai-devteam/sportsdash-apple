@@ -30,6 +30,7 @@ import com.samirpatel.sportsdash.ui.theme.Gold
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.SpaceMono
 import com.samirpatel.sportsdash.ui.theme.TextPrimary
+import com.samirpatel.sportsdash.ui.theme.VoidBlack
 import com.samirpatel.sportsdash.ui.theme.jumbotronPanel
 
 /**

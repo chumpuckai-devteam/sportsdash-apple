@@ -271,8 +271,8 @@ class EpgRepository(
                             val n = input.read(buf)
                             if (n <= 0) break
                             total += n
-                            if (total > MAX_DOWNLOAD_BYTES) {
-                                onStatus("Guide file too large for this device")
+                            if (total > MAX_STREAM_BYTES) {
+                                onStatus("Guide stream exceeded 1 GB abort guard")
                                 return false
                             }
                             output.write(buf, 0, n)
