@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SportsDash · 006 Jumbotron TV (approved-for-impl)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@900&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  /* Reference render only. Tokens = sketches/005-jumbotron/SPEC.md §1; TV-only values = 006 SPEC §1. */
+  body { margin:0; background:#03040A; color:#F2F4F7; font-family:"Space Mono","Courier New",monospace; -webkit-font-smoothing:antialiased; }
+  .strip { display:flex; flex-direction:column; gap:48px; padding:48px; width:max-content; }
+  section h2 { margin:0 0 12px 0; font:700 13px/1 "Space Mono",monospace; letter-spacing:.12em; color:#8B96A8; text-transform:uppercase; }
+  section h2 span { color:#4A5568; margin-left:14px; text-transform:none; letter-spacing:0; }
+  .tv { width:1920px; height:1080px; background:#070910; position:relative; overflow:hidden; box-sizing:border-box;
+        background-image: radial-gradient(#141B28 2px, transparent 2px); background-size:12px 12px; box-shadow:0 0 0 1px #1C2330; }
+  .safe { position:absolute; left:60px; right:60px; top:60px; bottom:60px; }
+  .b { font-family:"Bebas Neue","Arial Narrow",Impact,sans-serif; letter-spacing:0.04em; }
+  .led { font-family:"Orbitron","Space Mono",monospace; font-weight:900; color:#FFB800; text-shadow:0 0 20px rgba(255,184,0,0.8), 0 0 3px #FFB800; font-variant-numeric:tabular-nums; }
+  .ledm { font-family:"Orbitron","Space Mono",monospace; font-weight:900; color:#00E5A0; text-shadow:0 0 16px rgba(0,229,160,0.75); }
+  .ledr { font-family:"Orbitron","Space Mono",monospace; font-weight:900; color:#FF3B5C; text-shadow:0 0 16px rgba(255,59,92,0.7); }
+  .ledx { font-family:"Orbitron","Space Mono",monospace; font-weight:900; color:#8B96A8; }
+  .panel { background:linear-gradient(180deg,#171C24,#0F131A); border:3px solid #2A3340; box-shadow:inset 0 0 0 1px #070910; position:relative; overflow:hidden; box-sizing:border-box; }
+  .focus { border-color:#FFB800 !important; box-shadow:0 0 28px rgba(255,184,0,0.55), inset 0 0 0 1px #070910 !important; transform:scale(1.045); z-index:2; }
+  .edge { position:absolute; top:0; bottom:0; width:6px; }
+  .rivet { width:8px; height:8px; border-radius:4px; background:#2A3340; box-shadow:inset 0 1px 0 #4A5568; position:absolute; }
+  .title { font-size:64px; line-height:1; }
+  .title span { color:#FFB800; }
+  .chip { height:56px; min-width:160px; padding:0 26px; display:flex; align-items:center; justify-content:center; gap:14px; font-size:26px; color:#8B96A8; box-sizing:border-box; }
+  .chip.on { background:#FFB800; color:#070910; border-color:#FFB800; box-shadow:0 0 22px rgba(255,184,0,0.5); }
+  .rail-h { display:flex; align-items:center; justify-content:space-between; margin:0 0 14px 0; }
+  .rail-h .t { display:flex; align-items:center; gap:12px; font-size:30px; color:#B8C0CE; }
+  .rail-h .t i { display:block; width:6px; height:24px; }
+  .rail { display:flex; gap:24px; align-items:flex-start; padding:10px 0 14px 0; }
+  .card { width:420px; height:236px; padding:16px 22px 14px 22px; display:flex; flex-direction:column; justify-content:space-between; }
+  .card .top { display:grid; grid-template-columns:1fr 150px 1fr; align-items:center; }
+  .card .abbr { font-size:34px; line-height:1; display:flex; align-items:center; gap:10px; }
+  .card .logo { width:44px; height:44px; background:#070910; border:3px solid #2A3340; display:flex; align-items:center; justify-content:center; font-size:16px; box-sizing:border-box; }
+  .card .st { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .card .st small { font-size:13px; color:#8B96A8; }
+  .card .digits { display:grid; grid-template-columns:1fr 150px 1fr; align-items:center; }
+  .card .box { background:#070910; border:3px solid #2A3340; height:66px; display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
+  .card .box .led, .card .box .ledx { font-size:44px; line-height:1; }
+  .card .bot { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#B8C0CE; }
+  .watch { height:36px; padding:0 18px; display:flex; align-items:center; gap:8px; font-family:"Bebas Neue",Impact,sans-serif; font-size:22px; letter-spacing:0.08em; background:#FFB800; color:#070910; box-shadow:0 0 22px rgba(255,184,0,0.5); }
+  .hero { width:560px; }
+  .hero .abbr { font-size:44px; }
+  .hero .box { height:112px; }
+  .hero .box .led { font-size:96px; }
+  .hero .top { grid-template-columns:1fr 170px 1fr; }
+  .hero .digits { grid-template-columns:1fr 170px 1fr; }
+  /* guide */
+  .g-head { display:flex; align-items:center; height:36px; }
+  .g-row { display:flex; align-items:stretch; height:88px; border-top:3px solid #141B28; }
+  .g-ch { width:220px; display:flex; align-items:center; gap:14px; flex-shrink:0; box-sizing:border-box; padding-right:10px; position:relative; }
+  .g-ch .stripe { width:6px; align-self:stretch; flex-shrink:0; }
+  .g-ch .no { font-size:16px; width:52px; }
+  .g-ch .nm { font-size:26px; line-height:1; }
+  .g-blocks { position:relative; flex-grow:1; overflow:hidden; }
+  .blk { position:absolute; top:8px; bottom:8px; background:linear-gradient(180deg,#171C24,#0F131A); border:3px solid #2A3340; box-sizing:border-box; padding:8px 12px; display:flex; flex-direction:column; justify-content:center; gap:4px; }
+  .blk .t { font-size:16px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .blk .tm { font-size:14px; }
+  .blk.air { background:rgba(255,184,0,0.18); border-color:rgba(255,184,0,0.6); }
+  .blk .lv { position:absolute; right:10px; top:8px; font-family:"Orbitron",monospace; font-weight:900; font-size:12px; color:#00E5A0; text-shadow:0 0 10px rgba(0,229,160,0.7); }
+  .blk.gap { background:rgba(15,19,26,0.35); border-color:rgba(42,51,64,0.5); }
+  .g-focus { background:#FFB800 !important; color:#070910 !important; box-shadow:0 0 28px rgba(255,184,0,0.55); }
+  .g-focus .led, .g-focus .nm { color:#070910 !important; text-shadow:none !important; }
+  /* settings */
+  .lbl { display:flex; align-items:center; gap:12px; margin:22px 0 8px 0; }
+  .lbl .t { font-family:"Bebas Neue",Impact,sans-serif; font-size:24px; color:#8B96A8; letter-spacing:0.12em; }
+  .lbl .s { width:6px; height:22px; }
+  .r { display:flex; align-items:center; height:66px; padding:0 20px; gap:16px; border-top:3px solid #141B28; }
+  .r:first-child { border-top:none; }
+  .r .t { font-family:"Bebas Neue",Impact,sans-serif; font-size:30px; flex-grow:1; }
+  .r .v { font-size:16px; color:#8B96A8; }
+  .r.sub { height:56px; }
+  .ic { width:36px; height:36px; display:flex; align-items:center; justify-content:center; border:3px solid #2A3340; box-sizing:border-box; }
+  .tog { width:72px; height:36px; background:#070910; border:3px solid #FFB800; position:relative; box-shadow:0 0 16px rgba(255,184,0,0.35); box-sizing:border-box; }
+  .tog i { position:absolute; top:2px; right:2px; width:30px; height:26px; background:#FFB800; box-shadow:0 0 12px #FFB800; }
+  .togoff { width:72px; height:36px; background:#070910; border:3px solid #2A3340; position:relative; box-sizing:border-box; }
+  .togoff i { position:absolute; top:2px; left:2px; width:30px; height:26px; background:#2A3340; }
+  .lamp { width:14px; height:14px; border-radius:7px; }
+  /* shells */
+  .tvtab { position:absolute; top:0; left:0; right:0; height:64px; display:flex; justify-content:center; align-items:center; gap:56px; background:rgba(15,19,26,0.92); border-bottom:3px solid #2A3340; }
+  .tvtab div { font-family:"Bebas Neue",Impact,sans-serif; font-size:26px; letter-spacing:0.04em; color:#8B96A8; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .tvtab div i { display:block; width:36px; height:4px; background:#2A3340; }
+  .tvtab div.on { color:#FFB800; } .tvtab div.on i { background:#FFB800; box-shadow:0 0 10px #FFB800; }
+  .andtab { position:absolute; left:0; right:0; bottom:0; height:96px; background:#0F131A; border-top:3px solid #2A3340; display:flex; justify-content:space-around; align-items:center; }
+  .andtab div { font-family:"Bebas Neue",Impact,sans-serif; font-size:28px; letter-spacing:0.04em; color:#8B96A8; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .andtab div i { display:block; width:36px; height:5px; background:#2A3340; }
+  .andtab div.on { color:#FFB800; } .andtab div.on i { background:#FFB800; box-shadow:0 0 10px #FFB800; }
+  .note { position:absolute; right:24px; bottom:16px; font-size:12px; color:#4A5568; }
+</style>
+</head>
+<body>
+<div class="strip">
+
+<!-- ============================ APPLE TV · SCORES ============================ -->
+<section id="AppleScores"><h2>Apple TV · Scores <span>1920×1080 · system tvOS tab bar (stand-in) · LIVE chip has default focus · first My Games card is the hero · second card shows focus ring</span></h2>
+<div class="tv">
+  <div class="tvtab"><div class="on"><i></i>SCORES</div><div><i></i>GUIDE</div><div><i></i>SETTINGS</div></div>
+  <div class="safe" style="top:96px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+      <div class="b title">SCORE<span>BOARD</span></div>
+      <div style="display:flex; align-items:center; gap:28px;"><div class="ledm" style="font-size:16px;">● 5 LIVE</div><div class="led" style="font-size:28px;">19:42</div>
+        <div class="panel" style="width:66px; height:66px; border-radius:33px; display:flex; align-items:center; justify-content:center; color:#FFB800; font-size:26px;">★</div>
+        <div class="panel" style="width:66px; height:66px; border-radius:33px; display:flex; align-items:center; justify-content:center; color:#FFB800; font-size:26px;">↻</div></div>
+    </div>
+
+    <div style="display:flex; gap:16px; margin-top:22px; align-items:center;">
+      <div class="panel chip b on">LIVE <span class="led" style="font-size:16px; color:#070910; text-shadow:none;">5</span></div>
+      <div class="panel chip b">UPCOMING <span class="ledx" style="font-size:16px;">12</span></div>
+      <div class="panel chip b">FINAL</div>
+      <div style="flex-grow:1;"></div>
+      <div class="panel chip b" style="border-color:rgba(255,184,0,0.5); color:#FFB800;">★ EDIT FAVORITES</div>
+    </div>
+
+    <div style="margin-top:30px;">
+      <div class="rail-h"><div class="b t"><i style="background:#FFB800;"></i>★ MY GAMES</div><div class="ledm" style="font-size:16px;">2 LIVE</div></div>
+      <div class="rail">
+        <!-- hero card -->
+        <div class="panel card hero" style="border-color:rgba(0,229,160,0.45); background:linear-gradient(90deg, rgba(227,24,55,0.55) 0%, rgba(23,28,36,0.95) 34%, rgba(23,28,36,0.95) 66%, rgba(0,51,141,0.6) 100%), linear-gradient(180deg,#171C24,#0F131A);">
+          <div class="rivet" style="left:8px; top:8px;"></div><div class="rivet" style="right:8px; top:8px;"></div><div class="rivet" style="left:8px; bottom:8px;"></div><div class="rivet" style="right:8px; bottom:8px;"></div>
+          <div class="top">
+            <div><div class="b abbr">CHIEFS</div><div style="font-size:16px; color:#B8C0CE; margin-top:4px;">KC · 6-1 <span style="color:#FFB800;">★</span></div></div>
+            <div class="st"><div class="ledm" style="font-size:18px;">● LIVE · Q4</div><div class="ledm" style="font-size:28px;">3:12</div></div>
+            <div style="text-align:right;"><div class="b abbr" style="justify-content:flex-end;">BILLS</div><div style="font-size:16px; color:#B8C0CE; margin-top:4px;">BUF · 5-2</div></div>
+          </div>
+          <div class="digits"><div class="box"><div class="led">24</div></div><div></div><div class="box"><div class="led" style="opacity:0.5;">21</div></div></div>
+          <div class="bot"><div>CBS · ESPN+<br><span class="ledm" style="font-size:13px;">2 STREAMS OK</span></div><div class="watch">▶ WATCH</div></div>
+        </div>
+        <!-- focused card -->
+        <div class="panel card focus">
+          <div class="edge" style="left:0; background:#EF0107;"></div><div class="edge" style="right:0; background:#C8102E;"></div>
+          <div class="top">
+            <div class="b abbr"><div class="logo">ARS</div>ARS <span style="color:#FFB800; font-size:22px;">★</span></div>
+            <div class="st"><div class="ledm" style="font-size:18px;">67'</div><small>2ND HALF</small></div>
+            <div class="b abbr" style="justify-content:flex-end;">LIV <div class="logo">LIV</div></div>
+          </div>
+          <div class="digits"><div class="box"><div class="led">1</div></div><div></div><div class="box"><div class="led">1</div></div></div>
+          <div class="bot"><div>ARSENAL · LIVERPOOL<br><span style="color:#8B96A8;">SKY ME · BEIN 1</span></div><div class="watch">▶ WATCH</div></div>
+        </div>
+        <div class="panel card">
+          <div class="edge" style="left:0; background:#552583;"></div><div class="edge" style="right:0; background:#1D428A;"></div>
+          <div class="top">
+            <div class="b abbr"><div class="logo">LAL</div>LAL <span style="color:#FFB800; font-size:22px;">★</span></div>
+            <div class="st"><div class="ledx" style="font-size:18px;">TONIGHT</div><small>22:30</small></div>
+            <div class="b abbr" style="justify-content:flex-end;">GSW <div class="logo">GSW</div></div>
+          </div>
+          <div class="digits"><div class="box"><div class="ledx">–</div></div><div></div><div class="box"><div class="ledx">–</div></div></div>
+          <div class="bot"><div>LAKERS · WARRIORS<br><span style="color:#8B96A8;">NO STREAM MATCHED</span></div><div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:22px;">
+      <div class="rail-h"><div class="b t"><i style="background:#3D195B;"></i>PREMIER LEAGUE</div><div class="ledm" style="font-size:16px;">2 LIVE</div></div>
+      <div class="rail">
+        <div class="panel card">
+          <div class="edge" style="left:0; background:#6CABDD;"></div><div class="edge" style="right:0; background:#132257;"></div>
+          <div class="top"><div class="b abbr"><div class="logo">MCI</div>MCI</div><div class="st"><div class="ledm" style="font-size:18px;">HT</div><small>45+2'</small></div><div class="b abbr" style="justify-content:flex-end;">TOT <div class="logo">TOT</div></div></div>
+          <div class="digits"><div class="box"><div class="led">2</div></div><div></div><div class="box"><div class="led" style="opacity:0.5;">0</div></div></div>
+          <div class="bot"><div>MAN CITY · SPURS<br><span style="color:#8B96A8;">SKY ME</span></div><div class="watch">▶ WATCH</div></div>
+        </div>
+        <div class="panel card">
+          <div class="edge" style="left:0; background:#034694;"></div><div class="edge" style="right:0; background:#DA291C;"></div>
+          <div class="top"><div class="b abbr"><div class="logo">CHE</div>CHE</div><div class="st"><div class="ledm" style="font-size:18px;">23'</div><small>1ST HALF</small></div><div class="b abbr" style="justify-content:flex-end;">MUN <div class="logo">MUN</div></div></div>
+          <div class="digits"><div class="box"><div class="led" style="opacity:0.5;">0</div></div><div></div><div class="box"><div class="led">1</div></div></div>
+          <div class="bot"><div>CHELSEA · MAN UTD<br><span style="color:#8B96A8;">BEIN 2</span></div><div class="watch">▶ WATCH</div></div>
+        </div>
+        <div class="panel card">
+          <div class="edge" style="left:0; background:#FDB913;"></div><div class="edge" style="right:0; background:#7A263A;"></div>
+          <div class="top"><div class="b abbr"><div class="logo">WOL</div>WOL</div><div class="st"><div class="ledx" style="font-size:18px;">FINAL</div><small>FT</small></div><div class="b abbr" style="justify-content:flex-end;">WHU <div class="logo">WHU</div></div></div>
+          <div class="digits"><div class="box"><div class="led">2</div></div><div></div><div class="box"><div class="led" style="opacity:0.5;">2</div></div></div>
+          <div class="bot"><div>WOLVES · WEST HAM<br><span style="color:#8B96A8;">NO STREAM MATCHED</span></div><div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:6px;">
+      <div class="rail-h"><div class="b t"><i style="background:#D50032;"></i>MLB</div><div class="ledm" style="font-size:16px;">1 LIVE</div></div>
+    </div>
+  </div>
+  <div class="note">Data is fake. Tab strip stands in for the system tvOS TabView (gold tint). Third rail clipped by the safe area on purpose — rails scroll.</div>
+</div></section>
+
+<!-- ============================ APPLE TV · GUIDE ============================ -->
+<section id="AppleGuide"><h2>Apple TV · Guide <span>GuideTimelineGrid · 88pt rows · 220pt channel column · brand stripe + LED channel no. · airing block gold · focused channel cell = gold fill</span></h2>
+<div class="tv">
+  <div class="tvtab"><div><i></i>SCORES</div><div class="on"><i></i>GUIDE</div><div><i></i>SETTINGS</div></div>
+  <div class="safe" style="top:96px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+      <div class="b title">CHANNEL <span>GUIDE</span></div>
+      <div style="display:flex; align-items:center; gap:16px;">
+        <div class="panel chip b" style="min-width:320px; justify-content:space-between; border-color:rgba(255,184,0,0.5); color:#FFB800;">★ FAVORITES <span style="color:#8B96A8;">▾</span></div>
+        <div class="panel chip b" style="min-width:120px;">GRID</div>
+        <div class="panel chip b" style="min-width:140px;">MOVIES</div>
+        <div class="panel" style="width:66px; height:66px; border-radius:33px; display:flex; align-items:center; justify-content:center; color:#FFB800; font-size:26px;">↻</div>
+        <div class="led" style="font-size:28px; margin-left:12px;">19:42</div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:18px; font-size:14px; color:#8B96A8;">
+      <div>GUIDE <span style="color:#F2F4F7;">8/8</span> IN THIS CATEGORY</div><div>GUIDE READY · 1,102/1,284 CHANNELS</div>
+    </div>
+
+    <div class="panel" style="margin-top:12px; height:770px; display:flex; flex-direction:column;">
+      <div class="g-head" style="background:#0F131A;">
+        <div class="b" style="width:220px; padding-left:20px; font-size:16px; color:#8B96A8; letter-spacing:0.1em;">CHANNEL</div>
+        <div style="position:relative; flex-grow:1; height:36px;">
+          <div class="b" style="position:absolute; left:8px; top:8px; font-size:22px; color:#B8860B;">7 PM</div>
+          <div class="b" style="position:absolute; left:288px; top:8px; font-size:22px; color:#B8860B;">8 PM</div>
+          <div class="b" style="position:absolute; left:568px; top:8px; font-size:22px; color:#B8860B;">9 PM</div>
+          <div class="b" style="position:absolute; left:848px; top:8px; font-size:22px; color:#B8860B;">10 PM</div>
+          <div class="b" style="position:absolute; left:1128px; top:8px; font-size:22px; color:#B8860B;">11 PM</div>
+          <div class="b" style="position:absolute; left:1408px; top:8px; font-size:22px; color:#B8860B;">12 AM</div>
+          <div class="ledm" style="position:absolute; left:176px; top:8px; font-size:14px;">▼ 19:42</div>
+        </div>
+      </div>
+      <div style="position:relative; flex-grow:1;">
+        <!-- now marker -->
+        <div style="position:absolute; left:416px; top:0; bottom:0; width:3px; background:#00E5A0; box-shadow:0 0 10px rgba(0,229,160,0.7); z-index:3;"></div>
+        <!-- hour lines -->
+        <div style="position:absolute; left:500px; top:0; bottom:0; width:3px; background:rgba(42,51,64,0.35);"></div>
+        <div style="position:absolute; left:780px; top:0; bottom:0; width:3px; background:rgba(42,51,64,0.35);"></div>
+        <div style="position:absolute; left:1060px; top:0; bottom:0; width:3px; background:rgba(42,51,64,0.35);"></div>
+        <div style="position:absolute; left:1340px; top:0; bottom:0; width:3px; background:rgba(42,51,64,0.35);"></div>
+        <div style="position:absolute; left:1620px; top:0; bottom:0; width:3px; background:rgba(42,51,64,0.35);"></div>
+
+        <div class="g-row" style="border-top:none;"><div class="g-ch g-focus"><div class="stripe" style="background:#E31837;"></div><div class="led no">001</div><div class="b nm">ESPN</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:312px;"><div class="t">CHIEFS @ BILLS ★</div><div class="ledm tm">Q4 · ENDS 20:15</div><div class="lv">LIVE</div></div><div class="blk" style="left:318px; width:552px;"><div class="t">SPORTSCENTER</div><div class="tm" style="color:#8B96A8;">8:15 – 10:00 PM</div></div><div class="blk" style="left:876px; width:560px;"><div class="t">NFL PRIMETIME</div><div class="tm" style="color:#8B96A8;">10:00 PM – 12:00 AM</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#BB0000;"></div><div class="led no">002</div><div class="b nm">ESPN2</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:592px;"><div class="t">OHIO ST @ MICHIGAN</div><div class="ledm tm">CFB · ENDS 22:30</div><div class="lv">LIVE</div></div><div class="blk" style="left:598px; width:420px;"><div class="t">COLLEGE FOOTBALL FINAL</div><div class="tm" style="color:#8B96A8;">10:30 – 12:00 PM</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#E31837;"></div><div class="led no">014</div><div class="b nm">SKY SPORTS<br>MAIN EVENT</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:52px;"><div class="t">ARS V LIV ★</div><div class="lv">LIVE</div></div><div class="blk" style="left:58px; width:270px;"><div class="t">MATCH OF THE DAY</div><div class="tm" style="color:#8B96A8;">8:00 – 9:00 PM</div></div><div class="blk" style="left:334px; width:560px;"><div class="t">SKY SPORTS NEWS</div><div class="tm" style="color:#8B96A8;">9:00 – 11:00 PM</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#E31837;"></div><div class="led no">021</div><div class="b nm">NBA TV</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:220px;"><div class="t">GAMETIME</div><div class="ledm tm">ENDS 20:30</div><div class="lv">LIVE</div></div><div class="blk" style="left:226px; width:840px;"><div class="t">LAKERS @ WARRIORS</div><div class="tm" style="color:#8B96A8;">8:30 – 11:30 PM</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#E31837;"></div><div class="led no">022</div><div class="b nm">MLB NETWORK</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:452px;"><div class="t">YANKEES @ RED SOX</div><div class="ledm tm">TOP 7 · 2 OUT</div><div class="lv">LIVE</div></div><div class="blk" style="left:458px; width:400px;"><div class="t">MLB TONIGHT</div><div class="tm" style="color:#8B96A8;">9:45 – 11:00 PM</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#6E2B8D;"></div><div class="led no">044</div><div class="b nm">BEIN 1</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:32px;"><div class="lv">LIVE</div></div><div class="blk" style="left:38px; width:360px;"><div class="t">LIGUE 1 SHOW</div><div class="tm" style="color:#8B96A8;">7:55 – 9:15 PM</div></div><div class="blk gap" style="left:404px; width:300px;"><div class="tm" style="color:#8B96A8;">No guide</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#E31837;"></div><div class="led no">050</div><div class="b nm">NFL NETWORK</div></div>
+          <div class="g-blocks"><div class="blk air" style="left:0; width:872px;"><div class="t">NFL REDZONE</div><div class="ledm tm">UNTIL 23:00</div><div class="lv">LIVE</div></div></div></div>
+        <div class="g-row"><div class="g-ch"><div class="stripe" style="background:#1D4E89;"></div><div class="led no">061</div><div class="b nm">CNN</div></div>
+          <div class="g-blocks"><div class="blk gap" style="left:0; width:1436px;"><div class="tm" style="color:#8B96A8;">No guide</div></div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Program blocks are not focusable — the channel cell is the row's focus target; select = play. Timeline hours = existing GuideMetrics.hours (12), 280pt per hour.</div>
+</div></section>
+
+<!-- ============================ APPLE TV · SETTINGS ============================ -->
+<section id="AppleSettings"><h2>Apple TV · Settings <span>two-column hub · lamp card · 66pt rows · 72×36 toggles · no ALERTS on tvOS (notification service is a no-op) · GENERAL row focused</span></h2>
+<div class="tv">
+  <div class="tvtab"><div><i></i>SCORES</div><div><i></i>GUIDE</div><div class="on"><i></i>SETTINGS</div></div>
+  <div class="safe" style="top:96px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+      <div class="b title">CONTROL <span>ROOM</span></div>
+      <div class="led" style="font-size:28px;">19:42</div>
+    </div>
+
+    <div class="panel" style="margin-top:22px; padding:20px 26px; display:flex; align-items:center; gap:28px; border-color:rgba(255,184,0,0.45); background:linear-gradient(90deg, rgba(227,24,55,0.35) 0%, rgba(23,28,36,0.95) 40%), linear-gradient(180deg,#171C24,#0F131A);">
+      <div style="display:flex; gap:48px;">
+        <div style="display:flex; align-items:center; gap:12px; font-size:16px;"><div class="lamp" style="background:#00E5A0; box-shadow:0 0 12px #00E5A0;"></div>PLAYLIST</div>
+        <div style="display:flex; align-items:center; gap:12px; font-size:16px;"><div class="lamp" style="background:#00E5A0; box-shadow:0 0 12px #00E5A0;"></div>EPG</div>
+        <div style="display:flex; align-items:center; gap:12px; font-size:16px;"><div class="lamp" style="background:#FFB800; box-shadow:0 0 12px #FFB800;"></div>FAVORITES</div>
+      </div>
+      <div style="flex-grow:1;"></div>
+      <div class="b" style="font-size:32px;">SETUP <span class="led" style="font-size:30px;">2/3</span></div>
+      <div class="b" style="font-size:24px; color:#070910; background:#FFB800; padding:0 22px; height:44px; display:flex; align-items:center; box-shadow:0 0 16px rgba(255,184,0,0.45);">PICK TEAMS ▸</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 40px;">
+      <div>
+        <div class="lbl"><div class="s" style="background:#00E5A0;"></div><div class="t">SOURCE</div></div>
+        <div class="panel">
+          <div class="r"><div class="ic" style="color:#FFB800; font-size:18px;">▤</div><div class="t">XTREAM · MYPROVIDER.TV</div><div class="v">1,284 CH ›</div></div>
+          <div class="r sub"><div class="v" style="flex-grow:1;">STATUS</div><div class="ledm" style="font-size:16px;">ACTIVE</div></div>
+          <div class="r sub"><div class="v" style="flex-grow:1;">EXPIRES</div><div class="led" style="font-size:16px;">2026-12-12</div></div>
+          <div class="r sub"><div class="v" style="flex-grow:1;">CONNECTIONS</div><div class="led" style="font-size:16px;">1 / 2</div></div>
+          <div class="r sub"><div class="v" style="flex-grow:1;">EPG</div><div class="v" style="color:#B8C0CE;">GUIDE READY · 1,102 CH · 19:31</div></div>
+        </div>
+        <div class="lbl"><div class="s" style="background:#FFB800;"></div><div class="t">PLAYLISTS</div></div>
+        <div class="panel">
+          <div class="r"><div class="ic" style="color:#B8C0CE; font-size:16px;">≡</div><div class="t">MANAGE PLAYLISTS</div><div class="v">2 ›</div></div>
+          <div class="r"><div class="ic" style="color:#FFB800; font-size:16px;">↻</div><div class="t">RELOAD EPG</div><div class="v">3H AGO ›</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl"><div class="s" style="background:#FFB800;"></div><div class="t">SYSTEM</div></div>
+        <div class="panel" style="overflow:visible;">
+          <div class="r focus" style="border:3px solid #FFB800; margin:-3px; background:linear-gradient(180deg,#171C24,#0F131A);"><div class="ic" style="color:#B8C0CE; font-size:16px;">⚙</div><div class="t">GENERAL</div><div class="v" style="color:#FFB800;">›</div></div>
+          <div class="r"><div class="ic" style="color:#B8C0CE; font-size:16px;">≡</div><div class="t">USER INTERFACE</div><div class="v">CLEAN NAMES ›</div></div>
+          <div class="r"><div class="ic" style="color:#00E5A0; font-size:14px;">▶</div><div class="t">VIDEO PLAYER</div><div class="v">AUTO · VLC / AV ›</div></div>
+          <div class="r"><div class="ic" style="color:#FFB800; font-size:16px;">◎</div><div class="t">LEAGUES ON SCORES</div><div class="v">9 SELECTED ›</div></div>
+          <div class="r"><div class="ic" style="color:#B8C0CE; font-size:16px;">★</div><div class="t">CLEAN UP NAMES</div><div class="tog"><i></i></div></div>
+          <div class="r"><div class="ic" style="color:#B8C0CE; font-size:16px;">▦</div><div class="t">GUIDE LAYOUT</div><div class="v">TIMELINE ›</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Sub-pages keep their List styling with 006 tokens (66pt rows, 3pt lines). Android TV adds an ALERTS panel under SOURCE.</div>
+</div></section>
+
+<!-- ============================ ANDROID TV · SCORES (shell delta) ============================ -->
+<section id="AndroidScores"><h2>Android TV · Scores <span>same rails/cards at 380×210 dp · shell delta: no top app bar, bottom Jumbotron tab bar with lamp (restyled NavigationBar) · 60dp safe inset · Guide/Settings differ only by this shell</span></h2>
+<div class="tv">
+  <div class="safe" style="bottom:120px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+      <div class="b title">SCORE<span>BOARD</span></div>
+      <div style="display:flex; align-items:center; gap:28px;"><div class="ledm" style="font-size:16px;">● 5 LIVE</div><div class="led" style="font-size:28px;">19:42</div>
+        <div class="panel" style="width:56px; height:56px; border-radius:28px; display:flex; align-items:center; justify-content:center; color:#FFB800; font-size:22px;">★</div>
+        <div class="panel" style="width:56px; height:56px; border-radius:28px; display:flex; align-items:center; justify-content:center; color:#FFB800; font-size:22px;">↻</div></div>
+    </div>
+    <div style="display:flex; gap:16px; margin-top:22px; align-items:center;">
+      <div class="panel chip b on">LIVE <span class="led" style="font-size:16px; color:#070910; text-shadow:none;">5</span></div>
+      <div class="panel chip b">UPCOMING <span class="ledx" style="font-size:16px;">12</span></div>
+      <div class="panel chip b">FINAL</div>
+      <div style="flex-grow:1;"></div>
+      <div class="panel chip b" style="border-color:rgba(255,184,0,0.5); color:#FFB800;">★ EDIT FAVORITES</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-top:14px; font-size:14px; color:#B8C0CE;"><div style="width:6px; height:18px; background:#FF3B5C;"></div>MLB COULD NOT REFRESH. OTHER SCORES ARE CURRENT.</div>
+
+    <div style="margin-top:18px;">
+      <div class="rail-h"><div class="b t"><i style="background:#FFB800;"></i>★ MY GAMES</div><div class="ledm" style="font-size:16px;">2 LIVE</div></div>
+      <div class="rail" style="gap:18px;">
+        <div class="panel card hero" style="width:500px; height:210px; border-color:rgba(0,229,160,0.45); background:linear-gradient(90deg, rgba(227,24,55,0.55) 0%, rgba(23,28,36,0.95) 34%, rgba(23,28,36,0.95) 66%, rgba(0,51,141,0.6) 100%), linear-gradient(180deg,#171C24,#0F131A);">
+          <div class="rivet" style="left:8px; top:8px;"></div><div class="rivet" style="right:8px; top:8px;"></div><div class="rivet" style="left:8px; bottom:8px;"></div><div class="rivet" style="right:8px; bottom:8px;"></div>
+          <div class="top"><div><div class="b abbr" style="font-size:40px;">CHIEFS</div><div style="font-size:14px; color:#B8C0CE;">KC · 6-1 <span style="color:#FFB800;">★</span></div></div><div class="st"><div class="ledm" style="font-size:16px;">● LIVE · Q4</div><div class="ledm" style="font-size:26px;">3:12</div></div><div style="text-align:right;"><div class="b abbr" style="font-size:40px; justify-content:flex-end;">BILLS</div><div style="font-size:14px; color:#B8C0CE;">BUF · 5-2</div></div></div>
+          <div class="digits"><div class="box" style="height:92px;"><div class="led" style="font-size:80px;">24</div></div><div></div><div class="box" style="height:92px;"><div class="led" style="font-size:80px; opacity:0.5;">21</div></div></div>
+          <div class="bot"><div><span class="ledm" style="font-size:13px;">2 STREAMS OK</span></div><div class="watch">▶ WATCH</div></div>
+        </div>
+        <div class="panel card focus" style="width:380px; height:210px; padding:12px 18px;">
+          <div class="edge" style="left:0; background:#EF0107;"></div><div class="edge" style="right:0; background:#C8102E;"></div>
+          <div class="top"><div class="b abbr" style="font-size:30px;"><div class="logo">ARS</div>ARS <span style="color:#FFB800; font-size:20px;">★</span></div><div class="st"><div class="ledm" style="font-size:16px;">67'</div><small>2ND HALF</small></div><div class="b abbr" style="font-size:30px; justify-content:flex-end;">LIV <div class="logo">LIV</div></div></div>
+          <div class="digits"><div class="box" style="height:60px;"><div class="led" style="font-size:40px;">1</div></div><div></div><div class="box" style="height:60px;"><div class="led" style="font-size:40px;">1</div></div></div>
+          <div class="bot"><div>SKY ME · BEIN 1</div><div class="watch" style="height:32px; font-size:20px;">▶ WATCH</div></div>
+        </div>
+        <div class="panel card" style="width:380px; height:210px; padding:12px 18px;">
+          <div class="edge" style="left:0; background:#552583;"></div><div class="edge" style="right:0; background:#1D428A;"></div>
+          <div class="top"><div class="b abbr" style="font-size:30px;"><div class="logo">LAL</div>LAL <span style="color:#FFB800; font-size:20px;">★</span></div><div class="st"><div class="ledx" style="font-size:16px;">TONIGHT</div><small>22:30</small></div><div class="b abbr" style="font-size:30px; justify-content:flex-end;">GSW <div class="logo">GSW</div></div></div>
+          <div class="digits"><div class="box" style="height:60px;"><div class="ledx" style="font-size:40px;">–</div></div><div></div><div class="box" style="height:60px;"><div class="ledx" style="font-size:40px;">–</div></div></div>
+          <div class="bot"><div style="color:#8B96A8;">NO STREAM MATCHED</div><div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="rail-h"><div class="b t"><i style="background:#3D195B;"></i>PREMIER LEAGUE</div><div class="ledm" style="font-size:16px;">2 LIVE</div></div>
+      <div class="rail" style="gap:18px;">
+        <div class="panel card" style="width:380px; height:210px; padding:12px 18px;">
+          <div class="edge" style="left:0; background:#6CABDD;"></div><div class="edge" style="right:0; background:#132257;"></div>
+          <div class="top"><div class="b abbr" style="font-size:30px;"><div class="logo">MCI</div>MCI</div><div class="st"><div class="ledm" style="font-size:16px;">HT</div><small>45+2'</small></div><div class="b abbr" style="font-size:30px; justify-content:flex-end;">TOT <div class="logo">TOT</div></div></div>
+          <div class="digits"><div class="box" style="height:60px;"><div class="led" style="font-size:40px;">2</div></div><div></div><div class="box" style="height:60px;"><div class="led" style="font-size:40px; opacity:0.5;">0</div></div></div>
+          <div class="bot"><div>SKY ME</div><div class="watch" style="height:32px; font-size:20px;">▶ WATCH</div></div>
+        </div>
+        <div class="panel card" style="width:380px; height:210px; padding:12px 18px;">
+          <div class="edge" style="left:0; background:#034694;"></div><div class="edge" style="right:0; background:#DA291C;"></div>
+          <div class="top"><div class="b abbr" style="font-size:30px;"><div class="logo">CHE</div>CHE</div><div class="st"><div class="ledm" style="font-size:16px;">23'</div><small>1ST HALF</small></div><div class="b abbr" style="font-size:30px; justify-content:flex-end;">MUN <div class="logo">MUN</div></div></div>
+          <div class="digits"><div class="box" style="height:60px;"><div class="led" style="font-size:40px; opacity:0.5;">0</div></div><div></div><div class="box" style="height:60px;"><div class="led" style="font-size:40px;">1</div></div></div>
+          <div class="bot"><div>BEIN 2</div><div class="watch" style="height:32px; font-size:20px;">▶ WATCH</div></div>
+        </div>
+        <div class="panel" style="width:380px; height:210px; display:flex; align-items:center; justify-content:center; color:#8B96A8; font-size:16px;">None scheduled</div>
+      </div>
+    </div>
+  </div>
+  <div class="andtab"><div class="on"><i></i>SCORES</div><div><i></i>GUIDE</div><div><i></i>SETTINGS</div></div>
+  <div class="note" style="bottom:104px;">Partial-warning strip shown here (danger tick, no panel). "None scheduled" cell = existing Upcoming empty-league rule.</div>
+</div></section>
+
+</div>
+</body>
+</html>
