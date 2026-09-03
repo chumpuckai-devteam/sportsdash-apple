@@ -1,7 +1,10 @@
 package com.samirpatel.sportsdash.ui
 
 import android.content.res.Configuration
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,19 +36,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusGroup
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.samirpatel.sportsdash.ui.tv.tvFocusRing
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.samirpatel.sportsdash.AppUiState
 import com.samirpatel.sportsdash.AppViewModel
 import com.samirpatel.sportsdash.ui.theme.Gold
+import com.samirpatel.sportsdash.ui.theme.JumbotronSideNav
 import com.samirpatel.sportsdash.ui.theme.JumbotronTabBar
 import com.samirpatel.sportsdash.ui.theme.Muted
 import com.samirpatel.sportsdash.ui.theme.Panel
@@ -108,6 +119,17 @@ fun SportsDashRoot(
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     // Android TV is always "leanback landscape" — keep shell chrome for D-pad nav.
     val hideShellChrome = landscape && !isTelevision
+
+    if (isTelevision) {
+        TelevisionShell(
+            vm = vm,
+            state = state,
+            tab = tab,
+            onTab = { tab = it },
+            landscape = true,
+        )
+        return
+    }
 
     val navColors = NavigationBarItemDefaults.colors(
         selectedIconColor = Gold,
@@ -187,6 +209,77 @@ fun SportsDashRoot(
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TelevisionShell(
+    vm: AppViewModel,
+    state: AppUiState,
+    tab: Int,
+    onTab: (Int) -> Unit,
+    landscape: Boolean,
+) {
+    val railRequester = remember { FocusRequester() }
+    var railFocused by remember { mutableStateOf(false) }
+    BackHandler(enabled = !railFocused) {
+        railRequester.requestFocus()
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .gridDotGround(
+                step = com.samirpatel.sportsdash.ui.theme.TvGridStep,
+                dot = com.samirpatel.sportsdash.ui.theme.TvGridDot,
+            )
+            .onPreviewKeyEvent { ev ->
+                val n = ev.nativeKeyEvent
+                if (n.action == KeyEvent.ACTION_DOWN && n.repeatCount >= 8) {
+                    val code = n.keyCode
+                    if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        railRequester.requestFocus()
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            },
+    ) {
+        JumbotronSideNav(
+            selected = tab,
+            onSelect = onTab,
+            modifier = Modifier
+                .focusRequester(railRequester)
+                .focusGroup()
+                .focusable()
+                .onFocusChanged { railFocused = it.hasFocus }
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxSize(),
+        ) {
+            when (tab) {
+                0 -> ScoresScreen(
+                    vm = vm,
+                    state = state,
+                    landscape = landscape,
+                    isTelevision = true,
+                    onGoSettings = { onTab(2) },
+                )
+                1 -> GuideScreen(
+                    vm = vm,
+                    state = state,
+                    landscape = landscape,
+                    isTelevision = true,
+                    onGoSettings = { onTab(2) },
+                    onGoScores = { onTab(0) },
+                )
+                else -> SettingsScreen(vm = vm, state = state, isTelevision = true)
             }
         }
     }

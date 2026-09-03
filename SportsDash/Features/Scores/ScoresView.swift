@@ -845,32 +845,7 @@ struct ScoresView: View {
 
     private var filterBar: some View {
         #if os(tvOS)
-        // No horizontal ScrollView — plain chips inside ScrollView often can't take focus on tvOS.
-        HStack(spacing: 16) {
-            ForEach(DashboardFilter.allCases) { f in
-                let liveCount = appModel.games.filter(\.isLive).count
-                let upcomingCount = appModel.games.filter(\.isUpcoming).count
-                SportsFilterChip(
-                    title: f.label,
-                    count: f == .live ? liveCount : (f == .upcoming ? upcomingCount : nil),
-                    selected: appModel.dashboardFilter == f,
-                    prefersDefault: f == .live,
-                    focusNamespace: scoresFilterFocus
-                ) {
-                    appModel.dashboardFilter = f
-                }
-            }
-            Spacer(minLength: 0)
-            SportsFilterChip(
-                title: appModel.favoriteTeamIds.isEmpty ? "★ PICK TEAMS" : "★ EDIT FAVORITES",
-                selected: false
-            ) {
-                showFavoritePicker = true
-            }
-        }
-        .padding(.horizontal, SportsTVMetrics.screenInset)
-        .padding(.vertical, 6)
-        .focusSection()
+        tvosFilterBar
         #else
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -894,6 +869,42 @@ struct ScoresView: View {
         }
         #endif
     }
+
+    #if os(tvOS)
+    private var tvosFilterBar: some View {
+        HStack(spacing: 16) {
+            ForEach(DashboardFilter.allCases) { f in
+                tvFilterChip(f)
+            }
+            Spacer(minLength: 0)
+            SportsFilterChip(
+                title: appModel.favoriteTeamIds.isEmpty ? "★ PICK TEAMS" : "★ EDIT FAVORITES",
+                selected: false,
+                action: { showFavoritePicker = true }
+            )
+        }
+        .padding(.horizontal, SportsTVMetrics.screenInset)
+        .padding(.vertical, 6)
+        .focusSection()
+    }
+
+    private func tvFilterChip(_ f: DashboardFilter) -> SportsFilterChip {
+        let count: Int?
+        switch f {
+        case .live: count = appModel.games.filter(\.isLive).count
+        case .upcoming: count = appModel.games.filter(\.isUpcoming).count
+        case .final: count = nil
+        }
+        return SportsFilterChip(
+            title: f.label,
+            count: count,
+            selected: appModel.dashboardFilter == f,
+            prefersDefault: f == .live,
+            focusNamespace: scoresFilterFocus,
+            action: { appModel.dashboardFilter = f }
+        )
+    }
+    #endif
 
     /// Borderless grouped list — soft surface, hairline dividers only (no per-card boxes).
     private func leagueBlock(

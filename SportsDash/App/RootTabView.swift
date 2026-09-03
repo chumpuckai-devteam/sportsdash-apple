@@ -31,6 +31,9 @@ enum AppTab: Hashable {
 struct RootTabView: View {
     @EnvironmentObject private var appModel: AppModel
     @State private var tab: AppTab = .scores
+    #if os(tvOS)
+    @FocusState private var sidebarItem: AppTab?
+    #endif
     @State private var didApplyLaunchTab = false
     /// Full-screen splash until bootstrap finishes (min time avoids a flash).
     @State private var showSplash = true
@@ -116,9 +119,37 @@ struct RootTabView: View {
         #if os(iOS)
         jumbotronTabHost
         #else
-        legacyTabView
+        tvSidebarShell
         #endif
     }
+
+    #if os(tvOS)
+    /// Left rail: Back/Menu and long-press return focus to Scores · Guide · Settings.
+    private var tvSidebarShell: some View {
+        HStack(spacing: 0) {
+            JumbotronTVSidebar(selection: $tab, sidebarItem: $sidebarItem)
+            tvTabPage
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .focusSection()
+                .onExitCommand { sidebarItem = tab }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.65).onEnded { _ in
+                        sidebarItem = tab
+                    }
+                )
+        }
+        .tint(SportsColors.gold)
+    }
+
+    @ViewBuilder
+    private var tvTabPage: some View {
+        switch tab {
+        case .scores: ScoresView()
+        case .guide: GuideView()
+        case .settings: SettingsView()
+        }
+    }
+    #endif
 
     #if os(iOS)
     /// Opaque lamp tab bar — no Liquid Glass on the tab layer (SPEC §6).

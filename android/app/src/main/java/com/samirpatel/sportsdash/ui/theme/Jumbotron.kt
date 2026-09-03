@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -251,6 +252,59 @@ fun JumbotronTabBar(
                     fontSize = labelSize,
                     letterSpacing = 0.04.em,
                     modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun JumbotronSideNav(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .width(280.dp)
+            .fillMaxHeight()
+            .background(PanelGradient)
+            .drawBehind {
+                val w = TvHairline.toPx()
+                drawRect(
+                    Border,
+                    topLeft = Offset(size.width - w, 0f),
+                    size = androidx.compose.ui.geometry.Size(w, size.height),
+                )
+            }
+            .padding(top = 48.dp, bottom = 28.dp, start = 18.dp, end = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        listOf(0 to "SCORES", 1 to "GUIDE", 2 to "SETTINGS").forEach { (idx, label) ->
+            val on = selected == idx
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(66.dp)
+                    .clickable { onSelect(idx) }
+                    .padding(horizontal = 16.dp)
+                    .semantics { this.selected = on },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(6.dp)
+                        .height(28.dp)
+                        .background(if (on) Gold else Border)
+                        .shadow(if (on) 4.dp else 0.dp, ambientColor = LedGlow, spotColor = LedGlow),
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    label,
+                    color = if (on) Gold else Muted,
+                    fontFamily = BebasNeue,
+                    fontSize = 28.sp,
+                    letterSpacing = 0.04.em,
                 )
             }
         }

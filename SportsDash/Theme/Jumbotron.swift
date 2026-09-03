@@ -343,6 +343,78 @@ struct JumbotronTabBar: View {
     }
 }
 
+#if os(tvOS)
+/// Left rail for Apple TV. Back (`onExitCommand`) and long-press return focus here.
+struct JumbotronTVSidebar: View {
+    @Binding var selection: AppTab
+    var sidebarItem: FocusState<AppTab?>.Binding
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            row(.scores, "SCORES")
+            row(.guide, "GUIDE")
+            row(.settings, "SETTINGS")
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 48)
+        .padding(.bottom, 28)
+        .padding(.horizontal, 18)
+        .frame(width: 280)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(SportsColors.panelGradient)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(SportsColors.border)
+                .frame(width: SportsTVMetrics.hairline)
+        }
+        .focusSection()
+    }
+
+    private func row(_ value: AppTab, _ title: String) -> some View {
+        let on = selection == value
+        return Button {
+            selection = value
+        } label: {
+            SportsTVFocused { focused in
+                HStack(spacing: 16) {
+                    Rectangle()
+                        .fill((on || focused) ? SportsColors.gold : SportsColors.border)
+                        .frame(width: 6, height: 28)
+                        .shadow(color: (on || focused) ? SportsColors.ledGlow : .clear, radius: 6)
+                    Text(title)
+                        .font(JumbotronFonts.display(28))
+                        .jumbotronDisplayTracking(28)
+                        .foregroundStyle((on || focused) ? SportsColors.gold : SportsColors.muted)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
+                .background {
+                    if focused {
+                        SportsColors.gold.opacity(0.14)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .overlay {
+                    Rectangle().stroke(
+                        focused ? SportsColors.gold : Color.clear,
+                        lineWidth: SportsTVMetrics.hairline
+                    )
+                }
+                .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
+                .animation(SportsTVFocusMotion.animation, value: focused)
+            }
+        }
+        .buttonStyle(.plain)
+        .sportsTVFocusClean()
+        .focused(sidebarItem, equals: value)
+        .accessibilityLabel(value.title)
+        .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
+    }
+}
+#endif
+
 // MARK: - Switchboard
 
 struct JumbotronSwitchboard: View {
