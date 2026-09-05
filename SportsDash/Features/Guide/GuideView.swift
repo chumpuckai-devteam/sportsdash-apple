@@ -1179,6 +1179,7 @@ private struct GuideTimelineRow: View, Equatable {
     private var contentKey: Int {
         var hasher = Hasher()
         hasher.combine(row.channel.id)
+        hasher.combine(index)
         hasher.combine(row.programs)
         hasher.combine(windowStart)
         hasher.combine(nowMinute)
