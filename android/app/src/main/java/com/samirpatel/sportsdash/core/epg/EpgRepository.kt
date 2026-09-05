@@ -1,7 +1,6 @@
 package com.samirpatel.sportsdash.core.epg
 
 import android.util.Base64
-import android.util.Xml
 import com.samirpatel.sportsdash.core.model.IptvChannel
 import com.samirpatel.sportsdash.core.model.PlaylistConfig
 import com.samirpatel.sportsdash.core.model.PlaylistType
@@ -18,6 +17,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -41,12 +41,17 @@ import kotlin.math.min
  */
 class EpgRepository(
     private val cacheDir: File? = null,
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build(),
+    client: OkHttpClient? = null,
 ) {
+    // Lazy so JVM unit tests can parse XMLTV without constructing OkHttp
+    // (OkHttp's Android platform probe calls android.os.Build, which is not mocked).
+    private val httpClient: OkHttpClient by lazy {
+        client ?: OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+    }
     companion object {
         const val MAX_PER_CHANNEL = 16
         const val HOURS_BEHIND = 6
@@ -234,7 +239,7 @@ class EpgRepository(
             .header("User-Agent", "SportsDash/1.0")
             .get()
             .build()
-        client.newCall(req).execute().use { resp ->
+        httpClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
             val body = resp.body ?: return null
             onStatus("Step 2/3 · Parsing guide stream…")
@@ -256,7 +261,7 @@ class EpgRepository(
             .header("User-Agent", "SportsDash/1.0")
             .get()
             .build()
-        client.newCall(req).execute().use { resp ->
+        httpClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return false
             val body = resp.body ?: return false
             val contentLength = body.contentLength()
@@ -509,7 +514,9 @@ class EpgRepository(
         }
 
         counting.use { fis ->
-            val parser = Xml.newPullParser()
+            val factory = XmlPullParserFactory.newInstance()
+            factory.isNamespaceAware = false
+            val parser = factory.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
             parser.setInput(fis, null)
 
@@ -874,7 +881,7 @@ class EpgRepository(
             .header("User-Agent", "SportsDash/1.0")
             .get()
             .build()
-        client.newCall(req).execute().use { resp ->
+        httpClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) error("HTTP ${resp.code}")
             return resp.body?.string().orEmpty()
         }
