@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Player overlay ticker: sport → league → live games, with tap-to-collapse like the scores dashboard.
-struct LiveScoresStrip: View {
-    let games: [Game]
+struct LiveScoresStrip: View, Equatable {
+    let ordered: [Game]
+    var sections: [SportScoreSection] = []
     var currentGameId: String?
     var favoriteTeamIds: Set<String> = []
     var lastPlayedGameIds: [String] = []
@@ -15,12 +16,26 @@ struct LiveScoresStrip: View {
     /// Collapsed league keys (`worldcup`, `mlb`, …).
     @State private var collapsedLeagues: Set<String> = []
 
-    private var liveOrdered: [Game] {
+    static func == (lhs: LiveScoresStrip, rhs: LiveScoresStrip) -> Bool {
+        lhs.ordered == rhs.ordered
+            && lhs.sections == rhs.sections
+            && lhs.currentGameId == rhs.currentGameId
+            && lhs.favoriteTeamIds == rhs.favoriteTeamIds
+            && lhs.lastPlayedGameIds == rhs.lastPlayedGameIds
+            && lhs.compactTopStyle == rhs.compactTopStyle
+    }
+
+    /// Sort/group off-main. Nothing in `body` may sort.
+    static func buildTicker(
+        games: [Game],
+        currentGameId: String?,
+        favoriteTeamIds: Set<String>,
+        lastPlayedGameIds: [String]
+    ) -> (ordered: [Game], sections: [SportScoreSection]) {
         var live = games.filter { $0.isLive && $0.isTickerEligible }
-        // Favorites lead (cycle faves). Current-among-favs first; non-fav current after fav block.
         live.sort { a, b in
             func rank(_ g: Game) -> Int {
-                let fav = isFav(g)
+                let fav = favoriteTeamIds.contains(g.home.id) || favoriteTeamIds.contains(g.away.id)
                 let cur = g.id == currentGameId
                 if fav && cur { return 0 }
                 if fav { return 1 }
@@ -29,17 +44,30 @@ struct LiveScoresStrip: View {
             }
             let ra = rank(a), rb = rank(b)
             if ra != rb { return ra < rb }
-            let aLp = lastPlayedRank(a.id)
-            let bLp = lastPlayedRank(b.id)
+            let aLp = lastPlayedGameIds.firstIndex(of: a.id) ?? 9999
+            let bLp = lastPlayedGameIds.firstIndex(of: b.id) ?? 9999
             if aLp != bLp { return aLp < bLp }
             return a.startTime < b.startTime
         }
-        return Array(live.prefix(40))
-    }
-
-    /// Same sport → league sections as the scores dashboard, live-only.
-    private var sportSections: [SportScoreSection] {
-        ScoreboardGrouping.sportSections(from: liveOrdered, favoriteTeamIds: favoriteTeamIds)
+        let ordered = Array(live.prefix(40))
+        var sections = ScoreboardGrouping.sportSections(from: ordered, favoriteTeamIds: favoriteTeamIds)
+        for i in sections.indices {
+            for j in sections[i].leagues.indices {
+                sections[i].leagues[j].games.sort { a, b in
+                    let aNow = a.id == currentGameId ? 0 : 1
+                    let bNow = b.id == currentGameId ? 0 : 1
+                    if aNow != bNow { return aNow < bNow }
+                    let aLp = lastPlayedGameIds.firstIndex(of: a.id) ?? 9999
+                    let bLp = lastPlayedGameIds.firstIndex(of: b.id) ?? 9999
+                    if aLp != bLp { return aLp < bLp }
+                    let aFav = (favoriteTeamIds.contains(a.home.id) || favoriteTeamIds.contains(a.away.id)) ? 0 : 1
+                    let bFav = (favoriteTeamIds.contains(b.home.id) || favoriteTeamIds.contains(b.away.id)) ? 0 : 1
+                    if aFav != bFav { return aFav < bFav }
+                    return a.startTime < b.startTime
+                }
+            }
+        }
+        return (ordered, sections)
     }
 
     var body: some View {
@@ -56,13 +84,13 @@ struct LiveScoresStrip: View {
     private var compactPills: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                if liveOrdered.isEmpty {
+                if ordered.isEmpty {
                     Text("No other live games")
                         .font(.caption)
                         .foregroundStyle(SportsColors.muted)
                         .padding(.horizontal, 4)
                 }
-                ForEach(liveOrdered) { g in
+                ForEach(ordered) { g in
                     Button { onGameTap(g) } label: {
                         HStack(spacing: 5) {
                             miniLogo(g.away)
@@ -92,14 +120,10 @@ struct LiveScoresStrip: View {
     private func miniLogo(_ team: TeamInfo) -> some View {
         Group {
             if let raw = team.logoURL, let url = URL(string: raw) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let img): img.resizable().scaledToFit()
-                    default:
-                        Text(String(team.abbreviation.prefix(2)))
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(SportsColors.gold)
-                    }
+                TeamLogo(url: url, size: 18) {
+                    Text(String(team.abbreviation.prefix(2)))
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(SportsColors.gold)
                 }
             } else {
                 Text(String(team.abbreviation.prefix(2)))
@@ -113,24 +137,25 @@ struct LiveScoresStrip: View {
 
     private var legacyStrip: some View {
         VStack(spacing: 6) {
-            if let current = games.first(where: { $0.id == currentGameId }) {
+            if let current = ordered.first(where: { $0.id == currentGameId })
+                ?? ordered.first {
                 hero(current)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .center, spacing: 10) {
-                    if sportSections.isEmpty {
+                    if sections.isEmpty {
                         Text("No other live games")
                             .font(.caption)
                             .foregroundStyle(SportsColors.muted)
                             .padding(.horizontal)
                     }
-                    ForEach(sportSections) { section in
+                    ForEach(sections) { section in
                         sportChip(section)
                         if !collapsedSports.contains(section.sportKey) {
                             ForEach(section.leagues) { league in
                                 leagueChip(league)
                                 if !collapsedLeagues.contains(league.key) {
-                                    ForEach(sortedGames(league.games)) { g in
+                                    ForEach(league.games) { g in
                                         card(g)
                                     }
                                 }
@@ -309,22 +334,6 @@ struct LiveScoresStrip: View {
 
     // MARK: - Helpers
 
-    private func sortedGames(_ games: [Game]) -> [Game] {
-        games.sorted { a, b in
-            let aNow = a.id == currentGameId ? 0 : 1
-            let bNow = b.id == currentGameId ? 0 : 1
-            if aNow != bNow { return aNow < bNow }
-            let aLp = lastPlayedRank(a.id)
-            let bLp = lastPlayedRank(b.id)
-            if aLp != bLp { return aLp < bLp }
-            // Nice-to-have: prefer favorite-team games in the player ticker.
-            let aFav = isFav(a) ? 0 : 1
-            let bFav = isFav(b) ? 0 : 1
-            if aFav != bFav { return aFav < bFav }
-            return a.startTime < b.startTime
-        }
-    }
-
     private func toggleSport(_ key: String) {
         if collapsedSports.contains(key) {
             collapsedSports.remove(key)
@@ -341,13 +350,6 @@ struct LiveScoresStrip: View {
         }
     }
 
-    private func isFav(_ g: Game) -> Bool {
-        favoriteTeamIds.contains(g.home.id) || favoriteTeamIds.contains(g.away.id)
-    }
-
-    private func lastPlayedRank(_ id: String) -> Int {
-        lastPlayedGameIds.firstIndex(of: id) ?? 9999
-    }
 }
 
 

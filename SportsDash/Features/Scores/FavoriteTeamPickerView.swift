@@ -163,15 +163,9 @@ struct FavoriteTeamPickerView: View {
     @ViewBuilder
     private func teamLogo(_ team: TeamInfo) -> some View {
         if let raw = team.logoURL, let url = URL(string: raw) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img):
-                    img.resizable().scaledToFit()
-                default:
-                    monogram(team.abbreviation)
-                }
+            TeamLogo(url: url, size: 36) {
+                monogram(team.abbreviation)
             }
-            .frame(width: 36, height: 36)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
             monogram(team.abbreviation)

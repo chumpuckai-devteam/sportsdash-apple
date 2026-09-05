@@ -6,7 +6,7 @@ import BackgroundTasks
 
 @main
 struct SportsDashApp: App {
-    @StateObject private var appModel = AppModel()
+    @StateObject private var appModel: AppModel
 
     // Use delegate adaptor for early BGTask registration (required before app finishes launch)
     #if os(iOS)
@@ -17,6 +17,7 @@ struct SportsDashApp: App {
         JumbotronFonts.register()
         let prefs = StorageService.shared.playerPrefs()
         PlaybackController.applyGlobal(prefs)
+        _appModel = StateObject(wrappedValue: AppModel(prefs: prefs))
         // BG path independent of AppModel (see ScoresBackgroundRefresh)
     }
 
@@ -25,6 +26,7 @@ struct SportsDashApp: App {
             RootTabView()
                 .environmentObject(appModel)
                 .environmentObject(appModel.epg)
+                .environment(appModel.clock)
                 .preferredColorScheme(colorScheme)
         }
     }

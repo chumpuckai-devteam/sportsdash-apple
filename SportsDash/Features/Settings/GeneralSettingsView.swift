@@ -116,7 +116,7 @@ struct GeneralSettingsView: View {
                 .disabled(appModel.channels.isEmpty || epg.isLoadingEpg)
 
                 Button {
-                    epg.epgByChannel = [:]
+                    epg.clear()
                     epg.epgLoadedCount = 0
                     epg.lastEpgReload = nil
                     epg.epgStatus = nil

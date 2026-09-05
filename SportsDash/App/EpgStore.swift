@@ -10,7 +10,9 @@ import Foundation
 /// via `@EnvironmentObject` (injected alongside `AppModel`).
 @MainActor
 final class EpgStore: ObservableObject {
-    @Published var epgByChannel: [String: [EpgProgram]] = [:]
+    @Published private(set) var epgByChannel: [String: [EpgProgram]] = [:]
+    /// Bumped on every map write so Guide can rebuild rows off-main via `.task(id:)`.
+    @Published private(set) var revision = 0
     @Published var isLoadingEpg = false
     /// Channels with EPG entries loaded (may be empty lists).
     @Published var epgLoadedCount = 0
@@ -23,5 +25,25 @@ final class EpgStore: ObservableObject {
 
     func programs(for channelId: String) -> [EpgProgram] {
         epgByChannel[channelId] ?? []
+    }
+
+    func replace(_ map: [String: [EpgProgram]]) {
+        epgByChannel = map
+        revision += 1
+    }
+
+    func merge(_ delta: [String: [EpgProgram]]) {
+        guard !delta.isEmpty else { return }
+        var next = epgByChannel
+        next.reserveCapacity(next.count + delta.count)
+        for (k, v) in delta { next[k] = v }
+        epgByChannel = next
+        revision += 1
+    }
+
+    func clear() {
+        guard !epgByChannel.isEmpty else { return }
+        epgByChannel = [:]
+        revision += 1
     }
 }

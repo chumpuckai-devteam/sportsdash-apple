@@ -55,6 +55,7 @@ struct RootTabView: View {
                 FloatingPlayerView(playback: appModel.floatingPlayback)
                     .environmentObject(appModel)
                     .environmentObject(appModel.epg)
+                    .environment(appModel.clock)
                     .zIndex(100)
             }
             #endif
@@ -73,6 +74,7 @@ struct RootTabView: View {
             )
             .environmentObject(appModel)
             .environmentObject(appModel.epg)
+            .environment(appModel.clock)
         }
         .task {
             if !didApplyLaunchTab {
@@ -125,20 +127,33 @@ struct RootTabView: View {
 
     #if os(tvOS)
     /// Left rail: Back/Menu and long-press return focus to Scores · Guide · Settings.
+    /// Page width stays constant; expanded rail overlays the first 208 pt (P1-2).
     private var tvSidebarShell: some View {
         let expanded = sidebarItem != nil
-        return HStack(spacing: 0) {
+        return ZStack(alignment: .leading) {
+            tvTabPage
+                .padding(.leading, 72)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .focusSection()
+                .onExitCommand { sidebarItem = tab }
+
+            HStack(spacing: 0) {
+                Color.clear.frame(width: 72)
+                SportsColors.voidBlack.opacity(0.35)
+                    .frame(width: 208)
+                Spacer(minLength: 0)
+            }
+            .opacity(expanded ? 1 : 0)
+            .allowsHitTesting(false)
+            .animation(.easeOut(duration: 0.18), value: expanded)
+
             JumbotronTVSidebar(
                 selection: $tab,
                 sidebarItem: $sidebarItem,
                 expanded: expanded
             )
-            tvTabPage
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .focusSection()
-                .onExitCommand { sidebarItem = tab }
+            .animation(.easeOut(duration: 0.18), value: expanded)
         }
-        .animation(.easeOut(duration: 0.18), value: expanded)
         .tint(SportsColors.gold)
     }
 

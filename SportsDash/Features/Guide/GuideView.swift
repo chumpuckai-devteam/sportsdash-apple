@@ -26,16 +26,20 @@ private enum GuideMetrics {
 struct GuideView: View {
     @EnvironmentObject private var appModel: AppModel
     @EnvironmentObject private var epg: EpgStore
+    @Environment(AppClock.self) private var clock
     @State private var selectedGroup: String = ""
     @State private var windowStart: Date = GuideView.snappedCurrentHour()
     @State private var playerRoute: PlayerRoute?
-    @State private var nowTick = Date()
     @State private var sideWorkTask: Task<Void, Never>?
     @State private var ratingsTask: Task<Void, Never>?
     @State private var showGuideSettings = false
     @State private var showCategoryPicker = false
     /// Guide-only filter: now-playing looks like a movie (XMLTV categories + signals).
     @State private var moviesOnly = false
+    @State private var rows: [GuideChannelRowData] = []
+    @State private var playableRows: [GuideChannelRowData] = []
+    @State private var withGuideCount = 0
+    @State private var liveCount = 0
 
     private var displayMode: GuideLayoutMode {
         appModel.playerPrefs.guideLayout
@@ -63,34 +67,22 @@ struct GuideView: View {
 
     private var cleanNames: Bool { appModel.playerPrefs.cleanUpNames }
 
-    private var guideRows: [GuideChannelRowData] {
-        // Reference EPG map; LazyVStack/List only mount visible rows.
-        // Dedupe playlist clones (same display name in group — common on Xtream).
-        let chans = Self.dedupeChannels(activeChannels, epg: epg.epgByChannel)
-        var rows: [GuideChannelRowData] = []
-        rows.reserveCapacity(chans.count)
-        for ch in chans {
-            if ch.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
-            let programs = epg.epgByChannel[ch.id] ?? []
-            if moviesOnly {
-                let now = programs.first(where: \.isNow) ?? programs.first
-                let isMovie = now.map { prog in
-                    MovieDetection.isMovieCandidate(
-                        title: prog.title,
-                        categories: prog.categories,
-                        channelGroup: ch.group ?? selectedGroup,
-                        channelName: ch.name
-                    )
-                } ?? false
-                if !isMovie { continue }
-            }
-            rows.append(GuideChannelRowData(channel: ch, programs: programs))
-        }
-        return rows
+    private var nowMinute: Date { clock.minute }
+
+    private var rowsTaskId: GuideRowsKey {
+        GuideRowsKey(
+            selectedGroup: selectedGroup,
+            moviesOnly: moviesOnly,
+            revision: epg.revision,
+            channelCount: appModel.channels.count,
+            cleanNames: cleanNames,
+            favoriteChannelIds: appModel.favoriteChannelIds,
+            nowMinute: nowMinute
+        )
     }
 
     /// Prefer the stream that already has EPG when names collide.
-    private static func dedupeChannels(
+    static func dedupeChannels(
         _ channels: [IptvChannel],
         epg: [String: [EpgProgram]]
     ) -> [IptvChannel] {
@@ -117,6 +109,43 @@ struct GuideView: View {
             }
         }
         return order.compactMap { bestByKey[$0] }
+    }
+
+    static func buildGuidePayload(
+        channels: [IptvChannel],
+        epg: [String: [EpgProgram]],
+        moviesOnly: Bool,
+        groupName: String,
+        nowMinute: Date
+    ) -> GuideRowsPayload {
+        let chans = dedupeChannels(channels, epg: epg)
+        var rows: [GuideChannelRowData] = []
+        rows.reserveCapacity(chans.count)
+        var withGuide = 0
+        var live = 0
+        for ch in chans {
+            let programs = epg[ch.id] ?? []
+            if !programs.isEmpty { withGuide += 1 }
+            if ch.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+            if moviesOnly {
+                let nowProg = programs.first(where: { $0.start <= nowMinute && nowMinute < $0.end })
+                    ?? programs.first
+                let isMovie = nowProg.map { prog in
+                    MovieDetection.isMovieCandidate(
+                        title: prog.title,
+                        categories: prog.categories,
+                        channelGroup: ch.group ?? groupName,
+                        channelName: ch.name
+                    )
+                } ?? false
+                if !isMovie { continue }
+            }
+            if programs.contains(where: { $0.start <= nowMinute && nowMinute < $0.end }) {
+                live += 1
+            }
+            rows.append(GuideChannelRowData(channel: ch, programs: programs))
+        }
+        return GuideRowsPayload(rows: rows, playable: rows, withGuide: withGuide, liveCount: live)
     }
 
     var body: some View {
@@ -233,9 +262,28 @@ struct GuideView: View {
                 }
                 // Always open on the current hour (left edge of timeline).
                 windowStart = Self.snappedCurrentHour()
-                nowTick = Date()
                 // Background only — never block first Guide paint on EPG network.
                 scheduleGuideSideWork()
+            }
+            .task(id: rowsTaskId) {
+                let group = selectedGroup.isEmpty ? defaultGuideGroup : selectedGroup
+                let channels = appModel.channels(inGroup: group)
+                let epgMap = epg.epgByChannel
+                let movies = moviesOnly
+                let now = nowMinute
+                let payload = await Task.detached(priority: .userInitiated) {
+                    GuideView.buildGuidePayload(
+                        channels: channels,
+                        epg: epgMap,
+                        moviesOnly: movies,
+                        groupName: group,
+                        nowMinute: now
+                    )
+                }.value
+                rows = payload.rows
+                playableRows = payload.playable
+                withGuideCount = payload.withGuide
+                liveCount = payload.liveCount
             }
             .onChange(of: selectedGroup) { _, _ in
                 // Category switch must feel instant: UI updates from selectedGroup immediately;
@@ -262,9 +310,7 @@ struct GuideView: View {
                     selectedGroup = defaultGuideGroup
                 }
             }
-            .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { date in
-                nowTick = date
-                // Roll the grid when the clock crosses into a new hour.
+            .onChange(of: clock.minute) { _, _ in
                 let hour = Self.snappedCurrentHour()
                 if hour != windowStart {
                     windowStart = hour
@@ -278,6 +324,7 @@ struct GuideView: View {
                 )
                 .environmentObject(appModel)
                 .environmentObject(appModel.epg)
+                .environment(appModel.clock)
             }
             .sheet(isPresented: $showGuideSettings) {
                 guideSettingsSheet
@@ -555,6 +602,7 @@ struct GuideView: View {
                                 lineWidth: SportsTVMetrics.hairline
                             )
                         }
+                        .compositingGroup()
                         .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
                         .scaleEffect(focused ? SportsTVMetrics.chipFocusScale : 1.0)
                         .animation(SportsTVFocusMotion.animation, value: focused)
@@ -580,11 +628,10 @@ struct GuideView: View {
                 .padding(.vertical, 6)
                 .background(SportsColors.panel)
             } else if !activeChannels.isEmpty {
-                let withGuide = activeChannels.filter { !(epg.epgByChannel[$0.id] ?? []).isEmpty }.count
                 HStack(spacing: 8) {
-                    Text("Guide \(withGuide)/\(activeChannels.count) in this category")
+                    Text("Guide \(withGuideCount)/\(activeChannels.count) in this category")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(withGuide == 0 ? SportsColors.danger : SportsColors.muted)
+                        .foregroundStyle(withGuideCount == 0 ? SportsColors.danger : SportsColors.muted)
                     Spacer(minLength: 8)
                     if let s = epg.epgStatus, s.localizedCaseInsensitiveContains("ready") {
                         Text(s)
@@ -602,12 +649,14 @@ struct GuideView: View {
             case .list:
                 #if os(iOS)
                 GuideNowBarList(
-                    rows: guideRows,
+                    rows: rows,
+                    playable: playableRows,
+                    liveCount: liveCount,
                     selectedGroup: selectedGroup,
                     groupNames: groupNames,
                     moviesOnly: moviesOnly,
                     displayMode: displayMode,
-                    now: nowTick,
+                    now: nowMinute,
                     cleanNames: cleanNames,
                     favoriteChannelIds: appModel.favoriteChannelIds,
                     epgError: epg.epgError,
@@ -630,9 +679,9 @@ struct GuideView: View {
                 )
                 #else
                 GuideTimelineGrid(
-                    rows: guideRows,
+                    rows: rows,
                     windowStart: windowStart,
-                    now: nowTick,
+                    now: nowMinute,
                     cleanUpNames: cleanNames,
                     favoriteChannelIds: appModel.favoriteChannelIds,
                     onPlay: { channel in
@@ -663,7 +712,7 @@ struct GuideView: View {
     private var guideCardList: some View {
         List {
             Section {
-                ForEach(guideRows) { row in
+                ForEach(rows) { row in
                     GuideCardRow(
                         channel: row.channel,
                         programs: row.programs,
@@ -901,10 +950,27 @@ private struct GuideCardRow: View {
 
 // MARK: - Row model
 
-struct GuideChannelRowData: Identifiable {
+struct GuideChannelRowData: Identifiable, Equatable, Sendable {
     var id: String { channel.id }
     let channel: IptvChannel
     let programs: [EpgProgram]
+}
+
+struct GuideRowsPayload: Sendable {
+    var rows: [GuideChannelRowData]
+    var playable: [GuideChannelRowData]
+    var withGuide: Int
+    var liveCount: Int
+}
+
+struct GuideRowsKey: Hashable {
+    var selectedGroup: String
+    var moviesOnly: Bool
+    var revision: Int
+    var channelCount: Int
+    var cleanNames: Bool
+    var favoriteChannelIds: Set<String>
+    var nowMinute: Date
 }
 
 private enum GuideGapReason {
@@ -965,7 +1031,7 @@ private struct GuideTimelineGrid: View {
                             index: index + 1,
                             windowStart: windowStart,
                             windowEnd: windowEnd,
-                            now: now,
+                            nowMinute: now,
                             cleanUpNames: cleanUpNames,
                             isFavorite: favoriteChannelIds.contains(row.channel.id),
                             scrollSync: scrollSync,
@@ -974,6 +1040,7 @@ private struct GuideTimelineGrid: View {
                             prefersDefault: index == 0,
                             focusNamespace: guideFocusNS
                         )
+                        .equatable()
                     }
                 }
                 #if os(tvOS)
@@ -1008,7 +1075,8 @@ private struct GuideTimelineGrid: View {
                 axis: .horizontal,
                 showsIndicators: true,
                 sync: scrollSync,
-                role: .header
+                role: .header,
+                contentKey: GuideLinkedScrollView<EmptyView>.headerKey(windowStart: windowStart, nowMinute: now)
             ) {
                 ZStack(alignment: .topLeading) {
                     HStack(spacing: 0) {
@@ -1029,10 +1097,15 @@ private struct GuideTimelineGrid: View {
     }
 
     private func hourLabel(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "h a"
-        return f.string(from: date).lowercased()
+        Self.hourFormatter.string(from: date).lowercased()
     }
+
+    private static let hourFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.dateFormat = "h a"
+        return f
+    }()
 
     @ViewBuilder
     private var nowMarker: some View {
@@ -1058,12 +1131,12 @@ private struct GuideTimelineGrid: View {
 }
 
 /// One channel row: fixed label + horizontally synced program strip.
-private struct GuideTimelineRow: View {
+private struct GuideTimelineRow: View, Equatable {
     let row: GuideChannelRowData
     var index: Int = 1
     let windowStart: Date
     let windowEnd: Date
-    let now: Date
+    let nowMinute: Date
     let cleanUpNames: Bool
     var isFavorite: Bool = false
     @ObservedObject var scrollSync: GuideScrollSync
@@ -1075,6 +1148,26 @@ private struct GuideTimelineRow: View {
     /// callers never need mid-argument-list `#if os(tvOS)`.
     var focusNamespace: Namespace.ID? = nil
 
+    static func == (lhs: GuideTimelineRow, rhs: GuideTimelineRow) -> Bool {
+        lhs.row.channel.id == rhs.row.channel.id
+            && lhs.row.programs == rhs.row.programs
+            && lhs.windowStart == rhs.windowStart
+            && lhs.nowMinute == rhs.nowMinute
+            && lhs.isFavorite == rhs.isFavorite
+            && lhs.cleanUpNames == rhs.cleanUpNames
+    }
+
+    private var contentKey: Int {
+        var hasher = Hasher()
+        hasher.combine(row.channel.id)
+        hasher.combine(row.programs)
+        hasher.combine(windowStart)
+        hasher.combine(nowMinute)
+        hasher.combine(isFavorite)
+        hasher.combine(cleanUpNames)
+        return hasher.finalize()
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             channelNameCell
@@ -1084,7 +1177,8 @@ private struct GuideTimelineRow: View {
                 axis: .horizontal,
                 showsIndicators: false,
                 sync: scrollSync,
-                role: .body
+                role: .body,
+                contentKey: contentKey
             ) {
                 ZStack(alignment: .topLeading) {
                     Rectangle()
@@ -1188,6 +1282,7 @@ private struct GuideTimelineRow: View {
                 SportsColors.panelGradient
             }
         }
+        .compositingGroup()
         .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
         #if os(tvOS)
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
@@ -1316,7 +1411,7 @@ private struct GuideTimelineRow: View {
 
     @ViewBuilder
     private func programBlock(_ program: EpgProgram, left: CGFloat, width: CGFloat) -> some View {
-        let airing = program.start <= now && now < program.end
+        let airing = program.start <= nowMinute && nowMinute < program.end
 
         VStack(alignment: .leading, spacing: 4) {
             Text(program.title.isEmpty ? "Program" : program.title)
@@ -1487,7 +1582,16 @@ private struct GuideLinkedScrollView<Content: View>: UIViewRepresentable {
     let showsIndicators: Bool
     let sync: GuideScrollSync
     let role: GuideScrollRole
+    var contentKey: Int = 0
     @ViewBuilder let content: () -> Content
+
+    static func headerKey(windowStart: Date, nowMinute: Date) -> Int {
+        var hasher = Hasher()
+        hasher.combine("header")
+        hasher.combine(windowStart)
+        hasher.combine(nowMinute)
+        return hasher.finalize()
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -1530,14 +1634,22 @@ private struct GuideLinkedScrollView<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
-        // Preserve user scroll position when SwiftUI refreshes row content (e.g. EPG updates).
         let savedX = scrollView.contentOffset.x
-        context.coordinator.hosting?.rootView = content()
-        scrollView.layoutIfNeeded()
-        if abs(scrollView.contentOffset.x - savedX) > 0.5 {
-            scrollView.contentOffset.x = savedX
+        if context.coordinator.lastKey != contentKey {
+            context.coordinator.hosting?.rootView = content()
+            context.coordinator.lastKey = contentKey
+            scrollView.setNeedsLayout()
+            DispatchQueue.main.async {
+                if abs(scrollView.contentOffset.x - savedX) > 0.5 {
+                    scrollView.contentOffset.x = savedX
+                }
+                let target = self.sync.sharedOffsetX
+                if abs(scrollView.contentOffset.x - target) > 0.5 {
+                    scrollView.contentOffset.x = target
+                }
+            }
+            return
         }
-        // Align recycled rows to shared offset without forcing a jump-to-now.
         let target = sync.sharedOffsetX
         if abs(scrollView.contentOffset.x - target) > 0.5 {
             scrollView.contentOffset.x = target
@@ -1547,5 +1659,6 @@ private struct GuideLinkedScrollView<Content: View>: UIViewRepresentable {
     final class Coordinator {
         var hosting: UIHostingController<Content>?
         weak var scrollView: UIScrollView?
+        var lastKey: Int?
     }
 }

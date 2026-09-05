@@ -79,11 +79,16 @@ struct XtreamAccountInfo: Sendable, Equatable {
 
     var expDateLabel: String {
         guard let expDate else { return "—" }
+        return Self.expFormatter.string(from: expDate)
+    }
+
+    private static let expFormatter: DateFormatter = {
         let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
         f.dateStyle = .medium
         f.timeStyle = .none
-        return f.string(from: expDate)
-    }
+        return f
+    }()
 
     var connectionsLabel: String {
         let a = activeConnections.map(String.init) ?? "—"

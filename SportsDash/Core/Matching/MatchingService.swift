@@ -56,6 +56,17 @@ struct MatchingService: Sendable {
         return scored
     }
 
+    /// Board WATCH index: count of matches per game, capped at `limit` (hero shows up to 3).
+    func matchCountsByGameId(games: [Game], channels: [IptvChannel], limit: Int = 3) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        counts.reserveCapacity(games.count)
+        for g in games {
+            let n = matchGameToChannels(g, channels: channels, limit: limit).count
+            if n > 0 { counts[g.id] = n }
+        }
+        return counts
+    }
+
     private func detectEventGroups(game: Game, channels: [IptvChannel]) -> Set<String> {
         let needles = eventNeedles(game)
         var groups = Set<String>()

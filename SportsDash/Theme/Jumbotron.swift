@@ -69,6 +69,7 @@ extension View {
                 Rectangle()
                     .stroke(focused ? SportsColors.gold : SportsColors.border, lineWidth: SportsTVMetrics.hairline)
             }
+            .compositingGroup()
             .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
             .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
             .animation(SportsTVFocusMotion.animation, value: focused)
@@ -183,6 +184,9 @@ struct JumbotronLED: View {
             )
             .lineLimit(1)
             .minimumScaleFactor(0.6)
+            #if os(tvOS)
+            .drawingGroup(opaque: false)
+            #endif
     }
 
     private var glowColor: Color {

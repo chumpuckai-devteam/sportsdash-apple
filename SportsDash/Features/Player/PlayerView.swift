@@ -17,11 +17,37 @@ struct PlayerView: View {
     @State private var chromeTask: Task<Void, Never>?
     /// When true, dismissing full-screen hands off to the floating mini player (don't stop audio).
     @State private var isPoppingOut = false
+    @State private var tickerGames: [Game] = []
+    @State private var tickerSections: [SportScoreSection] = []
+    @State private var tickerGeneration = 0
+    @State private var pickerMatches: [ChannelMatch] = []
 
     init(channel: IptvChannel, game: Game?, alternateMatches: [ChannelMatch] = []) {
         _channel = State(initialValue: channel)
         _game = State(initialValue: game)
         _alternates = State(initialValue: alternateMatches)
+    }
+
+    private func rebuildTicker() {
+        tickerGeneration += 1
+        let gen = tickerGeneration
+        let games = appModel.games
+        let fav = appModel.favoriteTeamIds
+        let last = appModel.lastPlayedGameIds
+        let current = game?.id
+        Task.detached(priority: .userInitiated) {
+            let built = LiveScoresStrip.buildTicker(
+                games: games,
+                currentGameId: current,
+                favoriteTeamIds: fav,
+                lastPlayedGameIds: last
+            )
+            await MainActor.run {
+                guard gen == tickerGeneration else { return }
+                tickerGames = built.ordered
+                tickerSections = built.sections
+            }
+        }
     }
 
     private var tickerMode: ScoresTickerMode {
@@ -96,7 +122,10 @@ struct PlayerView: View {
                 Task { await appModel.refreshXtreamAccount() }
             }
             scheduleChromeHide()
+            rebuildTicker()
         }
+        .onChange(of: appModel.games) { _, _ in rebuildTicker() }
+        .onChange(of: appModel.favoriteTeamIds) { _, _ in rebuildTicker() }
         .onDisappear {
             appModel.playerDidDisappear()
             chromeTask?.cancel()
@@ -114,7 +143,7 @@ struct PlayerView: View {
         }
         .sheet(item: $showGamePicker) { g in
             streamSheet(
-                matches: MatchingService().matchGameToChannels(g, channels: appModel.channels),
+                matches: pickerMatches,
                 forGame: g
             )
         }
@@ -167,7 +196,8 @@ struct PlayerView: View {
             // Off | Fade-with-chrome | Persistent
             if shouldShowTicker, playback.error == nil {
                 LiveScoresStrip(
-                    games: appModel.games.filter { $0.isLive && $0.isTickerEligible },
+                    ordered: tickerGames,
+                    sections: tickerSections,
                     currentGameId: game?.id,
                     favoriteTeamIds: appModel.favoriteTeamIds,
                     lastPlayedGameIds: appModel.lastPlayedGameIds,
@@ -181,11 +211,13 @@ struct PlayerView: View {
                             if m.isEmpty {
                                 playback.banner = "No streams matched for \(g.matchupLabel)"
                             } else {
+                                pickerMatches = m
                                 showGamePicker = g
                             }
                         }
                     }
                 )
+                .equatable()
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Spacer(minLength: 0)

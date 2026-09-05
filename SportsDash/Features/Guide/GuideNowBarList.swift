@@ -3,6 +3,8 @@ import SwiftUI
 /// Jumbotron phone Guide list — Now-bar rows (timeline grid is TV / later).
 struct GuideNowBarList: View {
     let rows: [GuideChannelRowData]
+    var playable: [GuideChannelRowData]
+    var liveCount: Int
     var selectedGroup: String
     var groupNames: [String]
     var moviesOnly: Bool
@@ -22,17 +24,7 @@ struct GuideNowBarList: View {
 
     @State private var hourAnchor: Date? = nil
 
-    private var playable: [GuideChannelRowData] {
-        rows.filter { !$0.channel.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-
     private var anchor: Date { hourAnchor ?? now }
-
-    private var liveCount: Int {
-        playable.filter { row in
-            (row.programs.first(where: \.isNow) != nil)
-        }.count
-    }
 
     private var hourChips: [Date] {
         let cal = Calendar.current

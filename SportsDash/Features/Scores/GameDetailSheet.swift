@@ -64,6 +64,7 @@ struct GameDetailSheet: View {
                 )
                 .environmentObject(appModel)
                 .environmentObject(appModel.epg)
+                .environment(appModel.clock)
             }
         }
     }

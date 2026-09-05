@@ -339,6 +339,7 @@ struct SettingsView: View {
             .frame(height: SportsTVMetrics.settingsRowHeight)
             .background(focused ? SportsColors.gold : Color.clear)
             .overlay(alignment: .top) { Rectangle().fill(SportsColors.gridDot).frame(height: SportsTVMetrics.hairline) }
+            .compositingGroup()
             .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
             .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
             .animation(SportsTVFocusMotion.animation, value: focused)

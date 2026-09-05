@@ -62,6 +62,7 @@ struct ScoresTVGameCard: View {
         .overlay(alignment: .topTrailing) { if isHero { JumbotronRivet().padding(8) } }
         .overlay(alignment: .bottomLeading) { if isHero { JumbotronRivet().padding(8) } }
         .overlay(alignment: .bottomTrailing) { if isHero { JumbotronRivet().padding(8) } }
+        .compositingGroup()
         .shadow(color: focused ? SportsColors.ledGlow : .clear, radius: focused ? SportsTVMetrics.focusGlowRadius : 0)
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
         .animation(SportsTVFocusMotion.animation, value: focused)
@@ -155,12 +156,7 @@ struct ScoresTVGameCard: View {
     private func logoBox(_ team: TeamInfo) -> some View {
         Group {
             if let raw = team.logoURL, let url = URL(string: raw) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let img): img.resizable().scaledToFit()
-                    default: logoFallback(team)
-                    }
-                }
+                TeamLogo(url: url, size: 44) { logoFallback(team) }
             } else {
                 logoFallback(team)
             }
@@ -227,7 +223,6 @@ struct ScoresTVGameCard: View {
                     .padding(.horizontal, 18)
                     .frame(height: 36)
                     .background(SportsColors.gold)
-                    .shadow(color: SportsColors.ledGlow, radius: 11)
             }
         }
     }
@@ -248,7 +243,7 @@ struct ScoresTVRail: View {
     let games: [Game]
     var favoriteTeamIds: Set<String> = []
     var heroFirst: Bool = false
-    var hasMatch: (Game) -> Bool = { _ in false }
+    var matchedGameIds: Set<String> = []
     var liveCount: Int = 0
     var filter: DashboardFilter = .live
     var onSelect: (Game) -> Void
@@ -283,7 +278,7 @@ struct ScoresTVRail: View {
                                     || favoriteTeamIds.contains(game.away.id),
                                 isAwayFavorite: favoriteTeamIds.contains(game.away.id),
                                 isHomeFavorite: favoriteTeamIds.contains(game.home.id),
-                                hasMatch: hasMatch(game),
+                                hasMatch: matchedGameIds.contains(game.id),
                                 isHero: heroFirst && idx == 0,
                                 onSelect: { onSelect(game) }
                             )

@@ -72,13 +72,27 @@ final class AppModel: ObservableObject {
     @Published var lastPlayedGameIds: [String] = []
     @Published var playerPrefs = PlayerPrefs()
     @Published var selectedLeagues: [SportLeague] = SportLeague.defaults
-    @Published var dashboardFilter: DashboardFilter = .live
+    @Published var dashboardFilter: DashboardFilter = .live {
+        didSet {
+            if oldValue != dashboardFilter {
+                scheduleBoardRebuild(rematch: false)
+            }
+        }
+    }
     /// Guide state lives in its own observable so EPG ticks do not re-render
     /// Scores / Settings / the player. Inject with `.environmentObject(appModel.epg)`.
     let epg = EpgStore()
+    /// Shared minute tick for Guide/Scores/Player Equatable rows. Inject with `.environment(appModel.clock)`.
+    let clock = AppClock()
     /// Precomputed category → channels (avoid O(n) rebuild every SwiftUI body).
     @Published private(set) var channelGroupNames: [String] = []
     @Published private(set) var channelsByGroup: [String: [IptvChannel]] = [:]
+    /// P0-2: pin / sport sections / favorite rail, rebuilt off-main.
+    @Published private(set) var board: ScoreboardSnapshot = .empty
+    /// P0-1: WATCH counts (limit 3) keyed by game id. Missing key = no match yet.
+    @Published private(set) var matchCountByGameId: [String: Int] = [:]
+    @Published private(set) var matchedGameIds: Set<String> = []
+    private var boardGeneration = 0
 
     // MARK: - Floating / full-screen player session (UHF-style pop-out)
 
@@ -122,16 +136,13 @@ final class AppModel: ObservableObject {
         activePlayerSessions = max(0, activePlayerSessions - 1)
     }
 
-    init() {
+    init(prefs: PlayerPrefs? = nil) {
         favoriteTeamIds = storage.favoriteTeamIds()
-        favoriteTeams = storage.favoriteTeams()
         favoriteChannelIds = storage.favoriteChannelIds()
         lastPlayedGameIds = storage.lastPlayedGameIds()
-        playerPrefs = storage.playerPrefs()
+        playerPrefs = prefs ?? storage.playerPrefs()
         selectedLeagues = storage.selectedLeagues()
-        playlists = storage.loadPlaylists()
-        activePlaylistId = storage.activePlaylistId() ?? playlists.first?.id
-        iptvConfig = storage.loadActiveConfig()
+        // favoriteTeams JSON + playlist Keychain/JSON load after first frame (P2-1).
     }
 
     var activePlaylist: IptvPlaylist? {
@@ -140,6 +151,11 @@ final class AppModel: ObservableObject {
     }
 
     func bootstrap() async {
+        if playlists.isEmpty {
+            playlists = storage.loadPlaylists()
+            activePlaylistId = storage.activePlaylistId() ?? playlists.first?.id
+            iptvConfig = storage.loadActiveConfig()
+        }
         // First paint: channels cache only. A fat EPG JSON decode on the splash
         // path was freezing the UI for 10–20s before anything appeared.
         let playlistId = activePlaylistId
@@ -148,6 +164,10 @@ final class AppModel: ObservableObject {
         }.value
         if let chans = cachedChannels, !chans.isEmpty, channels.isEmpty {
             applyChannels(chans, persistCache: false)
+        }
+        if favoriteTeams.isEmpty {
+            favoriteTeams = storage.favoriteTeams()
+            scheduleBoardRebuild(rematch: false)
         }
 
         let hasChannelCache = !channels.isEmpty
@@ -177,7 +197,7 @@ final class AppModel: ObservableObject {
             StorageService.loadEpgCacheData()
         }.value
         if let cached = cachedEpg, epg.epgByChannel.isEmpty {
-            epg.epgByChannel = cached.map
+            epg.replace(cached.map)
             epg.epgLoadedCount = cached.map.count
             epg.lastEpgReload = cached.savedAt
             epg.epgStatus = "Guide from cache · \(cached.map.count) channels"
@@ -247,12 +267,10 @@ final class AppModel: ObservableObject {
     private func flushEpgMerge() {
         epgFlushTask = nil
         guard !pendingEpgDelta.isEmpty else { return }
-        var next = epg.epgByChannel
-        next.reserveCapacity(next.count + pendingEpgDelta.count)
-        for (k, v) in pendingEpgDelta { next[k] = v }
+        let delta = pendingEpgDelta
         pendingEpgDelta.removeAll(keepingCapacity: true)
-        epg.epgByChannel = next
-        epg.epgLoadedCount = next.count
+        epg.merge(delta)
+        epg.epgLoadedCount = epg.epgByChannel.count
     }
 
     private func setEpgStatusThrottled(_ msg: String) {
@@ -292,6 +310,7 @@ final class AppModel: ObservableObject {
         guard list != channels else { return }
         channels = list
         rebuildChannelGroups(from: list)
+        scheduleBoardRebuild(rematch: true)
         if persistCache {
             let playlistId = activePlaylistId
             Task.detached(priority: .utility) {
@@ -404,6 +423,7 @@ final class AppModel: ObservableObject {
                 self.games = partial
                 self.lastUpdated = Date()
                 self.migrateLegacyFavoriteTeamIds(using: partial)
+                self.scheduleBoardRebuild(rematch: true)
                 await self.processGameNotifications(using: partial)
             }
         }
@@ -441,6 +461,7 @@ final class AppModel: ObservableObject {
         }
         games = mergedGames
         lastUpdated = Date()
+        scheduleBoardRebuild(rematch: true)
         if result.hasPartialFailures {
             let warn = warningMessage(for: result.failedLeagues)
             if silent {
@@ -569,7 +590,7 @@ final class AppModel: ObservableObject {
         activePlaylistId = id
         iptvConfig = storage.loadActiveConfig()
         applyChannels([], persistCache: false)
-        epg.epgByChannel = [:]
+        epg.clear()
         epg.epgLoadedCount = 0
         xtreamAccount = nil
         storage.clearEpgCache()
@@ -595,7 +616,7 @@ final class AppModel: ObservableObject {
         iptvConfig = storage.loadActiveConfig()
         if wasActive {
             applyChannels([], persistCache: false)
-            epg.epgByChannel = [:]
+            epg.clear()
             storage.clearEpgCache()
             storage.clearChannelsCache()
             Task {
@@ -639,7 +660,7 @@ final class AppModel: ObservableObject {
         xtreamAccount = nil
         applyChannels([], persistCache: false)
         storage.clearChannelsCache()
-        epg.epgByChannel = [:]
+        epg.clear()
         epg.epgLoadedCount = 0
         epg.lastEpgReload = nil
         epg.epgError = nil
@@ -694,7 +715,7 @@ final class AppModel: ObservableObject {
     /// UI updates as batches arrive — no "Fill missing" required.
     func reloadEpg(force: Bool = false) async {
         guard !channels.isEmpty else {
-            epg.epgByChannel = [:]
+            epg.clear()
             epg.epgLoadedCount = 0
             return
         }
@@ -712,7 +733,7 @@ final class AppModel: ObservableObject {
                 StorageService.loadEpgCacheData()
             }.value
             if let cached, !cached.map.isEmpty {
-                epg.epgByChannel = cached.map
+                epg.replace(cached.map)
                 epg.epgLoadedCount = cached.map.count
                 epg.lastEpgReload = cached.savedAt
                 epg.epgStatus = "Guide from cache · \(cached.map.count) channels"
@@ -782,11 +803,9 @@ final class AppModel: ObservableObject {
             if !map.isEmpty {
                 // Prefer richest map (batch merges may already equal this).
                 if map.count >= epg.epgByChannel.count {
-                    epg.epgByChannel = map
+                    epg.replace(map)
                 } else {
-                    var next = epg.epgByChannel
-                    for (k, v) in map { next[k] = v }
-                    epg.epgByChannel = next
+                    epg.merge(map)
                 }
                 epg.epgLoadedCount = epg.epgByChannel.count
                 // Unchanged bulk keeps its build time so the window still expires.
@@ -844,10 +863,9 @@ final class AppModel: ObservableObject {
         }.value
 
         if !map.isEmpty {
-            var next = epg.epgByChannel
-            for (k, v) in map where !v.isEmpty { next[k] = v }
-            epg.epgByChannel = next
-            epg.epgLoadedCount = next.count
+            let nonempty = map.filter { !$0.value.isEmpty }
+            epg.merge(nonempty)
+            epg.epgLoadedCount = epg.epgByChannel.count
             scheduleEpgCacheWrite()
         }
         epg.epgStatus = "Guide ready · \(epg.epgLoadedCount)/\(channels.count) channels"
@@ -887,10 +905,9 @@ final class AppModel: ObservableObject {
         }.value
 
         guard !map.isEmpty else { return }
-        var next = epg.epgByChannel
-        for (k, v) in map where !v.isEmpty { next[k] = v }
-        epg.epgByChannel = next
-        epg.epgLoadedCount = next.count
+        let nonempty = map.filter { !$0.value.isEmpty }
+        epg.merge(nonempty)
+        epg.epgLoadedCount = epg.epgByChannel.count
         scheduleEpgCacheWrite()
     }
 
@@ -903,6 +920,7 @@ final class AppModel: ObservableObject {
         storage.toggleFavorite(teamId: teamId)
         favoriteTeamIds = storage.favoriteTeamIds()
         favoriteTeams = storage.favoriteTeams()
+        scheduleBoardRebuild(rematch: false)
     }
 
     func toggleFavorite(team: TeamInfo) {
@@ -910,43 +928,14 @@ final class AppModel: ObservableObject {
         storage.toggleFavorite(team: team)
         favoriteTeams = storage.favoriteTeams()
         favoriteTeamIds = storage.favoriteTeamIds()
+        scheduleBoardRebuild(rematch: false)
     }
 
     /// Android UI A: games with a starred team under the active filter.
-    var myGamesPin: [Game] {
-        guard !favoriteTeamIds.isEmpty else { return [] }
-        return Self.pinFavoriteGames(
-            filteredGames.filter { isFavorite($0) },
-            favoriteTeamIds: favoriteTeamIds
-        )
-    }
+    var myGamesPin: [Game] { board.pin }
 
     /// Horizontal rail with logos (meta first, enrich from board).
-    var favoriteTeamsRail: [TeamInfo] {
-        if !favoriteTeams.isEmpty {
-            var board: [String: TeamInfo] = [:]
-            for g in games {
-                board[g.home.id] = g.home
-                board[g.away.id] = g.away
-            }
-            return favoriteTeams.map { t in
-                if (t.logoURL == nil || t.logoURL?.isEmpty == true),
-                   let b = board[t.id], let logo = b.logoURL, !logo.isEmpty {
-                    var enriched = t
-                    enriched.logoURL = logo
-                    if enriched.colorHex == nil { enriched.colorHex = b.colorHex }
-                    return enriched
-                }
-                return t
-            }
-        }
-        var byId: [String: TeamInfo] = [:]
-        for g in games {
-            if favoriteTeamIds.contains(g.home.id) { byId[g.home.id] = g.home }
-            if favoriteTeamIds.contains(g.away.id) { byId[g.away.id] = g.away }
-        }
-        return favoriteTeamIds.compactMap { byId[$0] }
-    }
+    var favoriteTeamsRail: [TeamInfo] { board.rail }
 
     func sportGroupsForPicker() -> [(String, [SportLeague])] {
         let groups = Dictionary(grouping: Array(SportLeague.allCases)) { $0.sportSectionTitle }
@@ -1024,6 +1013,7 @@ final class AppModel: ObservableObject {
         favoriteTeams = next
         favoriteTeamIds = Set(next.map(\.id))
         storage.setFavoriteTeams(next)
+        scheduleBoardRebuild(rematch: false)
     }
 
     /// True when either side is a starred team (row chrome / pin sort).
@@ -1061,6 +1051,7 @@ final class AppModel: ObservableObject {
     func setSelectedLeagues(_ leagues: [SportLeague]) {
         selectedLeagues = leagues
         storage.setSelectedLeagues(leagues)
+        scheduleBoardRebuild(rematch: false)
         Task { await refreshScores() }
     }
 
@@ -1071,18 +1062,47 @@ final class AppModel: ObservableObject {
     }
 
     /// Live / Upcoming / Final — favorite-team games pin first (S-PARITY.FAV.2 / FAV.3).
-    /// No separate "favorite games" filter or sticky list — teams only.
+    /// Thin accessor over the published snapshot (P0-2).
     var filteredGames: [Game] {
-        let base: [Game]
-        switch dashboardFilter {
-        case .live:
-            base = games.filter(\.isLive)
-        case .upcoming:
-            base = games.filter(\.isUpcoming)
-        case .final:
-            base = games.filter(\.isFinal)
+        board.pin + board.sections.flatMap { $0.leagues.flatMap(\.games) }
+    }
+
+    /// Off-main board + match index. Generation counter drops stale results.
+    private func scheduleBoardRebuild(rematch: Bool) {
+        boardGeneration += 1
+        let gen = boardGeneration
+        let games = self.games
+        let channels = rematch ? self.channels : []
+        let filter = dashboardFilter
+        let selectedLeagues = self.selectedLeagues
+        let favoriteTeamIds = self.favoriteTeamIds
+        let favoriteTeams = self.favoriteTeams
+        let shouldMatch = rematch
+        Task.detached(priority: .userInitiated) {
+            let snapshot = ScoreboardGrouping.makeSnapshot(
+                games: games,
+                filter: filter,
+                selectedLeagues: selectedLeagues,
+                favoriteTeamIds: favoriteTeamIds,
+                favoriteTeams: favoriteTeams
+            )
+            var counts: [String: Int] = [:]
+            if shouldMatch {
+                counts = MatchingService().matchCountsByGameId(
+                    games: games,
+                    channels: channels,
+                    limit: 3
+                )
+            }
+            await MainActor.run {
+                guard gen == self.boardGeneration else { return }
+                self.board = snapshot
+                if shouldMatch {
+                    self.matchCountByGameId = counts
+                    self.matchedGameIds = Set(counts.keys)
+                }
+            }
         }
-        return Self.pinFavoriteGames(base, favoriteTeamIds: favoriteTeamIds)
     }
 
     /// Favorites first, then live over not-live, then earlier start (stable secondary).

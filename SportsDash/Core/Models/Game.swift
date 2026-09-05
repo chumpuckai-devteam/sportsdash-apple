@@ -114,21 +114,43 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         return "LIVE"
     }
 
+    private static let todayStartFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+    private static let tomorrowStartFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.dateFormat = "'Tomorrow' h:mm a"
+        return f
+    }()
+    private static let thisYearStartFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.dateFormat = "EEE M/d h:mm a"
+        return f
+    }()
+    private static let otherYearStartFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.dateFormat = "MMM d, yyyy h:mm a"
+        return f
+    }()
+
     private static func formatStartTime(_ start: Date, statusDetail: String?) -> String {
         if start > Date.distantPast.addingTimeInterval(60) {
             let cal = Calendar.current
-            let f = DateFormatter()
-            f.locale = .current
             if cal.isDateInToday(start) {
-                f.dateFormat = "h:mm a"
+                return todayStartFormatter.string(from: start)
             } else if cal.isDateInTomorrow(start) {
-                f.dateFormat = "'Tomorrow' h:mm a"
+                return tomorrowStartFormatter.string(from: start)
             } else if cal.component(.year, from: start) == cal.component(.year, from: Date()) {
-                f.dateFormat = "EEE M/d h:mm a"
+                return thisYearStartFormatter.string(from: start)
             } else {
-                f.dateFormat = "MMM d, yyyy h:mm a"
+                return otherYearStartFormatter.string(from: start)
             }
-            return f.string(from: start)
         }
         if let detail = statusDetail?.trimmingCharacters(in: .whitespacesAndNewlines),
            !detail.isEmpty,

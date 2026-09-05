@@ -27,14 +27,7 @@ struct TeamMarkView: View {
     var body: some View {
         Group {
             if let raw = team.logoURL, let url = URL(string: raw) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit()
-                    default:
-                        monogram
-                    }
-                }
+                TeamLogo(url: url, size: size) { monogram }
             } else {
                 monogram
             }
@@ -312,7 +305,6 @@ struct GameScoreFocusRow: View {
             }
         }
         .sportsTVFocusClean()
-        .compositingGroup()
         .accessibilityLabel(scoreRowAccessibilityLabel)
         .accessibilityHint("Opens game details and streams.")
         #endif
@@ -364,6 +356,7 @@ struct GameScoreFocusRow: View {
         }
         .clipShape(shape)
         #endif
+        .compositingGroup()
         .shadow(color: focused ? SportsColors.gold.opacity(0.30) : .clear, radius: 14, y: 0)
         #if os(tvOS)
         .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)

@@ -62,12 +62,14 @@ struct ScoresView: View {
                     GameDetailSheet(game: game)
                         .environmentObject(appModel)
                         .environmentObject(appModel.epg)
+                        .environment(appModel.clock)
                         .sportsSheetChrome()
                 }
                 .sportsLargeCover(isPresented: $showFavoritePicker) {
                     FavoriteTeamPickerView()
                         .environmentObject(appModel)
                         .environmentObject(appModel.epg)
+                        .environment(appModel.clock)
                         .sportsSheetChrome()
                 }
                 #if os(iOS)
@@ -196,15 +198,8 @@ struct ScoresView: View {
     private var scoresContent: some View {
         // Android UI A parity: favorite logo rail + My Games pin, then collapsible sports.
         // Starred-team games also pin first inside league shelves (FAV.2).
-        let pin = appModel.myGamesPin
-        let pinIds = Set(pin.map(\.id))
-        let boardGames = appModel.filteredGames.filter { !pinIds.contains($0.id) }
-        let sections: [SportScoreSection] = Self.buildSections(
-            games: boardGames,
-            filter: appModel.dashboardFilter,
-            selectedLeagues: appModel.selectedLeagues,
-            favoriteTeamIds: appModel.favoriteTeamIds
-        )
+        let pin = appModel.board.pin
+        let sections = appModel.board.sections
 
         #if os(tvOS)
         return tvNetflixBrowse(pin: pin, sections: sections)
@@ -232,7 +227,7 @@ struct ScoresView: View {
                         game: hero,
                         isAwayFavorite: appModel.isTeamFavorite(hero.away.id),
                         isHomeFavorite: appModel.isTeamFavorite(hero.home.id),
-                        matchCount: appModel.matches(for: hero).count,
+                        matchCount: appModel.matchCountByGameId[hero.id, default: 0],
                         onSelect: { selectedGame = hero },
                         onWatch: { selectedGame = hero }
                     )
@@ -367,7 +362,7 @@ struct ScoresView: View {
                             games: pin,
                             favoriteTeamIds: appModel.favoriteTeamIds,
                             heroFirst: true,
-                            hasMatch: { !appModel.matches(for: $0).isEmpty },
+                            matchedGameIds: appModel.matchedGameIds,
                             liveCount: pin.filter(\.isLive).count,
                             filter: appModel.dashboardFilter,
                             onSelect: { selectedGame = $0 }
@@ -382,7 +377,7 @@ struct ScoresView: View {
                             tick: league?.jumbotronTick ?? SportsColors.gold,
                             games: rail.games,
                             favoriteTeamIds: appModel.favoriteTeamIds,
-                            hasMatch: { !appModel.matches(for: $0).isEmpty },
+                            matchedGameIds: appModel.matchedGameIds,
                             liveCount: rail.games.filter(\.isLive).count,
                             filter: appModel.dashboardFilter,
                             onSelect: { selectedGame = $0 }
@@ -431,15 +426,10 @@ struct ScoresView: View {
     private func railLogo(_ team: TeamInfo) -> some View {
         Group {
             if let raw = team.logoURL, let url = URL(string: raw) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let img):
-                        img.resizable().scaledToFit()
-                    default:
-                        Text(String(team.abbreviation.prefix(2)))
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(SportsColors.gold)
-                    }
+                TeamLogo(url: url, size: 26) {
+                    Text(String(team.abbreviation.prefix(2)))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(SportsColors.gold)
                 }
             } else {
                 Text(String(team.abbreviation.prefix(2)))
@@ -646,57 +636,6 @@ struct ScoresView: View {
             return "Updated \(time)"
         }
         return "Not updated yet"
-    }
-
-    /// Group games by sport → league; on Upcoming, keep empty shelves for selected
-    /// leagues so MLB (etc.) never "disappears" when the slate is quiet.
-    private static func buildSections(
-        games: [Game],
-        filter: DashboardFilter,
-        selectedLeagues: [SportLeague],
-        favoriteTeamIds: Set<String> = []
-    ) -> [SportScoreSection] {
-        var sections = ScoreboardGrouping.sportSections(from: games, favoriteTeamIds: favoriteTeamIds)
-        guard filter == .upcoming else { return sections }
-
-        let selected = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
-        let present = Set(sections.flatMap { $0.leagues.map(\.key) })
-        let missing = selected.filter { !present.contains($0.rawValue) }
-        guard !missing.isEmpty else { return sections }
-
-        // Attach empty league shelves under the right sport bucket.
-        for league in ScoreboardGrouping.leagueOrder where missing.contains(league) {
-            let emptyShelf = LeagueShelf(
-                key: league.rawValue,
-                title: league.label,
-                sportKey: league.sportPath,
-                sportTitle: league.sportSectionTitle,
-                showSportHeader: true,
-                games: []
-            )
-            if let idx = sections.firstIndex(where: { $0.sportKey == league.sportPath }) {
-                if !sections[idx].leagues.contains(where: { $0.key == league.rawValue }) {
-                    sections[idx].leagues.append(emptyShelf)
-                }
-            } else {
-                sections.append(
-                    SportScoreSection(
-                        sportKey: league.sportPath,
-                        sportTitle: league.sportSectionTitle,
-                        emoji: league.emoji,
-                        leagues: [emptyShelf]
-                    )
-                )
-            }
-        }
-        // Keep sport order stable (first appearance in leagueOrder).
-        let sportOrder = ScoreboardGrouping.leagueOrder.map(\.sportPath)
-        sections.sort { a, b in
-            let ia = sportOrder.firstIndex(of: a.sportKey) ?? 999
-            let ib = sportOrder.firstIndex(of: b.sportKey) ?? 999
-            return ia < ib
-        }
-        return sections
     }
 
     // MARK: - Sport → league hierarchy (collapsible sports)
@@ -989,7 +928,7 @@ struct ScoresView: View {
             isFavorite: appModel.isFavorite(game),
             isAwayFavorite: appModel.isTeamFavorite(game.away.id),
             isHomeFavorite: appModel.isTeamFavorite(game.home.id),
-            hasMatch: !appModel.matches(for: game).isEmpty,
+            hasMatch: appModel.matchCountByGameId[game.id, default: 0] > 0,
             onSelect: { selectedGame = game },
             onToggleAwayFavorite: { appModel.toggleFavorite(teamId: game.away.id) },
             onToggleHomeFavorite: { appModel.toggleFavorite(teamId: game.home.id) }
@@ -1044,7 +983,7 @@ struct ScoresView: View {
 
 // MARK: - Grouping models
 
-struct LeagueShelf: Identifiable {
+struct LeagueShelf: Identifiable, Equatable, Sendable {
     var id: String { key }
     var key: String
     var title: String
@@ -1055,12 +994,22 @@ struct LeagueShelf: Identifiable {
 }
 
 /// Sport bucket used by Scores dashboard collapse (and shared strip grouping).
-struct SportScoreSection: Identifiable {
+struct SportScoreSection: Identifiable, Equatable, Sendable {
     var id: String { sportKey }
     let sportKey: String
     let sportTitle: String
     let emoji: String
     var leagues: [LeagueShelf]
+}
+
+/// Published Scores board — grouping runs off-main (P0-2).
+struct ScoreboardSnapshot: Equatable, Sendable {
+    var pin: [Game]
+    var sections: [SportScoreSection]
+    var rail: [TeamInfo]
+    var filter: DashboardFilter
+
+    static let empty = ScoreboardSnapshot(pin: [], sections: [], rail: [], filter: .live)
 }
 
 enum ScoreboardGrouping {
@@ -1151,5 +1100,123 @@ enum ScoreboardGrouping {
                 )
             }
         }
+    }
+
+    static func filteredGames(_ games: [Game], filter: DashboardFilter) -> [Game] {
+        switch filter {
+        case .live: return games.filter(\.isLive)
+        case .upcoming: return games.filter(\.isUpcoming)
+        case .final: return games.filter(\.isFinal)
+        }
+    }
+
+    static func boardSections(
+        games: [Game],
+        filter: DashboardFilter,
+        selectedLeagues: [SportLeague],
+        favoriteTeamIds: Set<String> = []
+    ) -> [SportScoreSection] {
+        var sections = sportSections(from: games, favoriteTeamIds: favoriteTeamIds)
+        guard filter == .upcoming else { return sections }
+
+        let selected = selectedLeagues.isEmpty ? SportLeague.defaults : selectedLeagues
+        let present = Set(sections.flatMap { $0.leagues.map(\.key) })
+        let missing = selected.filter { !present.contains($0.rawValue) }
+        guard !missing.isEmpty else { return sections }
+
+        for league in leagueOrder where missing.contains(league) {
+            let emptyShelf = LeagueShelf(
+                key: league.rawValue,
+                title: league.label,
+                sportKey: league.sportPath,
+                sportTitle: league.sportSectionTitle,
+                showSportHeader: true,
+                games: []
+            )
+            if let idx = sections.firstIndex(where: { $0.sportKey == league.sportPath }) {
+                if !sections[idx].leagues.contains(where: { $0.key == league.rawValue }) {
+                    sections[idx].leagues.append(emptyShelf)
+                }
+            } else {
+                sections.append(
+                    SportScoreSection(
+                        sportKey: league.sportPath,
+                        sportTitle: league.sportSectionTitle,
+                        emoji: league.emoji,
+                        leagues: [emptyShelf]
+                    )
+                )
+            }
+        }
+        let sportOrder = leagueOrder.map(\.sportPath)
+        sections.sort { a, b in
+            let ia = sportOrder.firstIndex(of: a.sportKey) ?? 999
+            let ib = sportOrder.firstIndex(of: b.sportKey) ?? 999
+            return ia < ib
+        }
+        return sections
+    }
+
+    static func favoriteTeamsRail(
+        games: [Game],
+        favoriteTeams: [TeamInfo],
+        favoriteTeamIds: Set<String>
+    ) -> [TeamInfo] {
+        if !favoriteTeams.isEmpty {
+            var board: [String: TeamInfo] = [:]
+            for g in games {
+                board[g.home.id] = g.home
+                board[g.away.id] = g.away
+            }
+            return favoriteTeams.map { t in
+                if (t.logoURL == nil || t.logoURL?.isEmpty == true),
+                   let b = board[t.id], let logo = b.logoURL, !logo.isEmpty {
+                    var enriched = t
+                    enriched.logoURL = logo
+                    if enriched.colorHex == nil { enriched.colorHex = b.colorHex }
+                    return enriched
+                }
+                return t
+            }
+        }
+        var byId: [String: TeamInfo] = [:]
+        for g in games {
+            if favoriteTeamIds.contains(g.home.id) { byId[g.home.id] = g.home }
+            if favoriteTeamIds.contains(g.away.id) { byId[g.away.id] = g.away }
+        }
+        return favoriteTeamIds.compactMap { byId[$0] }
+    }
+
+    static func makeSnapshot(
+        games: [Game],
+        filter: DashboardFilter,
+        selectedLeagues: [SportLeague],
+        favoriteTeamIds: Set<String>,
+        favoriteTeams: [TeamInfo]
+    ) -> ScoreboardSnapshot {
+        let base = pinFavoriteGames(
+            filteredGames(games, filter: filter),
+            favoriteTeamIds: favoriteTeamIds
+        )
+        let pin: [Game] = favoriteTeamIds.isEmpty
+            ? []
+            : base.filter { favoriteTeamIds.contains($0.home.id) || favoriteTeamIds.contains($0.away.id) }
+        let pinIds = Set(pin.map(\.id))
+        let rest = base.filter { !pinIds.contains($0.id) }
+        return ScoreboardSnapshot(
+            pin: pin,
+            sections: boardSections(
+                games: rest,
+                filter: filter,
+                selectedLeagues: selectedLeagues,
+                favoriteTeamIds: favoriteTeamIds
+            ),
+            rail: favoriteTeamsRail(
+                games: games,
+                favoriteTeams: favoriteTeams,
+                favoriteTeamIds: favoriteTeamIds
+            ),
+            filter: filter
+        )
     }
 }
