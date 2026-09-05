@@ -126,18 +126,19 @@ struct RootTabView: View {
     #if os(tvOS)
     /// Left rail: Back/Menu and long-press return focus to Scores · Guide · Settings.
     private var tvSidebarShell: some View {
-        HStack(spacing: 0) {
-            JumbotronTVSidebar(selection: $tab, sidebarItem: $sidebarItem)
+        let expanded = sidebarItem != nil
+        return HStack(spacing: 0) {
+            JumbotronTVSidebar(
+                selection: $tab,
+                sidebarItem: $sidebarItem,
+                expanded: expanded
+            )
             tvTabPage
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .focusSection()
                 .onExitCommand { sidebarItem = tab }
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.65).onEnded { _ in
-                        sidebarItem = tab
-                    }
-                )
         }
+        .animation(.easeOut(duration: 0.18), value: expanded)
         .tint(SportsColors.gold)
     }
 

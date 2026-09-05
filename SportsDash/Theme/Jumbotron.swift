@@ -348,6 +348,7 @@ struct JumbotronTabBar: View {
 struct JumbotronTVSidebar: View {
     @Binding var selection: AppTab
     var sidebarItem: FocusState<AppTab?>.Binding
+    var expanded: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -358,8 +359,8 @@ struct JumbotronTVSidebar: View {
         }
         .padding(.top, 48)
         .padding(.bottom, 28)
-        .padding(.horizontal, 18)
-        .frame(width: 280)
+        .padding(.horizontal, expanded ? 18 : 12)
+        .frame(width: expanded ? 280 : 72)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(SportsColors.panelGradient)
         .overlay(alignment: .trailing) {
@@ -368,6 +369,7 @@ struct JumbotronTVSidebar: View {
                 .frame(width: SportsTVMetrics.hairline)
         }
         .focusSection()
+        .accessibilityAddTraits(.isTabBar)
     }
 
     private func row(_ value: AppTab, _ title: String) -> some View {
@@ -376,18 +378,24 @@ struct JumbotronTVSidebar: View {
             selection = value
         } label: {
             SportsTVFocused { focused in
-                HStack(spacing: 16) {
+                HStack(spacing: expanded ? 16 : 0) {
                     Rectangle()
                         .fill((on || focused) ? SportsColors.gold : SportsColors.border)
                         .frame(width: 6, height: 28)
-                        .shadow(color: (on || focused) ? SportsColors.ledGlow : .clear, radius: 6)
-                    Text(title)
-                        .font(JumbotronFonts.display(28))
-                        .jumbotronDisplayTracking(28)
-                        .foregroundStyle((on || focused) ? SportsColors.gold : SportsColors.muted)
-                    Spacer(minLength: 0)
+                        .shadow(
+                            color: (expanded && (on || focused)) ? SportsColors.ledGlow : .clear,
+                            radius: 6
+                        )
+                    if expanded {
+                        Text(title)
+                            .font(JumbotronFonts.display(28))
+                            .jumbotronDisplayTracking(28)
+                            .foregroundStyle((on || focused) ? SportsColors.gold : SportsColors.muted)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, expanded ? 16 : 8)
                 .frame(maxWidth: .infinity, minHeight: SportsTVMetrics.minFocusSize, alignment: .leading)
                 .background {
                     if focused {
@@ -403,7 +411,6 @@ struct JumbotronTVSidebar: View {
                     )
                 }
                 .scaleEffect(focused ? SportsTVMetrics.focusScale : 1.0)
-                .animation(SportsTVFocusMotion.animation, value: focused)
             }
         }
         .buttonStyle(.plain)

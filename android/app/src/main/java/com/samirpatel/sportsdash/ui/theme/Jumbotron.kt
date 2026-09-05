@@ -1,6 +1,7 @@
 package com.samirpatel.sportsdash.ui.theme
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -262,11 +263,22 @@ fun JumbotronTabBar(
 fun JumbotronSideNav(
     selected: Int,
     onSelect: (Int) -> Unit,
+    expanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val width by animateDpAsState(
+        if (expanded) 280.dp else 72.dp,
+        animationSpec = tween(180),
+        label = "tv-rail-width",
+    )
+    val padH by animateDpAsState(
+        if (expanded) 18.dp else 12.dp,
+        animationSpec = tween(180),
+        label = "tv-rail-pad",
+    )
     Column(
         modifier = modifier
-            .width(280.dp)
+            .width(width)
             .fillMaxHeight()
             .background(PanelGradient)
             .drawBehind {
@@ -277,7 +289,7 @@ fun JumbotronSideNav(
                     size = androidx.compose.ui.geometry.Size(w, size.height),
                 )
             }
-            .padding(top = 48.dp, bottom = 28.dp, start = 18.dp, end = 18.dp),
+            .padding(top = 48.dp, bottom = 28.dp, start = padH, end = padH),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         listOf(0 to "SCORES", 1 to "GUIDE", 2 to "SETTINGS").forEach { (idx, label) ->
@@ -288,7 +300,7 @@ fun JumbotronSideNav(
                     .fillMaxWidth()
                     .height(66.dp)
                     .clickable { onSelect(idx) }
-                    .padding(horizontal = 16.dp)
+                    .padding(horizontal = if (expanded) 16.dp else 8.dp)
                     .semantics { this.selected = on },
             ) {
                 Box(
@@ -296,16 +308,25 @@ fun JumbotronSideNav(
                         .width(6.dp)
                         .height(28.dp)
                         .background(if (on) Gold else Border)
-                        .shadow(if (on) 4.dp else 0.dp, ambientColor = LedGlow, spotColor = LedGlow),
+                        .then(
+                            if (expanded && on) {
+                                Modifier.shadow(4.dp, ambientColor = LedGlow, spotColor = LedGlow)
+                            } else {
+                                Modifier
+                            },
+                        ),
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(
-                    label,
-                    color = if (on) Gold else Muted,
-                    fontFamily = BebasNeue,
-                    fontSize = 28.sp,
-                    letterSpacing = 0.04.em,
-                )
+                if (expanded) {
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        label,
+                        color = if (on) Gold else Muted,
+                        fontFamily = BebasNeue,
+                        fontSize = 28.sp,
+                        letterSpacing = 0.04.em,
+                        maxLines = 1,
+                    )
+                }
             }
         }
     }

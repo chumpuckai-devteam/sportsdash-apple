@@ -230,10 +230,7 @@ private fun TelevisionShell(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .gridDotGround(
-                step = com.samirpatel.sportsdash.ui.theme.TvGridStep,
-                dot = com.samirpatel.sportsdash.ui.theme.TvGridDot,
-            )
+            .background(VoidBlack)
             .onPreviewKeyEvent { ev ->
                 val n = ev.nativeKeyEvent
                 if (n.action == KeyEvent.ACTION_DOWN && n.repeatCount >= 8) {
@@ -252,6 +249,7 @@ private fun TelevisionShell(
         JumbotronSideNav(
             selected = tab,
             onSelect = onTab,
+            expanded = railFocused,
             modifier = Modifier
                 .focusRequester(railRequester)
                 .focusGroup()
