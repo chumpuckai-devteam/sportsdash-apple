@@ -137,8 +137,7 @@ struct LiveScoresStrip: View, Equatable {
 
     private var legacyStrip: some View {
         VStack(spacing: 6) {
-            if let current = ordered.first(where: { $0.id == currentGameId })
-                ?? ordered.first {
+            if let current = ordered.first(where: { $0.id == currentGameId }) {
                 hero(current)
             }
             ScrollView(.horizontal, showsIndicators: false) {

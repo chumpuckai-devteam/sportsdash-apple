@@ -19,10 +19,12 @@ actor TeamLogoCache {
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
+        let logosDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("team-logos", isDirectory: true)
         config.urlCache = URLCache(
             memoryCapacity: 4 * 1024 * 1024,
             diskCapacity: 50 * 1024 * 1024,
-            diskPath: "team-logos"
+            directory: logosDir
         )
         config.requestCachePolicy = .returnCacheDataElseLoad
         return URLSession(configuration: config)

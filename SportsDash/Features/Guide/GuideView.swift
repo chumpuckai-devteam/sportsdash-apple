@@ -40,6 +40,8 @@ struct GuideView: View {
     @State private var playableRows: [GuideChannelRowData] = []
     @State private var withGuideCount = 0
     @State private var liveCount = 0
+    @State private var rowsGroup = ""
+    @State private var categoryChannelCount = 0
 
     private var displayMode: GuideLayoutMode {
         appModel.playerPrefs.guideLayout
@@ -69,6 +71,11 @@ struct GuideView: View {
 
     private var nowMinute: Date { clock.minute }
 
+    private var rowsStale: Bool {
+        let g = selectedGroup.isEmpty ? defaultGuideGroup : selectedGroup
+        return rowsGroup != g
+    }
+
     private var rowsTaskId: GuideRowsKey {
         GuideRowsKey(
             selectedGroup: selectedGroup,
@@ -76,7 +83,6 @@ struct GuideView: View {
             revision: epg.revision,
             channelCount: appModel.channels.count,
             cleanNames: cleanNames,
-            favoriteChannelIds: appModel.favoriteChannelIds,
             nowMinute: nowMinute
         )
     }
@@ -145,7 +151,13 @@ struct GuideView: View {
             }
             rows.append(GuideChannelRowData(channel: ch, programs: programs))
         }
-        return GuideRowsPayload(rows: rows, playable: rows, withGuide: withGuide, liveCount: live)
+        return GuideRowsPayload(
+            rows: rows,
+            playable: rows,
+            withGuide: withGuide,
+            liveCount: live,
+            channelCount: chans.count
+        )
     }
 
     var body: some View {
@@ -287,6 +299,8 @@ struct GuideView: View {
                 playableRows = payload.playable
                 withGuideCount = payload.withGuide
                 liveCount = payload.liveCount
+                rowsGroup = group
+                categoryChannelCount = payload.channelCount
             }
             .onChange(of: selectedGroup) { _, _ in
                 // Category switch must feel instant: UI updates from selectedGroup immediately;
@@ -632,7 +646,7 @@ struct GuideView: View {
                 .background(SportsColors.panel)
             } else if !activeChannels.isEmpty {
                 HStack(spacing: 8) {
-                    Text("Guide \(withGuideCount)/\(activeChannels.count) in this category")
+                    Text("Guide \(withGuideCount)/\(categoryChannelCount == 0 ? activeChannels.count : categoryChannelCount) in this category")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(withGuideCount == 0 ? SportsColors.danger : SportsColors.muted)
                     Spacer(minLength: 8)
@@ -664,6 +678,7 @@ struct GuideView: View {
                     favoriteChannelIds: appModel.favoriteChannelIds,
                     epgError: epg.epgError,
                     isLoadingEpg: epg.isLoadingEpg,
+                    rowsStale: rowsStale,
                     onSelectGroup: { showCategoryPicker = true },
                     onGrid: {
                         var p = appModel.playerPrefs
@@ -964,6 +979,7 @@ struct GuideRowsPayload: Sendable {
     var playable: [GuideChannelRowData]
     var withGuide: Int
     var liveCount: Int
+    var channelCount: Int
 }
 
 struct GuideRowsKey: Hashable {
@@ -972,7 +988,6 @@ struct GuideRowsKey: Hashable {
     var revision: Int
     var channelCount: Int
     var cleanNames: Bool
-    var favoriteChannelIds: Set<String>
     var nowMinute: Date
 }
 
@@ -1153,6 +1168,7 @@ private struct GuideTimelineRow: View, Equatable {
 
     static func == (lhs: GuideTimelineRow, rhs: GuideTimelineRow) -> Bool {
         lhs.row.channel.id == rhs.row.channel.id
+            && lhs.index == rhs.index
             && lhs.row.programs == rhs.row.programs
             && lhs.windowStart == rhs.windowStart
             && lhs.nowMinute == rhs.nowMinute

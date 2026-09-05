@@ -1097,7 +1097,7 @@ final class AppModel: ObservableObject {
                 counts = MatchingService().matchCountsByGameId(
                     games: games,
                     channels: channels,
-                    limit: 3
+                    limit: 10
                 )
             }
             await MainActor.run {

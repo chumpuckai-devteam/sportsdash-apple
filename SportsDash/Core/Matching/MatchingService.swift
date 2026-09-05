@@ -56,8 +56,8 @@ struct MatchingService: Sendable {
         return scored
     }
 
-    /// Board WATCH index: count of matches per game, capped at `limit` (hero shows up to 3).
-    func matchCountsByGameId(games: [Game], channels: [IptvChannel], limit: Int = 3) -> [String: Int] {
+    /// Board WATCH index: count of matches per game, capped at `limit` (hero shows up to 10).
+    func matchCountsByGameId(games: [Game], channels: [IptvChannel], limit: Int = 10) -> [String: Int] {
         var counts: [String: Int] = [:]
         counts.reserveCapacity(games.count)
         for g in games {

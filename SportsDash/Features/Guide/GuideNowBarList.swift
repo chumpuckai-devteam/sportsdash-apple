@@ -14,6 +14,7 @@ struct GuideNowBarList: View {
     var favoriteChannelIds: Set<String>
     var epgError: String?
     var isLoadingEpg: Bool
+    var rowsStale: Bool = false
     var onSelectGroup: () -> Void
     var onGrid: () -> Void
     var onMovies: () -> Void
@@ -117,6 +118,18 @@ struct GuideNowBarList: View {
                     action: onReloadEPG
                 )
                 .padding(.horizontal, SportsMetrics.screenInset)
+                Spacer(minLength: 0)
+            } else if rowsStale {
+                VStack(spacing: 6) {
+                    ForEach(0..<6, id: \.self) { _ in
+                        Rectangle()
+                            .fill(SportsColors.panelElevated)
+                            .frame(height: SportsMetrics.guideRowHeight)
+                    }
+                }
+                .jumbotronPanel()
+                .padding(.horizontal, SportsMetrics.screenInset)
+                .redacted(reason: .placeholder)
                 Spacer(minLength: 0)
             } else if playable.isEmpty {
                 JumbotronMessagePanel(
