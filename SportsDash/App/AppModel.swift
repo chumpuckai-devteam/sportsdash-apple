@@ -93,6 +93,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var matchCountByGameId: [String: Int] = [:]
     @Published private(set) var matchedGameIds: Set<String> = []
     private var boardGeneration = 0
+    /// Separate from `boardGeneration`: a filter/favorites change must not drop a
+    /// match index that is still computing (seconds on a 5 000-channel playlist),
+    /// or WATCH stays empty until the next scores poll.
+    private var matchGeneration = 0
 
     // MARK: - Floating / full-screen player session (UHF-style pop-out)
 
@@ -1071,6 +1075,8 @@ final class AppModel: ObservableObject {
     private func scheduleBoardRebuild(rematch: Bool) {
         boardGeneration += 1
         let gen = boardGeneration
+        if rematch { matchGeneration += 1 }
+        let matchGen = matchGeneration
         let games = self.games
         let channels = rematch ? self.channels : []
         let filter = dashboardFilter
@@ -1095,9 +1101,10 @@ final class AppModel: ObservableObject {
                 )
             }
             await MainActor.run {
-                guard gen == self.boardGeneration else { return }
-                self.board = snapshot
-                if shouldMatch {
+                if gen == self.boardGeneration {
+                    self.board = snapshot
+                }
+                if shouldMatch, matchGen == self.matchGeneration {
                     self.matchCountByGameId = counts
                     self.matchedGameIds = Set(counts.keys)
                 }

@@ -7,7 +7,10 @@ import Observation
 @MainActor
 final class AppClock {
     private(set) var minute: Date
-    private var timer: Timer?
+    /// Plain stored property (not observation-tracked) so `deinit`, which is
+    /// nonisolated, may invalidate it — an `@Observable` accessor is main-actor
+    /// isolated and cannot be referenced there.
+    @ObservationIgnored private var timer: Timer?
 
     init(now: Date = Date()) {
         self.minute = Self.truncated(now)

@@ -280,6 +280,9 @@ struct GuideView: View {
                         nowMinute: now
                     )
                 }.value
+                // `.task(id:)` cancelled us for a newer key; the detached compute
+                // still returns and must not overwrite that key's rows.
+                guard !Task.isCancelled else { return }
                 rows = payload.rows
                 playableRows = payload.playable
                 withGuideCount = payload.withGuide
