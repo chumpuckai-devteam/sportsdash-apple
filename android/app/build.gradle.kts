@@ -103,4 +103,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20231013") // for test json if needed, but android has
+    // XmlPullParserFactory on the JVM (Android ships this on device).
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
 }
